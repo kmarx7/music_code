@@ -1,0 +1,30 @@
+{
+  "name": "music-score-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:architecture": "depcruise src --config .dependency-cruiser.cjs && node scripts/check-boundaries.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dependency-cruiser": "^18.7.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.4",
+    "typescript": "^5",
+    "vitest": "^5.1.0"
+  }
+}
