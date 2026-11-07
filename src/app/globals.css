@@ -16,3 +16,14 @@ body {
   background: #f6f7fb;
   color: #1c1f26;
 }
+
+button[data-playing="true"] {
+  outline: 3px solid #c07800;
+  outline-offset: 2px;
+}
+
+svg [data-playing="true"] path,
+svg [data-playing="true"] text {
+  fill: #b36b00;
+  stroke: #b36b00;
+}

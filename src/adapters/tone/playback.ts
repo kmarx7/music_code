@@ -1,57 +1,114 @@
-import type { Score } from "@/domain/score/types";
-import { mergeTiedNotes } from "@/domain/score/tie";
+import { mergeTiedNotes, playbackEndTick, playbackPositionAt, TICKS_PER_QUARTER } from "@/domain/score";
+import type { PlaybackPosition, Score } from "@/domain/score";
 
+export type PlaybackState = "playing" | "paused" | "stopped";
 export interface PlaybackHandle {
   stop(): void;
+  pause(): void;
+  resume(): void;
+  setMetronome(enabled: boolean): void;
+  getPosition(): PlaybackPosition;
 }
 
-/**
- * Tone.js 어댑터. canonical Score를 읽어 스케줄만 수행하며 Score를 변경하지 않는다.
- * 타이 체인은 `mergeTiedNotes`로 병합해 **하나의 어택 + 지속음**으로 재생한다(중복 어택 금지).
- * 오디오는 사용자 제스처에서 시작한다. 동적 import로 SSR 번들에서 제외한다.
- */
+/** Tone owns audio scheduling; ticks, cursor and tie semantics come from the canonical Score. */
 export async function playScore(
   score: Score,
-  options?: { onEnd?: () => void },
+  options?: {
+    metronome?: boolean;
+    onPosition?: (position: PlaybackPosition) => void;
+    onState?: (state: PlaybackState) => void;
+    onEnd?: () => void;
+  },
 ): Promise<PlaybackHandle> {
   const Tone = await import("tone");
   await Tone.start();
-
-  const synth = new Tone.Synth().toDestination();
   const part = score.parts[0];
-  const quarterSeconds = 60 / score.tempoBpm;
-  const tickSeconds = quarterSeconds / 960;
-  const startAt = Tone.now() + 0.1;
+  const notes = part ? mergeTiedNotes(part) : [];
+  const tiedHeads = new Set(part?.ties.map((tie) => tie.from));
+  const tickSeconds = 60 / score.tempoBpm / TICKS_PER_QUARTER;
+  const endTick = playbackEndTick(score);
+  let state: PlaybackState = "stopped";
+  let finished = false;
+  let originTick = 0;
+  let startAt = 0;
+  let metronome = options?.metronome ?? false;
+  let synth: InstanceType<typeof Tone.Synth> | undefined;
+  let click: InstanceType<typeof Tone.Synth> | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
 
-  let endTick = 0;
-  if (part) {
-    for (const note of mergeTiedNotes(part)) {
-      endTick = Math.max(endTick, note.startTick + note.durationTicks);
-      synth.triggerAttackRelease(
-        Tone.Frequency(note.pitch.midi, "midi").toFrequency(),
-        Math.max(0.05, note.durationTicks * tickSeconds * 0.9),
-        startAt + note.startTick * tickSeconds,
-      );
+  function position(): PlaybackPosition {
+    // Raw AudioContext time excludes Tone.now()'s scheduling look-ahead.
+    const rawTick = state === "playing"
+      ? Math.min(endTick, originTick + Math.max(0, Tone.immediate() - startAt) / tickSeconds)
+      : originTick;
+    // Avoid floating point drift selecting the previous segment at an exact beat boundary.
+    const nearestTick = Math.round(rawTick);
+    const tick = Math.abs(rawTick - nearestTick) < 1e-7 ? nearestTick : rawTick;
+    const projection = playbackPositionAt(score, tick);
+    return state === "playing" && Tone.immediate() >= startAt
+      ? projection : { ...projection, activeNoteIds: [] };
+  }
+  function release() {
+    clearInterval(timer); timer = undefined;
+    synth?.dispose(); synth = undefined;
+    click?.dispose(); click = undefined;
+  }
+  function scheduleClicks(fromTick: number) {
+    click?.dispose(); click = undefined;
+    if (!metronome || !part) return;
+    click = new Tone.Synth({ volume: -18, oscillator: { type: "square" },
+      envelope: { attack: 0.001, decay: 0.01, sustain: 0, release: 0.01 } }).toDestination();
+    const beatTicks = TICKS_PER_QUARTER * 4 / part.timeSignature.denominator;
+    for (let tick = Math.ceil(fromTick / beatTicks) * beatTicks; tick < endTick; tick += beatTicks) {
+      const accent = (tick / beatTicks) % part.timeSignature.numerator === 0;
+      click.triggerAttackRelease(accent ? 1200 : 800, 0.025, startAt + (tick - originTick) * tickSeconds);
     }
   }
-
-  let stopped = false;
-  const timeout = setTimeout(
-    () => {
-      if (stopped) return;
-      stopped = true;
-      synth.dispose();
-      options?.onEnd?.();
-    },
-    (endTick * tickSeconds + 0.3) * 1000,
-  );
-
+  function stop() {
+    if (finished) return;
+    finished = true; release(); state = "stopped"; originTick = 0;
+    options?.onPosition?.(position()); options?.onState?.(state);
+  }
+  function start() {
+    state = "playing";
+    startAt = Tone.now() + 0.1;
+    synth = new Tone.Synth().toDestination();
+    for (const note of notes) {
+      const noteEnd = note.startTick + note.durationTicks;
+      if (noteEnd <= originTick) continue;
+      const onset = Math.max(note.startTick, originTick);
+      // Tied segments sustain through their boundaries, without repeated attacks.
+      const gate = tiedHeads.has(note.id) ? 1 : 0.9;
+      synth.triggerAttackRelease(Tone.Frequency(note.pitch.midi, "midi").toFrequency(),
+        Math.max(0.001, (noteEnd - onset) * tickSeconds * gate),
+        startAt + (onset - originTick) * tickSeconds);
+    }
+    scheduleClicks(originTick);
+    options?.onState?.(state); options?.onPosition?.(position());
+    timer = setInterval(() => {
+      const current = position();
+      if (current.tick >= endTick) { stop(); options?.onEnd?.(); }
+      else options?.onPosition?.(current);
+    }, 25);
+  }
+  try { start(); } catch (error) { release(); throw error; }
   return {
-    stop() {
-      if (stopped) return;
-      stopped = true;
-      clearTimeout(timeout);
-      synth.dispose();
+    stop,
+    pause() {
+      if (finished || state !== "playing") return;
+      originTick = position().tick; release(); state = "paused";
+      options?.onPosition?.(position()); options?.onState?.(state);
     },
+    resume() { if (!finished && state === "paused") start(); },
+    setMetronome(enabled) {
+      if (finished || enabled === metronome) return;
+      metronome = enabled;
+      if (state === "playing") {
+        // Skip elapsed clicks, including a beat that has already sounded.
+        const from = Tone.immediate() < startAt ? originTick : position().tick + 0.001;
+        scheduleClicks(from);
+      }
+    },
+    getPosition: position,
   };
 }

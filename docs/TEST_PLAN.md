@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 7종 + 악보 설정 2종 | Playwright(Chromium, 프로덕션 빌드) | 기존 7종 사용자 Mac 통과 / 설정 추가 후 9종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 9종 + 재생 2종 | Playwright(Chromium, 프로덕션 빌드) | 42e29bb 사용자 Mac 9/9 통과 / 이번 버전 11종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 24 파일 / 240 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 25 파일 / 266 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -346,3 +346,43 @@ Safari/모바일 실기기. 기존 이벤트의 박자 재배치와 악보 중�
   기존 사용자 8/9 결과와 구분한다. Mac 일반 터미널에서 `npm run test:e2e` 재실행 필요.
 - 원래 실패 증거는 재실행 전 `/tmp/music-score-e2e-a4fc0ac/{trace.zip,error-context.md}`에 보존했다.
   임시 보관 경로이며 Git에는 포함하지 않는다.
+
+
+## 12. 재생 커서·메트로놈 및 마지막 저장 보존 (2026-11-08)
+
+- 사용자 제공 기준선 `42e29bb`: 240개 및 Mac Chromium **9/9** 통과.
+  이전 절의 Codex EPERM 기록은 그대로 보존한다.
+- 이번 단위·통합: **25파일 / 266개 통과**, 기존 240개 + 신규 26개(삭제/skip 없음).
+- 신규 `tests/unit/playback.test.ts` **20개**: AudioContext 기준 60/120/240 BPM 커서,
+  look-ahead 제외·정수 tick 경계, pause 고정·resume 남은 음·stop 초기화,
+  타이 단일 전체 지속음·세그먼트 경계 하이라이트·continuation 재개,
+  2/4·3/4·4/4·6/8의 클릭 수/간격/첫 박 강조, 60/90/240 BPM 클릭,
+  재생 중 메트로놈 토글·일시정지 후 토글, 후행 쉼표·자연 종료·멱등 stop,
+  gap/rest 활성음 부재, DOM 하이라이트/선택 독립, 오디오 초기화 실패.
+  Tone은 시계/음성 대역이며 **실제 오디오 출력 검증이 아니다**.
+- `rest-rendering.test.ts` **26개**(+1): 실제 VexFlow tickables를 유지하며,
+  그리기/DOM 접근 대역으로 SVG 그룹이 음표·쉼표·타이 세그먼트의 canonical ID에 연결됨을 확인.
+- `autosave.test.ts` **9개**(+5): 연속 편집 마지막 값, 느린 이전 저장의 역전 방지,
+  IndexedDB(fake-indexeddb) 재생성/불러오기 동등성, cleanup 최종 쓰기 순서,
+  저장 실패 후 후속 쓰기 진행. 느린 이전 저장 테스트는 수정 전 실제 덮어쓰기로 실패했다.
+- typecheck/lint/check:architecture/build exit 0.
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- 신규 `tests/e2e/playback.spec.ts` **2종**:
+  1. 위치 진행·SVG/칩 하이라이트·pause 고정·resume·stop 초기화,
+     메트로놈 토글·Score 불변·새로고침 초기화.
+  2. 빈 6/8 메트로놈·템포 편집 중 정지·연속 편집 마지막 값 저장/복원.
+  기존 9종 assertion/timeout은 유지한다. `npm run test:e2e -- --list`로 **11종/4파일** 수집 확인.
+- 전체 `npm run test:e2e`: exit 1, 프로덕션 빌드 후 webServer 시작에서
+  **listen EPERM 0.0.0.0:3010**. 이번 버전 **11종 전부 미실행·미검증**이며 기능 assertion 실패와 구분한다.
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 검증: 위 전체 브라우저 E2E, 실제 스피커/헤드폰의 지속음·클릭·정지/일시정지,
+SVG 하이라이트 시각 확인, 느린 메인 스레드·백그라운드 탭·Safari·모바일 실기기.
+커서 알림은 25ms 목표 주기지만 브라우저 메인 스레드 지연의 영향을 받는다.
+브라우저 강제 종료 시 비동기 cleanup 저장 및 다중 탭 동시 편집 충돌은 보장하지 않는다.

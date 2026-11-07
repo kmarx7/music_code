@@ -165,6 +165,7 @@ export async function renderScoreInto(
     voice.draw(context, stave);
 
     events.forEach((event, position) => {
+      notes[position].getSVGElement()?.setAttribute("data-event-id", event.id);
       rendered.set(event.id, { note: notes[position], row });
     });
   });

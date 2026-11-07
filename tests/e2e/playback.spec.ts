@@ -1,0 +1,62 @@
+import { expect, test } from "@playwright/test";
+import { storedScore } from "./storage";
+
+test("재생 커서·SVG/목록 하이라이트·일시정지·재개·정지와 Score 보존", async ({ page }) => {
+  const id = "e2e-playback-cursor";
+  await page.goto(`/editor/${id}`);
+  await page.getByLabel("기본 템포 (BPM)", { exact: true }).fill("60");
+  await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await page.getByRole("button", { name: "온음표", exact: true }).click();
+  await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
+  await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
+  await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures.flatMap((m: { events: unknown[] }) => m.events).length).toBe(2);
+  const before = await storedScore(page, id);
+  const cursor = page.getByTestId("playback-position");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => Number(await cursor.getAttribute("data-tick"))).toBeGreaterThan(0);
+  const chip = page.getByRole("button", { name: "C4", exact: true });
+  await expect(chip).toHaveAttribute("data-playing", "true");
+  await expect(page.getByTestId("staff").locator('[data-event-id][data-playing="true"]')).toHaveCount(1);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(cursor).toContainText("일시정지");
+  const paused = await cursor.getAttribute("data-tick");
+  await expect(page.locator('[data-playing="true"]')).toHaveCount(0);
+  await page.getByLabel("메트로놈", { exact: true }).check();
+  await page.getByLabel("메트로놈", { exact: true }).uncheck();
+  expect(await cursor.getAttribute("data-tick")).toBe(paused);
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect.poll(async () => Number(await cursor.getAttribute("data-tick"))).toBeGreaterThan(Number(paused));
+  await page.getByLabel("메트로놈", { exact: true }).check();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(cursor).toHaveAttribute("data-tick", "0");
+  await expect(cursor).toContainText("정지");
+  await expect(page.locator('[data-playing="true"]')).toHaveCount(0);
+  expect(await storedScore(page, id)).toEqual(before);
+  await page.reload();
+  await expect(chip).toBeVisible();
+  await expect(cursor).toHaveAttribute("data-tick", "0");
+  await expect(page.getByLabel("메트로놈", { exact: true })).not.toBeChecked();
+});
+
+test("빈 6/8 메트로놈·설정 편집 중 정지·연속 편집 마지막 값 저장", async ({ page }) => {
+  const id = "e2e-playback-metronome";
+  await page.goto(`/editor/${id}`);
+  await page.getByLabel("박자", { exact: true }).selectOption("6/8");
+  await page.getByRole("button", { name: "박자 적용", exact: true }).click();
+  await page.getByLabel("메트로놈", { exact: true }).check();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => Number(await page.getByTestId("playback-position").getAttribute("data-tick"))).toBeGreaterThan(480);
+  for (const tempo of [90, 100, 110]) {
+    await page.getByLabel("기본 템포 (BPM)", { exact: true }).fill(String(tempo));
+    await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  await expect(page.getByTestId("playback-position")).toHaveAttribute("data-tick", "0");
+  await expect.poll(async () => (await storedScore(page, id))?.tempoBpm).toBe(110);
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => Number(await page.getByTestId("playback-position").getAttribute("data-tick"))).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.reload();
+  await expect(page.getByLabel("기본 템포 (BPM)", { exact: true })).toHaveValue("110");
+  await expect(page.getByLabel("박자", { exact: true })).toHaveValue("6/8");
+});

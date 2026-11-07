@@ -43,7 +43,7 @@
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
-| MVP-012 | 재생 | Partial | Tone.js 스케줄 재생(원 Score 템포 기준). 시작/자동 종료 확인, 메트로놈·하이라이트 미구현 |
+| MVP-012 | 재생 | Partial | 커서·하이라이트·일시정지/재개·메트로놈 구현, 단위 검증 완료. 새 브라우저 E2E 미검증, cursor 시작/loop/rate는 후속 범위 |
 | MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 제목 변경·JSON 백업/가져오기 구현(1-E), 사용자 Mac Chromium E2E 통과 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
@@ -231,11 +231,41 @@
 - 이번 E2E 재실행은 Codex의 listen EPERM으로 9종 미실행. Mac 수정 버전의 통과는 아직 확인하지 않았다.
 - 원래 실패 trace와 error-context는 `/tmp/music-score-e2e-a4fc0ac/`에 보존했다. GitHub push 없음.
 
+### 4.10 이후 사용자 Mac 확인 (42e29bb 기준)
+
+- 사용자 제공 결과: **240개 단위·통합 / Chromium E2E 9/9** 통과,
+  typecheck/lint/architecture/build 통과, clean. 위 Codex EPERM 기록은 유지한다.
+
+### 4.11 재생 커서·하이라이트·메트로놈 (2026-11-08)
+
+- 시작점 `42e29bb`, clean. **구현·실행 가능한 로컬 검사 완료 / 신규 브라우저 검증 대기**.
+- 절대 tick/AudioContext 시계 기준 커서, 진행 표시, SVG·음표 칩 하이라이트,
+  Pause/Resume/Stop, 타이 단일 어택·전체 지속음, 쉼표/빈 구간 처리 구현.
+- 메트로놈 ON/OFF, 분모 음가 클릭·마디 첫 박 강조, 2/4·3/4·4/4·6/8,
+  빈 악보 연습과 템포/박자 편집 후 새 설정 재생을 지원한다.
+- 재생/선택/메트로놈 상태는 Score에 저장하지 않는다. 편집/Undo/Redo와 화면 이탈은 재생을 취소한다.
+- 기존 Tone adapter/mergeTiedNotes/960 PPQ/Score/Part.ties/store/Command/IndexedDB를 재사용한다.
+  고빈도 상태를 격리하는 최소 playback feature와 읽기 전용 위치 투영 추가. 모델·레이어·의존성 변경 없음.
+- 추가 저장 경합 재현: 느린 이전 쓰기가 최신 snapshot을 덮어씀. 기존 useAutosave 내부 쓰기 순서와
+  cleanup 저장을 직렬화해 마지막 값을 보존한다. 저장 실패 후 후속 쓰기도 계속한다.
+- 검증: **25파일 / 266개 통과**(기존 240 + 신규 26), typecheck/lint/architecture/build exit 0.
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0. 상세 목록 TEST_PLAN §12.
+- 신규 E2E 2종, 기존 9종 유지, 총 11종 수집 확인.
+  전체 `npm run test:e2e` 시도는 `listen EPERM 0.0.0.0:3010`, exit 1로 **11종 모두 미실행**.
+  이는 assertion 실패가 아니며 이전 사용자 9/9를 이번 버전 통과로 간주하지 않는다.
+- MODULE_CONTRACTS/TEST_PLAN 갱신. AGENTS/ARCHITECTURE/DECISIONS/Score 스키마는 변경하지 않음.
+- 실제 오디오 출력·SVG 시각 배치, Safari/모바일 실기기는 미검증. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 `npm run test:e2e`로 저장 완료 표시 수정 후 전체 9종을 다시 검증한다.
-   수정 전 a4fc0ac 결과는 사용자 8/9 통과이며, 수정 후 성공으로 간주하지 않는다.
-2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
-3. Phase 1 인수 기준과 남은 지원 환경 검증을 확인한다. 기존 이벤트의 박자 변경·중간 조표/박자
-   변경이 필요하면 영향 분석과 사전 승인 후 진행한다.
-4. Phase 1 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석으로 진행.
+1. Mac 일반 터미널에서 아래 명령으로 기존 9종+신규 재생 2종, 총 11종을 검증한다.
+
+   ```bash
+   cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+   npm run test:e2e
+   ```
+
+2. 실제 오디오로 타이 지속·중복 어택 부재, 메트로놈 강조/템포, Pause/Stop 해제와 SVG 하이라이트 확인.
+   메인 스레드 지연·백그라운드 탭의 커서 갱신, Safari/모바일 실기기는 별도 검증한다.
+3. Phase 1 인수 기준·지원 환경 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석.
+   cursor 위치부터 시작, 연습 속도/A–B loop는 후속 범위이며 이번 작업에 포함하지 않는다.

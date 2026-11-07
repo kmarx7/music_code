@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Accidental, Tickable, StaveNote } from "vexflow";
+import { StaveNote, type Accidental, type Tickable } from "vexflow";
 import { renderScoreInto } from "@/adapters/vexflow/renderScore";
 import { createNoteEvent, createRestEvent, NOTATABLE_DURATIONS } from "@/domain/score";
 import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
@@ -33,6 +33,7 @@ vi.mock("vexflow", async (importOriginal) => {
 beforeEach(() => {
   captured.voices.length = 0; captured.ties.length = 0;
   captured.keys.length = 0; captured.meters.length = 0;
+  vi.spyOn(StaveNote.prototype, "getSVGElement").mockReturnValue(undefined);
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -112,4 +113,13 @@ describe("rest rendering adapter with real VexFlow tickables", () => {
     expect(rest.getTicks().value()).toBe(2048);
     expect(score.parts[0].measures[0].events[0].id).toBe("later");
   });
+});
+
+it("links rendered SVG note/rest groups to canonical event IDs for cursor highlighting", async () => {
+  const attribute = vi.fn();
+  vi.mocked(StaveNote.prototype.getSVGElement).mockReturnValue({ setAttribute: attribute } as unknown as SVGElement);
+  const score = tiedScore();
+  score.parts[0].measures[0].events.unshift(createRestEvent({ id: "rest", startTick: 0, durationTicks: 960 }));
+  await renderScoreInto({ innerHTML: "" } as HTMLDivElement, score);
+  expect(attribute.mock.calls).toEqual([["data-event-id", "rest"], ["data-event-id", "t1"], ["data-event-id", "t1:tie1"]]);
 });

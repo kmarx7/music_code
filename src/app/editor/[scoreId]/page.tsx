@@ -14,7 +14,8 @@ import { useScoreState } from "@/store/useScoreStore";
 import { ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { useAutosave } from "@/features/score-library";
-import { playScore, type PlaybackHandle } from "@/adapters/tone/playback";
+import { PlaybackControls, highlightPlayback } from "@/features/playback";
+import type { PlaybackPosition } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
 type LabelMode = "off" | "letter" | "korean";
@@ -65,11 +66,12 @@ export default function EditorPage() {
   const [durationTicks, setDurationTicks] = useState(960);
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
-  const [playing, setPlaying] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
-  const playbackRef = useRef<PlaybackHandle | null>(null);
-  const playbackRequest = useRef(0);
+  const rootRef = useRef<HTMLElement>(null);
+  const showPosition = useCallback((position: PlaybackPosition) => {
+    if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
+  }, []);
   const repository = getScoreRepository();
   const saveStatus = useAutosave(repository);
 
@@ -93,14 +95,6 @@ export default function EditorPage() {
       active = false;
     };
   }, [repository, scoreId]);
-
-  useEffect(
-    () => () => {
-      playbackRequest.current += 1;
-      playbackRef.current?.stop();
-    },
-    [],
-  );
 
   const addPitch = useCallback(
     (pitch: Pitch) => {
@@ -203,39 +197,8 @@ export default function EditorPage() {
     return "";
   };
 
-  async function togglePlay() {
-    if (playbackRef.current || playing) {
-      playbackRequest.current += 1;
-      playbackRef.current?.stop();
-      playbackRef.current = null;
-      setPlaying(false);
-      return;
-    }
-    if (notes.length === 0) {
-      setMessage("재생할 음표가 없습니다.");
-      return;
-    }
-    setPlaying(true);
-    const request = ++playbackRequest.current;
-    try {
-      const handle = await playScore(score, {
-        onEnd: () => {
-          if (request !== playbackRequest.current) return;
-          playbackRef.current = null;
-          setPlaying(false);
-        },
-      });
-      if (request !== playbackRequest.current) handle.stop();
-      else playbackRef.current = handle;
-    } catch {
-      if (request !== playbackRequest.current) return;
-      setPlaying(false);
-      setMessage("재생을 시작하지 못했습니다.");
-    }
-  }
-
   return (
-    <main style={page}>
+    <main ref={rootRef} style={page}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Link href="/" style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
@@ -287,13 +250,8 @@ export default function EditorPage() {
         <Link href="/library" style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
       </form>
 
-      <ScoreSettings score={score} onCommand={(command) => {
-        if (!runCommand(command)) return;
-        playbackRequest.current += 1;
-        playbackRef.current?.stop();
-        playbackRef.current = null;
-        setPlaying(false);
-      }} />
+      <ScoreSettings score={score} onCommand={runCommand} />
+      <PlaybackControls score={score} onPosition={showPosition} />
 
       {loadError ? (
         <p style={{ color: "#b91c1c", fontSize: 13 }}>{loadError}</p>
@@ -305,9 +263,6 @@ export default function EditorPage() {
         </button>
         <button type="button" style={button} onClick={() => scoreStore.redo()}>
           Redo
-        </button>
-        <button type="button" style={button} onClick={togglePlay}>
-          {playing ? "Stop" : "Play"}
         </button>
         <button
           type="button"
@@ -379,6 +334,7 @@ export default function EditorPage() {
                 <li key={event.id}>
                   <button
                     type="button"
+                    data-event-id={event.id}
                     aria-pressed={selected}
                     onClick={() => setSelectedEventId(selected ? null : event.id)}
                     style={{

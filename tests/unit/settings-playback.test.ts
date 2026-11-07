@@ -5,7 +5,7 @@ import { fourNoteScore } from "../fixtures/scores";
 
 const calls = vi.hoisted(() => ({ attack: vi.fn() }));
 vi.mock("tone", () => ({
-  start: vi.fn().mockResolvedValue(undefined), now: () => 10,
+  start: vi.fn().mockResolvedValue(undefined), now: () => 10, immediate: () => 10,
   Frequency: (midi: number) => ({ toFrequency: () => midi }),
   Synth: class {
     toDestination() { return this; }

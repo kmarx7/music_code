@@ -33,6 +33,7 @@
 | Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
+| Feature · Playback | `@/features/playback` | `PlaybackControls`, `highlightPlayback` (런타임 UI/DOM 투영) |
 | Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings` |
 
 내부 파일 직접 import는 같은 feature/모듈 내부에서만 허용한다.
@@ -219,3 +220,35 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 | C-08 클립보드 의미 | Phase 3 전 확정 |
 | C-09 F1 게이트 | Phase 4 전 데이터셋 확정 |
 | C-10 브라우저 매트릭스 | **Chromium(Playwright 1.65.0) 기록됨**. WebKit/Firefox/실기기는 미실행 |
+
+
+## Phase 1 — 재생 커서·하이라이트·메트로놈 (2026-11-08)
+
+- 기존 Tone 어댑터의 `playScore(score, options?)`/`PlaybackHandle.stop()`을 유지하고,
+  `pause`, `resume`, `setMetronome`, `getPosition`과 선택적 `onPosition`, `onState`, `metronome`을 추가한다.
+  `onEnd`는 자연 종료에 한 번만 호출한다. stop은 멱등이며 일시정지·정지는 예정된 음과 클릭을 dispose한다.
+- `domain/score/playback.ts`는 기존 Score의 **읽기 전용** `PlaybackPosition`(절대 tick, 1부터 세는 마디/박,
+  activeNoteIds)과 종료 위치를 계산한다. 별도 음악 데이터나 영속 시간 좌표계를 만들지 않는다.
+- 위치는 `Tone.immediate()`의 AudioContext 시계와 시작 tick으로 계산한다. `Tone.now()`의 look-ahead와
+  시작 여유 시간은 커서에 포함하지 않는다. 25ms 간격은 UI 알림 주기이며 누적 tick 시계가 아니다.
+  정확한 정수 tick 경계의 부동소수점 오차만 보정한다. UI 알림은 메인 스레드 지연의 영향을 받을 수 있다.
+- 첫 Part만 재생한다(기존 단선율 범위). 마지막 이벤트 끝까지 재생하므로 뒤 쉼표를 보존하고,
+  이벤트가 없는 악보는 메트로놈 ON으로 전체 마디를 연습할 수 있다. 사용하지 않는 후행 빈 마디는 생략한다.
+- `mergeTiedNotes`를 재사용해 체인당 **한 번의 어택과 전체 길이 지속**을 스케줄한다.
+  하이라이트는 현재 tick의 기보 세그먼트로 이동한다(`[start, end)`). 쉼표/빈 구간에는 음표 하이라이트가 없다.
+  일반 음표의 기존 90% gate는 유지한다. 타이 지속음 중간에서 재개하면 남은 길이만 한 번 다시 어택한다.
+- 일시정지는 tick을 유지하고 하이라이트를 지운다. 재개는 해당 tick부터 남은 음/클릭을 새로 스케줄한다.
+  정지/자연 종료는 tick 0 및 빈 하이라이트로 돌아간다. 성공한 Score 편집/Undo/Redo/설정 변경과
+  화면 이탈은 이전 재생을 취소한다. 오디오 초기화 중이던 요청도 토큰으로 무효화한다.
+- 메트로놈은 기본 OFF이며 Score에 저장하지 않는다. 분모 음가를 한 클릭으로 삼는다:
+  2/4·3/4·4/4는 4분음표, 6/8은 8분음표 6클릭(첫 박 강조). 6/8 점4분음표 두 박 옵션은 제공하지 않는다.
+  BPM은 기존 4분음표 기준이다. ON/OFF는 멜로디 재시작 없이 클릭만 취소/재스케줄한다.
+  박자·템포 편집은 기존 정책대로 정지 후 다음 재생에서 새 설정을 사용한다.
+- 기존에 고빈도 상태를 소유할 feature가 없으므로 기준선의 `features/playback`에 최소 UI를 구현한다.
+  React 로컬 상태/ref만 사용하고 페이지 전체나 scoreStore를 매 프레임 갱신하지 않는다.
+  VexFlow SVG 그룹과 목록 칩의 `data-event-id`를 통해 DOM 하이라이트를 갱신한다.
+  선택의 `aria-pressed`와 재생의 `data-playing`은 독립적이다. SVG는 매 tick 다시 그리지 않는다.
+- Score/schemaVersion 2/Part.ties/Command/Repository/production 의존성은 변경하지 않는다.
+  연속 편집 회귀에서 재현된 늦은 저장 덮어쓰기를 막기 위해 기존 `useAutosave`의 쓰기를 순서대로 실행한다.
+  cleanup의 마지막 저장도 같은 대기열을 사용하고 실패한 요청 다음의 저장은 계속한다.
+  다중 탭 동시 편집과 브라우저 강제 종료 시 비동기 저장 보장은 기존 미해결 범위다.
