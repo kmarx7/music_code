@@ -36,7 +36,7 @@
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표 |
-| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo. 음정/길이 수정 UI·마디 추가·제목 편집 미구현 |
+| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B). 마디 넘김/타이, 제목·조표·박자 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -44,7 +44,7 @@
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Partial | Tone.js 스케줄 재생(원 Score 템포 기준). 시작/자동 종료 확인, 메트로놈·하이라이트 미구현 |
-| MVP-013 | 로컬 악보함 | Pending | `ScoreRepository` 포트 + 직렬화/검증(`serializeScore`/`deserializeScore`). IndexedDB 어댑터는 Phase 1 |
+| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 이름 변경·백업/복구 미구현 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
 ## 4. Phase 1 진행 (2026-11-07)
@@ -86,6 +86,16 @@
 - 대안 3: 타이 없이 **마디 자동 확장**(append 시 마디가 차면 `AddMeasure` 자동 발행). 모델 변경 없음.
 - **결론**: Phase 1은 대안 3의 수동 버전(마디 추가 버튼)만 제공한다. 타이/자동 확장은
   모델 변경(대안 1) 또는 자동 명령(대안 3)에 대한 **사용자 승인 후** 진행한다.
+
+### 4.3 Phase 1-C — 품질 검증 (Done, 2026-11-07)
+
+- 도입: `@playwright/test` 1.65.0 + Chromium. `npm run test:e2e`, `playwright.config.ts`
+  (`webServer`는 `npm run build && npm run start`, Chromium 단일 프로젝트).
+- E2E 3종(모두 통과): ① 생성→입력→편집→저장→**새로고침 복구**→불러오기→재생/정지,
+  ② 모바일 390×844 가로 스크롤 없음+입력/저장, ③ 키보드 입력·포커스·`aria-pressed`.
+- 재생 토글 보강: 재생 중이면 `playbackRef`가 없어도 정지하고, 오디오 시작 실패 시 상태를 복구한다.
+- `.gitignore`에 `test-results/`, `playwright-report/`, `blob-report/` 추가.
+- 전체 검사 재실행: typecheck/lint/test(66)/check:architecture/build 전부 exit 0.
 
 ## 5. 다음 작업 (Phase 1 착수 전)
 1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.

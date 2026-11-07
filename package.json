@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "check:architecture": "depcruise src --config .dependency-cruiser.cjs && node scripts/check-boundaries.mjs"
   },
   "dependencies": {

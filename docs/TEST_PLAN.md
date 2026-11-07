@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 골격 로드·수화 | Playwright | ⏳ 미도입 |
+| 브라우저 E2E | 입력·편집·저장·복구·재생 흐름, 모바일 레이아웃, 키보드/접근성 | Playwright(Chromium, 프로덕션 빌드) | ✅ 실행(3 통과) |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위 테스트 목록 (실행 결과: 8 파일 / 48 통과)
+## 2. 단위·통합 테스트 목록 (실행 결과: 11 파일 / 66 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -71,14 +71,30 @@
 - 악보가 가득 차면 거부
 - 잘못된 길이 거부
 
+### `tests/unit/score-library.test.ts` (4) — Phase 1-A
+- 없는 악보는 생성 후 저장(`created: true`), 기존 악보는 재사용(`created: false`)
+- 제목 지정 생성, 목록 조회 (`tests/fixtures/memory-repository.ts` 사용)
+
+### `tests/integration/score-repository.test.ts` (6) — Phase 1-A
+- 저장/로드 동등성, 없는 ID → null, `updatedAt` 내림차순 목록, 삭제
+- 손상 레코드는 무시(덮어쓰지 않음), 미지원 `schemaVersion` 거부
+- `fake-indexeddb`로 Node에서 IndexedDB 어댑터 실행(테스트 전용 dev 의존성)
+
+### `tests/unit/commands-resize.test.ts` (7) — Phase 1-B
+- `AddMeasure`: 마디 추가(index/id) 및 중복 ID 거부
+- `ResizeNote`: 마디 내 여유 시 성공, 경계 초과 시 다음 마디로 리플로우(전체 검증 통과)
+- 마지막 마디 용량 부족 → `MEASURE_CAPACITY_EXCEEDED`
+- 단축 시 뒤 이벤트 압축, 잘못된 길이/없는 note 거부
+
 ## 3. 실행 명령과 결과 (2026-11-07)
 
 ```bash
 npm run typecheck        # exit 0
 npm run lint             # exit 0
-npm run test             # exit 0  (48 passed)
-npm run check:architecture  # exit 0 (34 modules / 73 deps, 위반 0)
+npm run test             # exit 0  (11 파일 / 66 통과)
+npm run check:architecture  # exit 0 (42 modules / 97 deps, 위반 0)
 npm run build            # exit 0
+npm run test:e2e         # exit 0  (3 통과, Chromium / 프로덕션 빌드)
 ```
 
 ## 4. 아키텍처 검사기 자기검증 (의도적 위반 → 탐지 → 제거)
@@ -114,18 +130,41 @@ npm run build            # exit 0
 | 재생 토글 | ✅ 클릭 직후 "Stop", 약 0.8초 뒤 자동 "Play" 복귀(Tone.js 15.1.22 로드 확인) |
 | 아키텍처 가드레일 | ✅ 실제 위반(`feature-private-import`) 검출 → 공개 진입점 추가로 수정 |
 
-**미검증**: 실제 오디오 출력(헤드리스 환경), 모바일 Safari/Chrome, 마이크, IndexedDB 저장/복구, E2E 자동화(Playwright 미도입).
+### 5.2 Phase 1-A(저장)·1-B(편집) 검증 (2026-11-07, agent-browser)
 
-### 5.2 브라우저 매트릭스 (E2E 도입 시 기록)
+| 항목 | 결과 |
+|---|---|
+| 악보함 생성 → 편집기 이동 | ✅ `/library` “새 악보” → `/editor/<uuid>` |
+| 자동 저장 | ✅ 음표 입력 후 “저장됨” 표시 |
+| **새로고침 복구** | ✅ 새로고침 후 음표 1개·C4 라벨 유지(IndexedDB `music-score-platform`) |
+| 목록/불러오기 | ✅ 악보함에 표시, “열기”로 동일 ID 복귀(음표 유지) |
+| 삭제 | ✅ 확인 후 목록 비움 + “삭제했습니다” |
+| 음표 선택/편집 | ✅ 선택 → 편집 패널, 반음 ↑(C4→C#4), 2분음표(1920 ticks) 리플로우, 삭제 |
+| 마디 추가 | ✅ 8 → 9마디 |
+
+### 5.3 자동 E2E (Playwright, 2026-11-07)
+
+- 구성: `playwright.config.ts` — `testDir: tests/e2e`, Chromium 단일 프로젝트,
+  `webServer`는 `npm run build && npm run start`(프로덕션 빌드, 포트 3010).
+- 결과: **3/3 통과** (`npm run test:e2e`, 11.7s).
+  1. 새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → **새로고침** → 악보함 불러오기 → 재생/정지
+  2. 모바일(390×844) 가로 스크롤 없음 + 입력/저장
+  3. 컴퓨터 키보드(A) 입력, 건반 포커스(`toBeFocused`), 음표 칩 `aria-pressed` 상태
+- 기록된 환경: Playwright 1.65.0 · Chromium headless shell 158.0.8127.18 · Node 22 · macOS
+- 주의: dev 서버를 재사용하면 첫 라우트의 클라이언트 청크 컴파일이 느려 실패로 오인될 수 있어
+  **프로덕션 빌드 기준**으로 실행한다.
+
+### 5.4 브라우저 매트릭스
 
 | 항목 | 상태 |
 |---|---|
-| 데스크탑 Chrome/Safari 골격 로드 | 미실행 (Playwright 미도입) |
-| 모바일 Safari/Chrome | 미실행 |
+| 데스크탑 Chromium(자동 E2E) | ✅ 실행 (5.3) |
+| 데스크탑 Safari / Firefox / WebKit | 미실행 |
+| 모바일 실기기 Safari/Chrome | 미실행 (Chromium 뷰포트 390×844만 검증) |
 | 마이크 권한/오디오 | Phase 4 |
-| IndexedDB 복구 | Phase 1 |
+| 오디오 실제 출력 | 미검증(무음/헤드리스) |
 
-브라우저 매트릭스는 E2E 도입 시점의 실제 버전을 기록한다(추정 금지).
+브라우저 매트릭스는 실행 시점의 실제 버전을 기록한다(추정 금지).
 
 ## 6. 향후 테스트 (Phase별)
 
@@ -140,8 +179,10 @@ npm run build            # exit 0
 
 ## 7. 미해결·미검증 (정직한 기록)
 
-- E2E 미실행, 실제 브라우저 검증 없음.
-- IndexedDB 어댑터 미구현 → 실제 저장/재열기 미검증(직렬화 계층만 검증).
+- **오디오 실제 출력**은 헤드리스/무음 환경에서 검증하지 않았다(재생 상태 전환만 확인).
+- 브라우저는 Chromium 1종만 실행했다. WebKit/Firefox, 모바일 실기기, 데스크탑 Safari 미실행.
+- IndexedDB는 같은 브라우저의 새로고침 복구까지 검증했다. **프로필 삭제, 저장 용량 초과, 다중 탭 동시 편집 충돌**은 미검증.
+- 타이와 마디 넘김 음표는 미지원이다(정책 검토 결과는 `docs/TASKS.md` §4.2, 모델 변경은 사용자 승인 필요).
 - 아키텍처 위반 fixture는 "검증 후 제거" 방식이며, **상시 회귀 테스트로 남아 있지 않다**.
   필요 시 `tests/architecture/` 격리 fixture + 별도 script로 상시화 검토.
-- 채보 정확도·내보내기 호환성은 아직 해당 없음.
+- 채보 정확도·내보내기 호환성은 아직 해당 없음(Phase 4/5).

@@ -187,8 +187,8 @@ export default function EditorPage() {
   };
 
   async function togglePlay() {
-    if (playbackRef.current) {
-      playbackRef.current.stop();
+    if (playbackRef.current || playing) {
+      playbackRef.current?.stop();
       playbackRef.current = null;
       setPlaying(false);
       return;
@@ -198,13 +198,17 @@ export default function EditorPage() {
       return;
     }
     setPlaying(true);
-    const handle = await playScore(score, {
-      onEnd: () => {
-        playbackRef.current = null;
-        setPlaying(false);
-      },
-    });
-    playbackRef.current = handle;
+    try {
+      playbackRef.current = await playScore(score, {
+        onEnd: () => {
+          playbackRef.current = null;
+          setPlaying(false);
+        },
+      });
+    } catch {
+      setPlaying(false);
+      setMessage("재생을 시작하지 못했습니다.");
+    }
   }
 
   return (

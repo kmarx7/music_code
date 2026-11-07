@@ -111,11 +111,15 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 | dev | `eslint` / `eslint-config-next` | ^9 / 16.4.4 | Next 권장 린트 |
 | dev | `vitest` | ^5.1.0 | 단위 테스트 |
 | dev | `dependency-cruiser` | ^18.7.2 | 레이어·순환 의존성 검사 |
+| dev | `@playwright/test` | ^1.65.0 | 브라우저 E2E(Chromium, 프로덕션 빌드 대상) |
+| dev | `fake-indexeddb` | ^6.2.7 | Node에서 IndexedDB 어댑터 검증용 테스트 대역(런타임 아님) |
 
-**의도적으로 Phase 0에서 도입하지 않은 것**: Tailwind CSS(제품 UI 없음), Zod, IndexedDB 라이브러리, Playwright. 각 기능 Phase에서 필요 시 사유와 함께 도입한다.
+**의도적으로 Phase 0에서 도입하지 않은 것**: Tailwind CSS(제품 UI 없음), Zod, IndexedDB 라이브러리. 각 기능 Phase에서 필요 시 사유와 함께 도입한다.
 Phase 1에서 **VexFlow 5.0.0 / Tone.js 15.1.22**를 ADR-008(사용자 승인)로 도입했다. 두 패키지는
 `src/adapters/*`에서만 초기화하고 서버 컴포넌트/SSR에서 import 하지 않는다.
-**Playwright**는 렌더링 화면 구현 이후(사용자 결정) 도입한다.
+Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/e2e`에서 프로덕션 빌드
+(`npm run build && npm run start`)를 대상으로 실행하며, dev 서버 재사용 시 청크 컴파일 지연을 피한다.
+`fake-indexeddb`는 어댑터 테스트 전용이며 프로덕션 번들에 포함되지 않는다.
 
 ## 8. 아키텍처 검사 구성 (P0-07)
 
