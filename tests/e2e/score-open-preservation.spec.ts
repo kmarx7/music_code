@@ -67,7 +67,7 @@ for (const failure of failures) {
     await page.clock.install();
     await page.goto(`/editor/${id}`);
     await expect(page.getByTestId("score-open-error")).toBeVisible();
-    await expect(page.getByRole("alert")).toContainText(failure.code);
+    await expect(page.getByTestId("score-open-error").locator('p[role="alert"]')).toContainText(failure.code);
     await expect(page.getByRole("button")).toHaveCount(0);
     await expect(page.getByTestId("staff")).toHaveCount(0);
     // Advance beyond debounce to detect an accidentally started autosave.
@@ -134,7 +134,7 @@ test("이전 정상 편집 세션이 남아 있어도 같은 ID의 실패 저장
   await page.clock.install();
   await open.click();
   await expect(page.getByTestId("score-open-error")).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText("INVALID_JSON");
+  await expect(page.getByTestId("score-open-error").locator('p[role="alert"]')).toContainText("INVALID_JSON");
   await page.clock.runFor(1000);
   expect(await rawRecord(page, score.id)).toEqual(damaged);
   expect(await page.evaluate(() => (window as Window & { scoreWriteCount?: number }).scoreWriteCount)).toBe(0);

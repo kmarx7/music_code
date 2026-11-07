@@ -16,7 +16,7 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 13종 + 원본 보존 10종 | Playwright(Chromium, 프로덕션 빌드) | 8141c6b 사용자 Mac 13/13 통과 / 원본 보존 수정 후 23종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 13종 + 원본 보존 10종 | Playwright(Chromium, 프로덕션 빌드) | 60a9e01 사용자 Mac 15/23 통과 / alert 선택자 수정 후 23종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
 ## 2. 단위·통합 테스트 목록 (최신 실행 결과: 26 파일 / 284 통과)
@@ -502,3 +502,33 @@ npm run test:e2e
 강제 종료·직접 URL 이탈·뒤로가기의 미저장 정상 편집 보존과 정상 저장본 간 다중 탭 충돌.
 이번 atomic save guard는 읽을 수 없는 기존 레코드를 보호하며 정상 레코드 간 충돌 병합은 하지 않는다.
 원시 백업 UI/자동 복구는 미구현이고 실패 원본은 수정 없이 보관한다.
+
+
+## 16. Next.js route announcer와 오류 alert 선택자 충돌 (2026-11-08)
+
+- 사용자 Mac `60a9e01`: **15개 통과 / 8개 실패**, 총 23종.
+- 실제 실패 8개 error-context는 모두 `getByRole("alert")`가 실제 오류 p와
+  `<div role="alert" id="__next-route-announcer__">`에 동시에 일치한 strict mode violation이다.
+  실패는 원본 불변성 assertion에 도달하기 전에 발생했으므로 데이터 보존 성공/실패로 확대 해석하지 않는다.
+- score-open-preservation.spec.ts:70,137만 오류 화면 testid 내부의 p로 한정한다:
+  `page.getByTestId("score-open-error").locator('p[role="alert"]')`.
+  기대 오류 코드·toContainText 방식은 유지하고 `.first()`나 timeout 증가는 사용하지 않는다.
+- 다른 E2E의 전역 alert 선택자는 없음을 확인했다. 애플리케이션 코드는 수정하지 않았다.
+- Git 기준 파일과 비교해 위 2곳 외 모든 테스트 내용이 동일함을 확인했다.
+  원시 레코드 전체 불변, 자동 저장을 포함한 쓰기 시도 0회, 편집/Staff 부재,
+  이전 정상 세션의 동일 ID 재진입 차단, 악보함 복귀 후 보존 검증 모두 유지한다.
+- `npm run test`: **26파일 / 284개 통과**. typecheck/lint/check:architecture/build exit 0.
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- `npm run test:e2e`: 서버 시작 시 **listen EPERM 0.0.0.0:3010**, exit 1 → **23종 미실행**.
+  `npm run test:e2e -- --list`: exit 0, 23종/6파일 수집 확인(브라우저 통과 아님).
+- 원래 실패 증거 8종은 `/tmp/music-score-alert-60a9e01-ye6cjijv/test-results/`에
+  실행 전 보존했다(임시 경로, Git 제외). 이전 Codex EPERM 기록도 유지한다.
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 검증: 수정 후 전체 23종 및 오류 선택자 이후의 브라우저 원본 보존 assertion 실행.

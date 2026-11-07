@@ -319,9 +319,28 @@
 - DATA_MODEL/MODULE_CONTRACTS/TEST_PLAN 갱신. Score 모델·Part.ties·schemaVersion 2·아키텍처 유지.
   포트 서명과 레이어를 유지한 오류 처리 강화여서 구조 변경 ADR은 추가하지 않았다. GitHub push 없음.
 
+### 4.15 E2E 오류 alert 선택자 범위 수정 (2026-11-08)
+
+- 기준 `60a9e01`, clean. 사용자 Mac Chromium 결과 **15/23 통과, 8종 실패**.
+- 8개 error-context 모두 실제 오류 `p[role="alert"]`와 Next.js `__next-route-announcer__`의
+  전역 alert 선택자 충돌을 기록한다. 오류 메시지는 화면에 존재하며 원본 보존 assertion 실패가 아니다.
+- score-open-preservation.spec.ts:70,137의 2곳을
+  `page.getByTestId("score-open-error").locator('p[role="alert"]')`로 한정한다.
+  첫 locator는 실패 7종에 공유되며 두 번째는 이전 정상 세션 차단 시나리오다.
+- 전체 테스트의 같은 전역 alert locator는 이 2곳뿐임을 확인했다.
+  2곳 외 테스트 내용은 동일: 오류 코드 기대값, 원시 레코드 전체 불변, readwrite/put/add/delete/clear 0회,
+  편집/Staff 부재·기존 세션 차단·악보함 복귀·clock/timeout 모두 유지. 삭제/skip 없음.
+- 애플리케이션·데이터 모델·아키텍처는 변경하지 않는다. 테스트 1파일과 검증 문서 2파일만 수정한다.
+- 단위·통합 **26파일 / 284개 통과**, typecheck/lint/architecture/build exit 0.
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- 전체 test:e2e 실행은 **listen EPERM 0.0.0.0:3010**, exit 1 → 수정 버전 23종 미실행.
+  `--list`는 23종/6파일 수집 확인. 오류 선택자 이후의 브라우저 데이터 보존 검증은 아직 완료로 표시하지 않는다.
+- 다음: Mac 일반 터미널 전체 E2E 23종 재검증. 이전 EPERM/사용자 15/23 결과는 별도 기록으로 유지한다.
+  GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 원본 보존 수정 후 총 23종을 검증한다(기준 8141c6b Mac 결과 13/13).
+1. Mac 일반 터미널에서 아래 명령으로 alert 선택자 수정 후 총 23종을 검증한다(수정 전 60a9e01 Mac 결과 15/23).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
