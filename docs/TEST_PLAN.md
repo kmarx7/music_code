@@ -14,12 +14,12 @@
 | 아키텍처 | 레이어·순환·전역·private import·중복 모델 | dependency-cruiser + check-boundaries | ✅ 실행 |
 | 정적 검사 | 타입·린트 | tsc, eslint | ✅ 실행 |
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
-| 통합 | store/port/adapter 연결 | Vitest | ⏳ 미구현(P0-06 Partial) |
-| 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ⏳ 미구현 |
+| 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
+| 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
 | 브라우저 E2E | 골격 로드·수화 | Playwright | ⏳ 미도입 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위 테스트 목록 (실행 결과: 4 파일 / 28 통과)
+## 2. 단위 테스트 목록 (실행 결과: 6 파일 / 38 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -45,13 +45,27 @@
 - 히스토리 없을 때 undo/redo no-op
 - 과거 스냅샷 불변
 
+### `tests/unit/serialize.test.ts` (5)
+- 유효 Score round-trip 동등성
+- 잘못된 JSON 거부
+- Score 형태 아님 거부
+- 미지원 schemaVersion 거부
+- 손상 Score(0 길이) 거부 + 검증 코드 포함
+
+### `tests/unit/score-store.test.ts` (5)
+- 초기 null → init 후 세션
+- 명령 적용 + 히스토리 기록
+- 실패 명령 시 상태 동일 참조 유지
+- undo/redo
+- 변경 시에만 구독자 알림(구독 해제 후 미알림)
+
 ## 3. 실행 명령과 결과 (2026-11-07)
 
 ```bash
 npm run typecheck        # exit 0
 npm run lint             # exit 0
-npm run test             # exit 0  (28 passed)
-npm run check:architecture  # exit 0 (17 modules / 30 deps, 위반 0)
+npm run test             # exit 0  (38 passed)
+npm run check:architecture  # exit 0 (21 modules / 41 deps, 위반 0)
 npm run build            # exit 0
 ```
 
@@ -100,7 +114,7 @@ npm run build            # exit 0
 ## 7. 미해결·미검증 (정직한 기록)
 
 - E2E 미실행, 실제 브라우저 검증 없음.
-- 직렬화/마이그레이션 코드 미구현 → round-trip·손상 데이터 복구 미검증.
+- IndexedDB 어댑터 미구현 → 실제 저장/재열기 미검증(직렬화 계층만 검증).
 - 아키텍처 위반 fixture는 "검증 후 제거" 방식이며, **상시 회귀 테스트로 남아 있지 않다**.
   필요 시 `tests/architecture/` 격리 fixture + 별도 script로 상시화 검토.
 - 채보 정확도·내보내기 호환성은 아직 해당 없음.

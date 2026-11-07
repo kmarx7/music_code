@@ -14,9 +14,9 @@
 | P0-03 | 최소 Next.js 골격 + 검사 명령 | **Done** | `package.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.mts`, `src/app/{layout,page,globals.css}`. 5개 script 동작 |
 | P0-04 | canonical 모델 + 검증 | **Done** | `src/domain/score/{types,constants,create,validate,index}.ts`, `src/domain/music-theory/pitch.ts`. 정상/오류 fixture 8종 판정 |
 | P0-05 | Command 파이프라인 + Undo/Redo | **Done (기본 4종)** | `AddNote`, `UpdateNote`, `DeleteEvent`, `InsertRest`. Transpose/Paste는 Phase 2/3 (계약만 준비) |
-| P0-06 | 상태·port·조립 경계 | **Partial** | `ScoreRepository` 포트 정의, 단일 Score 소유자 = `EditSessionState`. React store 바인딩은 Phase 1로 연기(새 상태 시스템 미도입) |
+| P0-06 | 상태·port·조립 경계 | **Done** | `ScoreRepository` 포트, 단일 Score 소유자 `src/store/score-store.ts`(React 비의존) + `useScoreStore`(useSyncExternalStore). 새 상태 라이브러리 미도입 |
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
-| P0-08 | 통합 검증·인수 기록 | **Partial** | 5개 명령 통과. E2E(Playwright) 미도입·미실행, 직렬화 round-trip 미구현 |
+| P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
 ## 2. 검증 명령 결과 (2026-11-07 실행)
 
@@ -24,8 +24,8 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 4 파일 / **28 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 17 모듈·30 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 6 파일 / **38 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | 21 모듈·41 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -44,7 +44,7 @@
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Pending | 미착수 |
-| MVP-013 | 로컬 악보함 | Pending | `ScoreRepository` 포트 인터페이스만 |
+| MVP-013 | 로컬 악보함 | Pending | `ScoreRepository` 포트 + 직렬화/검증(`serializeScore`/`deserializeScore`). IndexedDB 어댑터는 Phase 1 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
 ## 4. 다음 작업 (Phase 1 착수 전)
