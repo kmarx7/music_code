@@ -1,5 +1,6 @@
 import type { Measure, Part, Pitch, Score } from "@/domain/score/types";
 import { createNoteEvent, createRestEvent, measureStartTick, measureTicks } from "@/domain/score/create";
+import { TICKS_PER_QUARTER } from "@/domain/score/constants";
 import type { EditCommand } from "@/domain/commands/types";
 
 export type AppendNotePlan =
@@ -12,7 +13,7 @@ export type AppendNotePlan =
  */
 function planAppendPosition(
   score: Score,
-  input: { durationTicks: number; id: string; partId?: string },
+  input: { durationTicks: number; id: string; partId?: string; startTick?: number },
 ): { ok: true; part: Part; target: Measure; startTick: number } | { ok: false; message: string } {
   const part = input.partId
     ? score.parts.find((candidate) => candidate.id === input.partId)
@@ -30,7 +31,10 @@ function planAppendPosition(
       endTick = Math.max(endTick, event.startTick + event.durationTicks);
     }
   }
-  const startTick = endTick;
+  const startTick = input.startTick ?? endTick;
+  if (!Number.isSafeInteger(startTick) || startTick < 0) {
+    return { ok: false, message: "입력 위치는 0 이상의 정수 tick이어야 합니다." };
+  }
 
   // 음표/쉼표 공통: 시작 위치를 찾고 종류별 길이 정책은 명령에서 검증한다.
   const target = part.measures.find((measure) => {
@@ -42,7 +46,8 @@ function planAppendPosition(
   if (!target) {
     return {
       ok: false,
-      message: "악보가 가득 찼습니다. 마디를 추가해 주세요.",
+      message: input.startTick === undefined ? "악보가 가득 찼습니다. 마디를 추가해 주세요."
+        : "입력 위치가 악보 범위를 벗어났습니다. 마디를 추가하거나 위치를 바꿔 주세요.",
     };
   }
 
@@ -52,6 +57,21 @@ function planAppendPosition(
 export function planAppendNote(
   score: Score,
   input: { pitch: Pitch; durationTicks: number; id: string; partId?: string },
+): AppendNotePlan {
+  return planNoteInput(score, input);
+}
+
+/** 기존 AddNote 경로로 빈 위치에 삽입한다. 충돌·음가·타이는 Command가 검증한다. */
+export function planNoteAt(
+  score: Score,
+  input: { pitch: Pitch; durationTicks: number; id: string; startTick: number; partId?: string },
+): AppendNotePlan {
+  return planNoteInput(score, input);
+}
+
+function planNoteInput(
+  score: Score,
+  input: { pitch: Pitch; durationTicks: number; id: string; startTick?: number; partId?: string },
 ): AppendNotePlan {
   const position = planAppendPosition(score, input);
   if (!position.ok) return position;
@@ -74,6 +94,15 @@ export function planAppendNote(
       }),
     },
   };
+}
+
+/** 1부터 세는 마디/분모 음가 박을 canonical 절대 tick으로 변환한다. */
+export function noteInputTick(part: Part, measure: number, beat: number): number | null {
+  if (!Number.isInteger(measure) || measure < 1 || measure > part.measures.length ||
+      !Number.isFinite(beat) || beat < 1 || beat >= part.timeSignature.numerator + 1) return null;
+  const tick = (measure - 1) * measureTicks(part.timeSignature) +
+    (beat - 1) * TICKS_PER_QUARTER * 4 / part.timeSignature.denominator;
+  return Number.isSafeInteger(tick) ? tick : null;
 }
 
 /** 기존 입력 위치 계획을 재사용해 끝에 쉼표를 추가한다. 경계 초과를 자동 건너뛰지 않는다. */

@@ -18,21 +18,21 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 피아노 입력 소리 미리듣기)
+## 2. 검증 명령 결과 (최신: 2026-11-08 편집 커서 위치 입력)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 28 파일 / **315 테스트 통과**(기존 313 + 반복 입력 회귀 2) |
-| `npm run check:architecture` | ✅ exit 0 | 51 모듈·130 의존성, 경계 44파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 30 파일 / **353 테스트 통과**(기존 315 + 커서 회귀 38) |
+| `npm run check:architecture` | ✅ exit 0 | 52 모듈·136 의존성, 경계 45파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
 | ID | 기능 | 상태 | Phase 0에서 확보한 기반 |
 |---|---|---|---|
-| MVP-001 | 가상 피아노 | Partial | 88건반(A0–C8) 클릭 + 컴퓨터 키보드 매핑 → `planAppendNote` → `AddNote`. 입력 소리·ON/OFF·터치 지원 추가, 실제 오디오/새 E2E 미검증. 커서 위치 입력은 후속 |
+| MVP-001 | 가상 피아노 | Partial | 88건반(A0–C8) 클릭 + 컴퓨터 키보드 매핑 → `planAppendNote` → `AddNote`. 입력 소리·ON/OFF·터치 및 마디/박 편집 커서 입력 구현. 실제 오디오/새 커서 E2E 미검증 |
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
@@ -377,9 +377,31 @@
 - Score/Command/IndexedDB/Part.ties/schemaVersion 2/전체 악보 재생 정책/의존성/아키텍처 유지.
   문서·테스트만 보완하며 GitHub push, Vercel 접근·설정 변경·배포는 수행하지 않는다.
 
+### 4.18 편집 커서 위치 입력 (2026-11-08)
+
+- 기준 `3d7cfe8`, clean. 사용자 기준선: 단위·통합 315개 및 Mac Chromium **28/28 통과**.
+  4.17의 Codex 28종 EPERM 기록은 과거 결과로 유지한다.
+- 기본 끝 입력 유지. 마디/박 선택 → 절대 tick 커서 표시 → 피아노 입력을 지원한다.
+  SVG 파란 커서 선은 VexFlow 좌표를 사용한다. 모바일은 줄바꿈 폼/터치로 위치를 조작한다.
+- 기존 append-note 계획을 확장해 `planNoteAt`/`noteInputTick`을 추가하고 기존 AddNote를 dispatch한다.
+  마디 초과는 기존 분할 타이, 이벤트 충돌·악보 길이 초과는 원본/이력/커서 유지로 거부한다.
+  후속 타이 세그먼트에서 충돌해도 앞부분을 부분 삽입하지 않는다. 이벤트 자동 밀기/자동 마디 추가 없음.
+- 성공 시에만 음표 끝으로 커서 전진. 커서/모드는 UI 상태로 저장·Undo 이력 대상이 아니다.
+  Undo/Redo는 cursor tick을 유지하고 새로고침은 끝 입력 모드다. 쉼표 삽입은 기존 끝 입력 유지.
+- 단위 33개(위치 변환·삽입/거부·히스토리·타이), SVG 4개, IndexedDB 통합 1개 추가.
+  전체 **30파일 / 353개 통과**(기존 315 유지). typecheck/lint/architecture/build exit 0.
+  아키텍처 52 modules / 136 dependencies, 경계 45파일 위반 0.
+- 신규 E2E 3종: 중간 삽입/커서 전진/충돌/Undo/Redo/복원/끝 입력,
+  기존 타이/쉼표 충돌/전체 경계, 모바일 6/8/끝 tick/마디 추가. 기존 28종 모두 유지.
+  `--list` **31종/8파일** 수집 성공. 전체 실행은 **listen EPERM 0.0.0.0:3010**, exit 1로 **31종 미실행**.
+- 실제 SVG 위치/모바일 실기기/빠른 입력 체감은 미검증이며 Mac 전체 E2E 및 TEST_PLAN §19 수동 절차가 필요하다.
+  구현과 실행 가능한 검사는 완료했으나 브라우저 검증 완료로 표시하지 않는다.
+- MODULE_CONTRACTS/TEST_PLAN 갱신. Score/schemaVersion 2/Part.ties/기존 Command·VexFlow·Tone·저장 경계 유지.
+  신규 음악 모델/상태 라이브러리/production 의존성/구조 변경 없음. GitHub push/Vercel 접근·변경·배포 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 반복 입력 회귀 추가 후 전체 28종을 검증한다(사용자 기준선 23/23).
+1. Mac 일반 터미널에서 아래 명령으로 편집 커서 추가 후 전체 31종을 검증한다(사용자 기준선 28/28).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
@@ -389,4 +411,4 @@
 2. TEST_PLAN §17의 입력 미리듣기 실제 청취·Safari/모바일 절차를 수행한다. 실제 오디오로 타이 지속·중복 어택 부재, 메트로놈 강조/템포, Pause/Stop 해제와 SVG 하이라이트 확인.
    메인 스레드 지연·백그라운드 탭의 커서 갱신, Safari/모바일 실기기는 별도 검증한다.
 3. Phase 1 인수 기준·지원 환경 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석.
-   cursor 위치부터 시작, 연습 속도/A–B loop는 후속 범위이며 이번 작업에 포함하지 않는다.
+   명시적 수동 저장 UI 및 재생 cursor 시작, 연습 속도/A–B loop는 후속 범위다.

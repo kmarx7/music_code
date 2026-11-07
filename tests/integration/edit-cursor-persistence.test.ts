@@ -1,0 +1,29 @@
+import "fake-indexeddb/auto";
+import { expect, it } from "vitest";
+import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
+import { planNoteAt } from "@/application";
+import { createScoreStore } from "@/store/score-store";
+import { createPitch } from "@/domain/music-theory";
+import { tiedScore } from "../fixtures/scores";
+
+it("persists middle-gap insertion, undo/redo and failed collisions without changing tied events", async () => {
+  const repository = createIndexedDbScoreRepository({ dbName: "edit-cursor-persistence" });
+  const store = createScoreStore(); const initial = tiedScore(); store.init(initial);
+  await repository.save(initial);
+  const plan = planNoteAt(initial, { pitch: createPitch("E", 0, 4), id: "middle", startTick: 960, durationTicks: 960 });
+  if (!plan.ok) throw new Error(plan.message);
+  expect(store.dispatch(plan.command)?.ok).toBe(true);
+  const edited = store.getState()!.current;
+  store.undo(); await repository.save(store.getState()!.current);
+  expect(await repository.load(initial.id)).toEqual(initial);
+  store.redo(); await repository.save(store.getState()!.current);
+  const reopened = createIndexedDbScoreRepository({ dbName: "edit-cursor-persistence" });
+  expect(await reopened.load(initial.id)).toEqual(edited);
+  expect(edited.parts[0].ties).toEqual(initial.parts[0].ties);
+  expect(edited.schemaVersion).toBe(2);
+  const state = store.getState();
+  expect(store.dispatch(plan.command)?.ok).toBe(false);
+  expect(store.getState()).toBe(state);
+  expect(await reopened.load(initial.id)).toEqual(edited);
+  expect(JSON.stringify(edited)).not.toContain("cursor");
+});

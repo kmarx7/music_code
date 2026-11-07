@@ -35,7 +35,7 @@
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
 | Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle` |
 | Feature · Playback | `@/features/playback` | `PlaybackControls`, `highlightPlayback` (런타임 UI/DOM 투영) |
-| Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings` |
+| Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings`, `EditCursor` |
 
 내부 파일 직접 import는 같은 feature/모듈 내부에서만 허용한다.
 
@@ -340,3 +340,36 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   컴퓨터 키의 별도 누름은 각각 입력하며 운영체제의 held-key repeat만 무시한다.
   미리듣기 실패 중 생성한 음표도 기존 Command 히스토리의 Undo/Redo 및 저장·복원을 따른다.
   미리듣기 자체는 음악 편집 이력을 추가하지 않는다(2026-11-08 반복 입력 회귀 검증 보완).
+
+
+## Phase 1 — 편집 커서 위치 입력 (2026-11-08)
+
+- `application/append-note.ts`의 기존 위치 계획/음표 생성을 공유한다. 기존
+  `planAppendNote(score, input)`는 마지막 이벤트 뒤 입력과 기존 오류 안내를 유지한다.
+  `planNoteAt(score, { pitch, durationTicks, id, startTick, partId? })`는 절대 tick 위치의
+  기존 `AddNote`를 계획한다. 계획 성공은 음악 검증 성공을 뜻하지 않으며 Command 결과를 확인해야 한다.
+- `noteInputTick(part, measure, beat)`은 1부터 세는 마디·분모 음가 박을 절대 tick으로 변환한다.
+  마디 범위·마디 안 박 범위·정수 tick을 검증하며 잘못된 값은 null이다. 6/8은 8분음표 6박이다.
+  UI 좌표를 음악 모델로 저장하거나 새 시간 모델을 만들지 않는다.
+- 새 `EditCursor`는 기존 score-editor 공개 진입점의 작은 위치 선택 UI다. 기존 음표/쉼표 선택 패널은
+  선택 이벤트 편집용이라 입력 위치를 소유하지 않는다. 마디/박 폼과 모드 선택만 별도로 추가한다.
+- 편집기 기본 모드는 “악보 끝에 입력”(cursor null). “편집 커서에 입력” 전환 시 tick 0에서 시작하며,
+  선택 위치는 React 로컬 UI 상태와 입력 콜백용 ref에만 둔다. ref는 같은 렌더 사이의 빠른 입력도
+  직전 성공 위치 다음으로 입력하도록 동기 갱신한다. Score/store/IndexedDB에 커서를 저장하지 않는다.
+- 피아노 입력은 기존 미리듣기와 onPitch → 계획 → scoreStore.dispatch 경로를 따른다.
+  **성공한 AddNote만** cursor를 `startTick + durationTicks`로 이동시킨다. 실패 시 커서·Score·past/future 불변.
+  기존 이벤트를 밀거나 덮거나 빈 곳으로 자동 건너뛰지 않는다. 다음 위치에 이벤트가 있으면 다음 입력을 거부한다.
+- 기존 AddNote의 마디 경계 분할/표기가능 음가/Part.ties/중첩 검증을 유지한다. 마디를 넘는 음은
+  기존 타이로 분할한다. 악보 전체 길이 초과나 후속 세그먼트 충돌도 원자적으로 거부한다.
+  마지막 끝 tick은 커서로 표시하되 다음 입력은 거부하고 마디 추가/위치 변경을 안내한다.
+- Undo/Redo는 기존 음악 히스토리만 변경한다. 커서 이동은 이력을 추가하지 않으며 Undo/Redo 후에도
+  절대 tick을 유지한다. 박자 변경은 같은 tick을 새 마디/박으로 표시한다. 길이가 줄어 범위 밖이면
+  명시적 위치 변경/마디 추가 전 삽입을 거부한다. 새로고침·다른 악보 열기는 끝 입력 모드로 초기화한다.
+- 쉼표 삽입은 기존 끝 입력 정책을 유지하며 UI에 명시한다. 커서 위치에서 악보 재생 시작은 이번 범위가 아니다.
+  커서 이동은 Score를 수정하지 않고 재생을 제어하지 않는다. 실제 삽입/Undo/Redo의 기존 재생 정지 정책은 유지한다.
+- `StaffView`/`renderScoreInto`에 선택적 cursorTick을 추가한다(기존 호출 호환).
+  VexFlow 음표/GhostNote의 x 좌표와 마디 경계를 이용해 파란 SVG 선을 표시하고,
+  빈 구간은 해당 좌표 사이를 보간한다. 기보 그룹/타이/음표 tick은 변경하지 않는다.
+  이 선은 읽기 전용 UI 투영이며 SVG 클릭으로 위치를 계산하거나 Score를 역산하지 않는다.
+- Score/schemaVersion 2/Part.ties/Command/Repository/Tone 재생·미리듣기/의존성/레이어는 불변이다.
+  호환 가능한 입력 계획·UI 확장이며 구조 변경 ADR은 필요하지 않다.

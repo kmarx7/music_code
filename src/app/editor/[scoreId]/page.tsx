@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { ScoreReadError, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest } from "@/application";
+import { ScoreReadError, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt } from "@/application";
 import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { ScoreSettings, StaffView } from "@/features/score-editor";
+import { EditCursor, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
@@ -101,6 +101,11 @@ function EditorWorkspace() {
   const router = useRouter();
   const session = useScoreState();
   const [durationTicks, setDurationTicks] = useState(960);
+  const [cursorTick, setCursorTick] = useState<number | null>(null);
+  const cursorRef = useRef<number | null>(null);
+  const moveCursor = useCallback((tick: number | null) => {
+    cursorRef.current = tick; setCursorTick(tick);
+  }, []);
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -132,11 +137,14 @@ function EditorWorkspace() {
       const state = scoreStore.getState();
       if (!state) return;
 
-      const plan = planAppendNote(state.current, {
+      const input = {
         pitch,
         durationTicks,
         id: crypto.randomUUID(),
-      });
+      };
+      const tick = cursorRef.current;
+      const plan = tick === null ? planAppendNote(state.current, input)
+        : planNoteAt(state.current, { ...input, startTick: tick });
       if (!plan.ok) {
         setMessage(plan.message);
         return;
@@ -144,8 +152,9 @@ function EditorWorkspace() {
 
       const result = scoreStore.dispatch(plan.command);
       setMessage(result && !result.ok ? result.error.message : "");
+      if (result?.ok && tick !== null) moveCursor(tick + durationTicks);
     },
-    [durationTicks],
+    [durationTicks, moveCursor],
   );
 
   if (!session) {
@@ -318,7 +327,8 @@ function EditorWorkspace() {
         <button type="button" style={button} onClick={insertRest}>
           쉼표 삽입
         </button>
-        <span style={{ fontSize: 12, color: "#5f6773" }}>선택한 길이로 악보 끝에 삽입</span>
+        <span style={{ fontSize: 12, color: "#5f6773" }}>{cursorTick === null
+          ? "선택한 길이로 악보 끝에 삽입" : "음표: 편집 커서에 삽입 · 쉼표: 악보 끝에 삽입"}</span>
         <span style={{ width: 1, background: "#d9dee8", margin: "0 4px" }} />
         {(["off", "letter", "korean"] as LabelMode[]).map((mode) => (
           <button
@@ -333,7 +343,8 @@ function EditorWorkspace() {
       </div>
 
       <div style={panel}>
-        <StaffView score={score} />
+        <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
+        <StaffView score={score} cursorTick={cursorTick} />
       </div>
 
       <div style={panel}>

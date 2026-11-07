@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 23종 + 피아노 미리듣기 5종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 23/23 통과 / 반복 입력 회귀 추가 후 28종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 28종 + 편집 커서 3종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 28/28 통과 / 편집 커서 추가 후 31종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 28 파일 / 315 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 30 파일 / 353 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -595,3 +595,47 @@ npm run test:e2e
 ```
 
 이번 작업은 GitHub push 및 Vercel 접근·설정 변경·배포를 수행하지 않는다.
+
+
+## 19. 편집 커서 위치 입력 (2026-11-08)
+
+- 사용자 기준선 `3d7cfe8`: 단위·통합 315개, Mac Chromium 28/28 통과(§18 과거 EPERM과 구분).
+- `edit-cursor.test.ts` **33개**: 빈/중간 마디 삽입, 잘못된/전체 범위 밖 위치,
+  잘못된·표기 불가 음가/전체 끝 초과, 음표/쉼표 충돌 시 Score·redo 이력 불변,
+  기존 타이/이벤트 불변, 새 경계 타이 및 단일 지속음 병합, Undo/Redo,
+  후속 타이 세그먼트 충돌 시 부분 삽입 방지, 끝 입력 보존, 2/4·3/4·4/4·6/8 좌표 변환.
+- 기존 `rest-rendering.test.ts`에 **4개** 추가: 빈 구간/마디/최종 끝 tick의 SVG 선,
+  실제 VexFlow tickable 기반 음표 좌표 정렬과 타이 유지. DOM 그리기 대역이며 실제 SVG 육안 검증은 아니다.
+- `edit-cursor-persistence.test.ts` **1개**: 기존 타이 악보 빈 구간 삽입, Undo/Redo 후 실제 fake-indexeddb
+  저장·새 repository 읽기의 전체 동등성, 충돌 뒤 원본/이력 불변. 커서가 직렬화되지 않는지 확인한다.
+- 전체 **30파일 / 353개 통과**, 기존 315개(미리듣기 포함) 유지.
+  typecheck/lint/check:architecture/build exit 0, 52 modules / 136 dependencies, 경계 45파일 위반 0.
+- 신규 `edit-cursor.spec.ts` **3종**: 중간 위치 입력/커서 전진/SVG tick/충돌 거부/Undo/Redo/저장/재생/복원/끝 입력,
+  경계 타이·기존 타이 보존·쉼표 충돌·악보 끝 초과,
+  모바일 touch 6/8 박 선택·최종 tick·마디 추가 후 입력·가로 넘침 부재.
+- 기존 28종 삭제/skip/timeout 증가 없이 유지. `npm run test:e2e -- --list`: **31종/8파일** 수집.
+  전체 `npm run test:e2e`는 **listen EPERM 0.0.0.0:3010**, exit 1 → **31종 미실행**.
+  브라우저 데이터 보존/커서 이동·삽입 성공을 자동 검증 완료로 기록하지 않는다.
+
+Mac 일반 터미널:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+수동 확인(미실행):
+
+1. `npm run dev` → localhost:3010 에서 새 악보를 열고 “편집 커서에 입력” 선택.
+   3마디 2박으로 이동해 위치 문구와 해당 마디의 파란 SVG 선을 확인한다(가로 스크롤 포함).
+2. 건반 입력 후 음표가 그 자리에 생기고 커서가 음가만큼 전진하는지 확인한다. 빠른 키 입력도 다음 위치에 순서대로 입력되어야 한다.
+3. 기존 음표/쉼표 자리로 이동해 입력한다. 거부 안내·위치/원본 유지, 이후 Undo/Redo 및 새로고침 복원을 확인한다.
+4. 1마디 마지막 박에서 2분음표를 넣어 기존 경계 타이를 확인한다. 악보 마지막 박에서 같은 길이는 거부되어야 한다.
+   마지막 끝 tick에서 마디 추가 후 입력이 가능해야 한다. 겹침을 피하려 자동 이동하거나 이벤트를 밀면 안 된다.
+5. Undo/Redo/박자 변경 후에도 동일한 절대 tick 정책, 새로고침 후 끝 입력 모드 복귀,
+   “악보 끝에 입력” 전환 후 마지막 이벤트 뒤 입력과 기존 미리듣기·재생을 확인한다.
+6. 실제 모바일/Safari에서 마디·소수 박 입력/이동·터치·스크롤과 SVG 위치를 확인한다.
+   UI 폼은 터치/키보드용이며 악보 픽셀 클릭 입력은 제공하지 않는다. 실제 소리는 §17 절차로 별도 확인한다.
+
+Score/Command/Repository/Tone 및 schemaVersion 2/Part.ties/의존성/기본 아키텍처 유지.
+GitHub push 및 Vercel 설정·배포 변경은 수행하지 않는다.

@@ -1,6 +1,6 @@
 import type { Part, Score, ScoreEvent } from "@/domain/score/types";
 import { NOTATABLE_DURATIONS } from "@/domain/score/tie";
-import { measureStartTick, TICKS_PER_QUARTER } from "@/domain/score";
+import { measureStartTick, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 
 const DURATION_ALIAS: Record<number, string> = {
   1: "w",
@@ -68,6 +68,7 @@ function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
 export async function renderScoreInto(
   element: HTMLDivElement,
   score: Score,
+  options?: { cursorTick?: number | null },
 ): Promise<void> {
   const vexflow = await import("vexflow");
   const {
@@ -94,6 +95,9 @@ export async function renderScoreInto(
   renderer.resize(width, height);
   const context = renderer.getContext();
   const keySpec = keySpecOf(part);
+  let cursorPoint: { x: number; y: number } | undefined;
+  const cursorTick = options?.cursorTick;
+  const length = measureTicks(part.timeSignature);
 
   const rendered = new Map<
     string,
@@ -121,7 +125,21 @@ export async function renderScoreInto(
     }
 
     stave.setContext(context).draw();
-    if (measure.events.length === 0) return;
+    const start = measureStartTick(measure.index, part.timeSignature);
+    const atCursor = cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick) &&
+      cursorTick >= start && (cursorTick < start + length ||
+        (index === part.measures.length - 1 && cursorTick === start + length));
+    function locateCursor(anchors: { tick: number; x: number }[] = []) {
+      if (!atCursor) return;
+      const points = [{ tick: start, x: stave.getNoteStartX() }, ...anchors,
+        { tick: start + length, x: stave.getNoteEndX() }];
+      const right = points.findIndex((point) => point.tick > cursorTick!);
+      const left = right < 0 ? points.at(-1)! : points[Math.max(0, right - 1)];
+      const next = right < 0 ? left : points[right];
+      const ratio = next.tick === left.tick ? 0 : (cursorTick! - left.tick) / (next.tick - left.tick);
+      cursorPoint = { x: left.x + ratio * (next.x - left.x), y: row * ROW_HEIGHT + STAVE_TOP + 10 };
+    }
+    if (measure.events.length === 0) { locateCursor(); return; }
 
     const events = [...measure.events].sort((a, b) => a.startTick - b.startTick);
     const notes = events.map((event) => {
@@ -142,14 +160,17 @@ export async function renderScoreInto(
     // 쉼표 이동/삭제로 생긴 빈 구간도 절대 tick 위치대로 간격을 유지한다.
     // GhostNote는 렌더 전용이며 canonical Score에는 추가하지 않는다.
     const tickables: InstanceType<typeof StaveNote | typeof GhostNote>[] = [];
+    const ticks: number[] = [];
     let cursor = measureStartTick(measure.index, part.timeSignature);
     events.forEach((event, position) => {
       if (event.startTick > cursor) {
         const gap = new GhostNote({ duration: "q" });
         gap.setDuration(new Fraction(event.startTick - cursor, TICKS_PER_QUARTER * 4));
         tickables.push(gap);
+        ticks.push(cursor);
       }
       tickables.push(notes[position]);
+      ticks.push(event.startTick);
       cursor = event.startTick + event.durationTicks;
     });
 
@@ -163,6 +184,7 @@ export async function renderScoreInto(
     Accidental.applyAccidentals([voice], keySpec);
     new Formatter().joinVoices([voice]).format([voice], MEASURE_WIDTH - 40);
     voice.draw(context, stave);
+    if (atCursor) locateCursor(tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
 
     events.forEach((event, position) => {
       notes[position].getSVGElement()?.setAttribute("data-event-id", event.id);
@@ -187,5 +209,16 @@ export async function renderScoreInto(
     // 줄이 바뀌면 VexFlow는 양끝을 한 번에 그릴 수 없다 → 부분 타이로 나눠 그린다.
     new StaveTie({ firstNote: first.note, ...indexes }).setContext(context).draw();
     new StaveTie({ lastNote: last.note, ...indexes }).setContext(context).draw();
+  }
+  if (cursorPoint) {
+    const svg = element.querySelector("svg");
+    if (svg) {
+      const line = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "line");
+      for (const [key, value] of Object.entries({ x1: cursorPoint.x, x2: cursorPoint.x,
+        y1: cursorPoint.y, y2: cursorPoint.y + 75, stroke: "#2563eb", "stroke-width": 2,
+        "pointer-events": "none", "data-testid": "staff-edit-cursor", "data-tick": cursorTick,
+        "aria-label": "편집 커서" })) line.setAttribute(key, String(value));
+      svg.appendChild(line);
+    }
   }
 }

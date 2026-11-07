@@ -12,6 +12,8 @@ const captured = vi.hoisted(() => ({ voices: [] as Tickable[][], ties: [] as { f
 vi.mock("vexflow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vexflow")>();
   class Stave {
+    constructor(private x = 0) {}
+    getNoteStartX() { return this.x + 20; } getNoteEndX() { return this.x + 200; }
     addClef() { return this; } addKeySignature(key: string) { captured.keys.push(key); return this; }
     addTimeSignature(meter: string) { captured.meters.push(meter); return this; } setContext() { return this; } draw() {}
   }
@@ -122,4 +124,29 @@ it("links rendered SVG note/rest groups to canonical event IDs for cursor highli
   score.parts[0].measures[0].events.unshift(createRestEvent({ id: "rest", startTick: 0, durationTicks: 960 }));
   await renderScoreInto({ innerHTML: "" } as HTMLDivElement, score);
   expect(attribute.mock.calls).toEqual([["data-event-id", "rest"], ["data-event-id", "t1"], ["data-event-id", "t1:tie1"]]);
+});
+
+it.each([[0, 30], [4800, 295], [7680, 430]])("renders an empty-gap/end edit cursor at tick %s without changing Score", async (tick, x) => {
+  const attributes: Record<string, string> = {};
+  const appendChild = vi.fn();
+  const element = { innerHTML: "", querySelector: () => ({ appendChild }),
+    ownerDocument: { createElementNS: () => ({ setAttribute: (key: string, value: string) => { attributes[key] = value; } }) } };
+  const score = baseScore(); const before = JSON.stringify(score);
+  await renderScoreInto(element as unknown as HTMLDivElement, score, { cursorTick: tick });
+  expect(appendChild).toHaveBeenCalledTimes(1);
+  expect(attributes).toMatchObject({ "data-testid": "staff-edit-cursor", "data-tick": String(tick), x1: String(x), x2: String(x) });
+  expect(JSON.stringify(score)).toBe(before);
+});
+
+it("aligns the edit cursor with a rendered note without altering existing ties", async () => {
+  vi.spyOn(StaveNote.prototype, "getAbsoluteX").mockReturnValue(150);
+  const { GhostNote } = await import("vexflow");
+  vi.spyOn(GhostNote.prototype, "getAbsoluteX").mockReturnValue(30);
+  const attributes: Record<string, string> = {};
+  const element = { innerHTML: "", querySelector: () => ({ appendChild() {} }),
+    ownerDocument: { createElementNS: () => ({ setAttribute: (key: string, value: string) => { attributes[key] = value; } }) } };
+  const score = tiedScore(); const before = JSON.stringify(score);
+  await renderScoreInto(element as unknown as HTMLDivElement, score, { cursorTick: 2880 });
+  expect(attributes.x1).toBe("150"); expect(captured.ties).toHaveLength(1);
+  expect(JSON.stringify(score)).toBe(before);
 });

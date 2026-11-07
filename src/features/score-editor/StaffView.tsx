@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Score } from "@/domain/score/types";
 import { renderScoreInto } from "@/adapters/vexflow/renderScore";
 
-export function StaffView({ score }: { score: Score }) {
+export function StaffView({ score, cursorTick = null }: { score: Score; cursorTick?: number | null }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -12,7 +12,7 @@ export function StaffView({ score }: { score: Score }) {
     if (!element) return;
     let cancelled = false;
 
-    renderScoreInto(element, score).catch(() => {
+    renderScoreInto(element, score, { cursorTick }).catch(() => {
       if (!cancelled) {
         element.textContent = "악보를 표시하지 못했습니다.";
       }
@@ -21,7 +21,7 @@ export function StaffView({ score }: { score: Score }) {
     return () => {
       cancelled = true;
     };
-  }, [score]);
+  }, [score, cursorTick]);
 
   return (
     <div
