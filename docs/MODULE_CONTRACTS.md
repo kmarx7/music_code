@@ -43,8 +43,14 @@ type EditCommand =
   | { type: "AddNote"; partId; measureId; note: NoteEvent }
   | { type: "UpdateNote"; partId; noteId; patch: NotePatch }
   | { type: "DeleteEvent"; partId; eventId }
-  | { type: "InsertRest"; partId; measureId; rest: RestEvent };
+  | { type: "InsertRest"; partId; measureId; rest: RestEvent }
+  | { type: "AddMeasure"; partId; measureId: string }
+  | { type: "ResizeNote"; partId; noteId; durationTicks: number };
 ```
+
+> Phase 1-B에서 `AddMeasure`, `ResizeNote`를 **추가**했다(기존 파이프라인·모델 유지, 명령 집합의 확장).
+> `ResizeNote`는 편집된 음표 뒤 이벤트를 순서대로 재배치하며, 마디를 넘는 음표(타이)는 만들지 않는다.
+> 자리가 없으면 `MEASURE_CAPACITY_EXCEEDED`로 실패하고, 마디 추가는 `AddMeasure`로 수행한다.
 
 | 항목 | 계약 |
 |---|---|
@@ -52,7 +58,7 @@ type EditCommand =
 | 성공 | `{ ok: true, score }` — 새 Score는 전체 검증을 통과해야 한다 |
 | 실패 | `{ ok: false, error: { code, message } }` — 원본 Score는 그대로 |
 | 검증 시점 | 명령 적용 후 `validateScore`를 재실행하여 불변식을 보증 |
-| 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_SCORE` |
+| 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `INVALID_SCORE` |
 | updatedAt | Command는 스탬프하지 않는다. 시간은 Application/경계에서 주입한다(재현성) |
 | 이름 매핑 | ARCHITECTURE의 예시 `DeleteNote`는 note/rest 모두 삭제 가능한 `DeleteEvent`로 구현했다 |
 

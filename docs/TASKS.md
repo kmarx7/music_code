@@ -24,8 +24,8 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 10 파일 / **58 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 42 모듈·95 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 11 파일 / **66 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | 42 모듈·97 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -68,6 +68,24 @@
 - 테스트: `tests/integration/score-repository.test.ts`(6), `tests/unit/score-library.test.ts`(4), `tests/fixtures/memory-repository.ts`.
 - **dev 의존성 추가**: `fake-indexeddb` — Node에 IndexedDB가 없어 어댑터를 테스트하기 위한 테스트 전용 대역. 프로덕션 번들 영향 없음.
 - 브라우저 검증: 새 악보 생성 → 음표 입력 → "저장됨" → **새로고침 후 음표 유지** → 목록/열기 → 삭제.
+
+### 4.2 Phase 1-B — 악보 편집 (Done, 2026-11-07)
+
+- 재사용: `UpdateNote`(음높이), `DeleteEvent`(삭제), 편집 세션/히스토리, `midiToPitch`.
+- **명령 추가(기존 파이프라인 유지)**: `AddMeasure`, `ResizeNote`(뒤 이벤트 리플로우, 마디 넘김 없음).
+- 편집기 UI: 음표 칩 선택 → 편집 패널(반음 ↑/↓, 길이 4종, 삭제), 툴바 “마디 추가”.
+- 테스트: `tests/unit/commands-resize.test.ts`(7) — 추가/중복/리플로우/용량 초과/단축/잘못된 길이/없는 음표.
+- 브라우저 검증: 입력 2개 → 선택 → 반음 ↑(C#4) → 2분음표(1920 ticks, 음표 2개 유지) → 삭제(1개) → 마디 추가(9개).
+
+**마디 경계·타이 정책 (분석 결과, 구현 보류)**
+
+- 현재 모델: 이벤트는 소속 마디 범위를 벗어날 수 없다(`EVENT_OUT_OF_MEASURE`). 타이 표현이 없다.
+- 대안 1(권장, 모델 소폭 확장): `NoteEvent`에 `tieToNext`/`tieFromPrev` 같은 **명시적 타이 플래그**를 추가하고,
+  렌더러가 마디 경계에서 음표를 분할해 타이로 연결. 재생은 하나의 지속음으로 처리.
+- 대안 2: 이벤트가 마디를 넘도록 검증을 완화 → 렌더러가 자동 분할. 검증·렌더 복잡도 증가.
+- 대안 3: 타이 없이 **마디 자동 확장**(append 시 마디가 차면 `AddMeasure` 자동 발행). 모델 변경 없음.
+- **결론**: Phase 1은 대안 3의 수동 버전(마디 추가 버튼)만 제공한다. 타이/자동 확장은
+  모델 변경(대안 1) 또는 자동 명령(대안 3)에 대한 **사용자 승인 후** 진행한다.
 
 ## 5. 다음 작업 (Phase 1 착수 전)
 1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.

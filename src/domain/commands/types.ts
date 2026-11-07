@@ -8,7 +8,9 @@ export type EditCommand =
   | { type: "AddNote"; partId: string; measureId: string; note: NoteEvent }
   | { type: "UpdateNote"; partId: string; noteId: string; patch: NotePatch }
   | { type: "DeleteEvent"; partId: string; eventId: string }
-  | { type: "InsertRest"; partId: string; measureId: string; rest: RestEvent };
+  | { type: "InsertRest"; partId: string; measureId: string; rest: RestEvent }
+  | { type: "AddMeasure"; partId: string; measureId: string }
+  | { type: "ResizeNote"; partId: string; noteId: string; durationTicks: number };
 
 export type CommandErrorCode =
   | "PART_NOT_FOUND"
@@ -16,6 +18,8 @@ export type CommandErrorCode =
   | "NOTE_NOT_FOUND"
   | "EVENT_NOT_FOUND"
   | "DUPLICATE_ID"
+  | "INVALID_DURATION"
+  | "MEASURE_CAPACITY_EXCEEDED"
   | "INVALID_SCORE";
 
 export interface CommandError {
