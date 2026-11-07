@@ -253,3 +253,11 @@ The developer can evolve details within these boundaries without repeated approv
 ## 14. Evolution path (not in MVP)
 
 Cloud accounts via Supabase adapter; polyphonic audio and multi-part; piano roll; chord recommendation; WAV/MP3 import; external Web MIDI enhancement; ensemble notation; gayageum tuning, ornaments and pitch bends; jangdan and Jeongganbo rendering. Keep these out of the Phase 0–6 scope unless specifically authorized.
+
+
+### ADR-010 저장 안전성 (Accepted 2026-11-08)
+Repository는 Score 외부 revision으로 생성과 수정/삭제를 분리한다. 수정/삭제 CAS와 쓰기는
+같은 IndexedDB transaction에서 수행하며 삭제 ID는 영속 Tombstone으로 보존한다.
+BroadcastChannel은 DB 재확인 알림이며 저장 진실의 원천이 아니다. useAutosave가 저장 상태와
+편집 세션의 baseline revision을 소유한다. DB 버전은 2, 음악 schemaVersion은 2 그대로다.
+상세 정책·제외·구버전 연결·롤백은 ADR-010 참조.

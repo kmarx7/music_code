@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
@@ -19,12 +20,12 @@ it("saves mixed rest/tied-note edits and reopens identical v2 content after undo
   store.undo();
   store.redo();
   expect(store.getState()!.current).toEqual(edited);
-  await repository.save(edited);
+  await persist(repository, edited);
   const reopened = createIndexedDbScoreRepository({ dbName });
   expect(await reopened.load(edited.id)).toEqual(edited);
   expect((await reopened.load(edited.id))!.parts[0].ties).toEqual(initial.parts[0].ties);
   expect(edited.schemaVersion).toBe(2);
   expect(store.dispatch({ type: "DeleteEvent", partId, eventId: "r" })?.ok).toBe(true);
-  await repository.save(store.getState()!.current);
+  await persist(repository, store.getState()!.current);
   expect(await reopened.load(initial.id)).toEqual(initial);
 });

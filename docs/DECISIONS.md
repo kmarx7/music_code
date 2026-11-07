@@ -165,3 +165,20 @@ This file records **architectural choices**, their trade-offs and change history
 | 2026-11-07 | Created baseline ADR-001–007 | Captures approved project direction; implementation details pending Phase 0 |
 | 2026-11-07 | ADR-008 Accepted — VexFlow 5.0.0 / Tone.js 15.1.22 도입 (사용자 승인) | Approved |
 | 2026-11-07 | ADR-009 Accepted — 마디 경계 분할 + `Part.ties` 명시적 연결, schemaVersion 2 (사용자 조건부 승인) | Approved |
+
+
+## ADR-010 — 저장 revision/OCC 및 영속 삭제 보호
+
+- 상태: **Accepted**, 2026-11-08 사용자 명시 승인.
+- 문제: 탭 간 오래된 쓰기/삭제, 삭제 ID 재생성, 저장 상태 불일치, 페이지 이탈 위험.
+- 결정: Score 외부 envelope revision, 원자적 create/update/delete CAS, 영속 Tombstone,
+  BroadcastChannel 알림 후 DB 재확인, useAutosave 단일 상태 소유, dirty beforeunload/hidden flush/focus 재확인.
+- DB 버전 1→2는 구버전 unconditional writer를 차단한다. blocked는 오류로 안내하고
+  versionchange는 연결을 닫고 이후 쓰기를 거부한다. 정상 legacy revision은 0으로 읽으며 정상 수정 때만 지연 전환한다.
+- 충돌/삭제 후 자동 재시도·병합·덮어쓰기 없음. 메모리/Undo 보존, JSON 백업·새 ID 저장·확인 후 최신본 열기 제공.
+- 대안: 알림 단독은 유실 시 보호 불가. Web Locks 단독은 구버전 writer/삭제 정책을 대체하지 못한다.
+- 제외: Web Locks, 강제 종료 복구 저널, 자동 Tombstone 정리, cloud sync.
+- 영향: Repository 공개 쓰기 계약 변경. Score schemaVersion 2/Part.ties/Command/음악 모델은 그대로다.
+- 한계: dirty 안내/hidden 조기 저장은 강제 종료 무손실을 보장하지 않는다. 구버전 탭은 백업 후 닫아야 업그레이드 가능하다.
+- 롤백: DB v2를 이해하는 빌드만 사용. v1 코드로 다운그레이드하거나 DB를 삭제하지 않는다.
+- 검증: 동시 CAS/삭제/abort/legacy/blocked/versionchange, 훅 상태/이탈, 실제 같은 context 두 탭 E2E.

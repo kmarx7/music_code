@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
@@ -14,13 +15,13 @@ it("persists tempo/key changes with unchanged pitches and ties", async () => {
   expect(store.dispatch({ type: "SetKeySignature", partId: initial.parts[0].id,
     keySignature: { tonic: "B", alter: -1, mode: "major", fifths: -2 }, updatedAt: "2026-11-08T01:01:00.000Z" })?.ok).toBe(true);
   const changed = store.getState()!.current;
-  await repository.save(changed);
+  await persist(repository, changed);
   const reopened = createIndexedDbScoreRepository({ dbName });
   expect(await reopened.load(initial.id)).toEqual(changed);
   expect(changed.parts[0].measures).toEqual(initial.parts[0].measures);
   expect(changed.parts[0].ties).toEqual(initial.parts[0].ties);
   store.undo(); store.undo();
-  await repository.save(store.getState()!.current);
+  await persist(repository, store.getState()!.current);
   expect(await reopened.load(initial.id)).toEqual(initial);
 });
 
@@ -31,9 +32,9 @@ it("restores an empty score meter and its original value after undo", async () =
   store.init(initial);
   expect(store.dispatch({ type: "SetTimeSignature", partId: initial.parts[0].id,
     timeSignature: { numerator: 6, denominator: 8 }, updatedAt: "2026-11-08T01:00:00.000Z" })?.ok).toBe(true);
-  await repository.save(store.getState()!.current);
+  await persist(repository, store.getState()!.current);
   expect((await repository.load(initial.id))!.parts[0].timeSignature).toEqual({ numerator: 6, denominator: 8 });
   store.undo();
-  await repository.save(store.getState()!.current);
+  await persist(repository, store.getState()!.current);
   expect(await repository.load(initial.id)).toEqual(initial);
 });

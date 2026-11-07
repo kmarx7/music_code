@@ -1,4 +1,4 @@
-import type { ScoreRepository, ScoreSummary } from "@/application/ports";
+import { ScoreConflictError, type ScoreRepository, type ScoreSummary } from "@/application/ports";
 import type { Score } from "@/domain/score/types";
 import { createEmptyScore } from "@/domain/score/create";
 import { deserializeScore, serializeScore } from "@/domain/score";
@@ -26,13 +26,14 @@ export async function importScoreBackup(
     throw new Error("새 악보 ID가 필요합니다. 기존 악보는 변경하지 않았습니다.");
   }
   const score: Score = { ...parsed.score, id: input.id, updatedAt: input.importedAt };
-  await repository.save(score);
+  await repository.create(score);
   return { score, migrated: parsed.migrated };
 }
 
 export interface OpenScoreResult {
   score: Score;
   created: boolean;
+  revision: number;
 }
 
 /**
@@ -44,8 +45,8 @@ export async function openOrCreateScore(
   repository: ScoreRepository,
   input: { id: string; createdAt: string; title?: string; measureCount?: number },
 ): Promise<OpenScoreResult> {
-  const existing = await repository.load(input.id);
-  if (existing) return { score: existing, created: false };
+  const existing = await repository.read(input.id);
+  if (existing) return { ...existing, created: false };
 
   const score = createEmptyScore({
     id: input.id,
@@ -53,8 +54,18 @@ export async function openOrCreateScore(
     measureCount: input.measureCount ?? 8,
     createdAt: input.createdAt,
   });
-  await repository.save(score);
-  return { score, created: true };
+  try {
+    const revision = await repository.create(score);
+    return { score, revision, created: true };
+  } catch (error) {
+    // Concurrent first opens (including development StrictMode) may create the ID first.
+    // No edit session exists yet: read the winner, never retry a write or replace its content.
+    if (error instanceof ScoreConflictError && error.code === "CONFLICT") {
+      const winner = await repository.read(input.id);
+      if (winner) return { ...winner, created: false };
+    }
+    throw error;
+  }
 }
 
 export async function createNewScore(
@@ -67,7 +78,7 @@ export async function createNewScore(
     measureCount: input.measureCount ?? 8,
     createdAt: input.createdAt,
   });
-  await repository.save(score);
+  await repository.create(score);
   return score;
 }
 

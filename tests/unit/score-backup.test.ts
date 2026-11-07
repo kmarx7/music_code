@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import { describe, expect, it, vi } from "vitest";
 import { applyCommand, createEditSession, redo, undo, exportScoreBackup, importScoreBackup } from "@/application";
 import { deserializeScore, serializeScore } from "@/domain/score";
@@ -33,7 +34,7 @@ describe("JSON backup and import", () => {
   it("round-trips v2 ties as a new score without changing the existing score", async () => {
     const repository = new MemoryScoreRepository();
     const original = tiedScore();
-    await repository.save(original);
+    await persist(repository, original);
     const backup = exportScoreBackup(original);
     expect(JSON.parse(backup.json)).toEqual(original);
     const result = await importScoreBackup(repository, backup.json, { id: "restored", importedAt: now });
@@ -67,8 +68,8 @@ describe("JSON backup and import", () => {
   it.each(["", "score-tie", "occupied"])("rejects conflicting/invalid destination ID %j", async (id) => {
     const repository = new MemoryScoreRepository();
     const original = tiedScore();
-    await repository.save(original);
-    await repository.save({ ...original, id: "occupied" });
+    await persist(repository, original);
+    await persist(repository, { ...original, id: "occupied" });
     await expect(importScoreBackup(repository, serializeScore(original), { id, importedAt: now })).rejects.toThrow("새 악보 ID");
     expect(repository.size()).toBe(2);
     expect(await repository.load(original.id)).toEqual(original);
@@ -80,8 +81,8 @@ describe("JSON backup and import", () => {
   ])("rejects bad input without writing: %s", async (raw) => {
     const repository = new MemoryScoreRepository();
     const original = tiedScore();
-    await repository.save(original);
-    const save = vi.spyOn(repository, "save");
+    await persist(repository, original);
+    const save = vi.spyOn(repository, "create");
     await expect(importScoreBackup(repository, raw, { id: "copy", importedAt: now })).rejects.toThrow();
     expect(save).not.toHaveBeenCalled();
     expect(await repository.load(original.id)).toEqual(original);
@@ -90,8 +91,8 @@ describe("JSON backup and import", () => {
   it("reports a storage failure without modifying existing scores", async () => {
     const repository = new MemoryScoreRepository();
     const original = tiedScore();
-    await repository.save(original);
-    vi.spyOn(repository, "save").mockRejectedValue(new Error("quota"));
+    await persist(repository, original);
+    vi.spyOn(repository, "create").mockRejectedValue(new Error("quota"));
     await expect(importScoreBackup(repository, serializeScore(original), { id: "copy", importedAt: now })).rejects.toThrow("quota");
     expect(await repository.load(original.id)).toEqual(original);
     expect(repository.size()).toBe(1);

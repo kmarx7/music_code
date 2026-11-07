@@ -4,7 +4,7 @@ import { storedScore } from "./storage";
 
 async function rawRecord(page: Page, id: string, record?: unknown) {
   return page.evaluate(async ({ id, record }) => {
-    const open = indexedDB.open("music-score-platform", 1);
+    const open = indexedDB.open("music-score-platform");
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       open.onupgradeneeded = () => open.result.createObjectStore("scores", { keyPath: "id" });
       open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);

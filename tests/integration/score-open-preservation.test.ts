@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { expect, it, vi } from "vitest";
 import { openOrCreateScore, importScoreBackup, ScoreReadError } from "@/application";
@@ -36,25 +37,27 @@ it.each(failures)("direct open preserves the complete record and never saves on 
   const original = { id: "score-tie", updatedAt: "original timestamp", json, recovery: { keep: [1, "original"] } };
   await raw(dbName, original.id, original);
   const save = vi.spyOn(repository, "save");
+  const create = vi.spyOn(repository, "create");
   await expect(openOrCreateScore(repository, { id: original.id, createdAt: FIXTURE_CREATED_AT })).rejects.toMatchObject({ code });
-  expect(save).not.toHaveBeenCalled();
-  await expect(repository.save(tiedScore())).rejects.toMatchObject({ code });
+  expect(save).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+  await expect(repository.save(tiedScore(), 1)).rejects.toMatchObject({ code });
   expect(await raw(dbName, original.id)).toEqual(original);
   expect(await repository.list()).toEqual([]);
   expect(await raw(dbName, original.id)).toEqual(original);
 });
 
 it("creates only genuinely missing IDs", async () => {
-  const { repository } = setup(); const save = vi.spyOn(repository, "save");
+  const { repository } = setup(); const save = vi.spyOn(repository, "create");
   const result = await openOrCreateScore(repository, { id: "missing", createdAt: FIXTURE_CREATED_AT });
   expect(result.created).toBe(true); expect(save).toHaveBeenCalledTimes(1);
   expect(await repository.load("missing")).toEqual(result.score);
 });
 it("opens a normal tied score without any write", async () => {
-  const { repository } = setup(); const initial = tiedScore(); await repository.save(initial);
+  const { repository } = setup(); const initial = tiedScore(); await persist(repository, initial);
   const save = vi.spyOn(repository, "save");
-  expect(await openOrCreateScore(repository, { id: initial.id, createdAt: FIXTURE_CREATED_AT })).toEqual({ score: initial, created: false });
-  expect(save).not.toHaveBeenCalled();
+  const create = vi.spyOn(repository, "create");
+  expect(await openOrCreateScore(repository, { id: initial.id, createdAt: FIXTURE_CREATED_AT })).toEqual({ score: initial, revision: 1, created: false });
+  expect(save).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
 });
 it("migrates a supported v1 in memory while preserving its original record on read", async () => {
   const { dbName, repository } = setup();
@@ -66,24 +69,25 @@ it("migrates a supported v1 in memory while preserving its original record on re
   expect(opened.score).toEqual(current); expect(opened.created).toBe(false);
   expect(await raw(dbName, current.id)).toEqual(original);
   // A subsequent normal edit/save may persist the supported, validated v2 representation.
-  await repository.save({ ...opened.score, title: "edited" });
+  await persist(repository, { ...opened.score, title: "edited" });
   expect((await repository.load(current.id))!.schemaVersion).toBe(2);
 });
 it("read errors are distinct from missing and cannot cause a create", async () => {
-  const { dbName, repository } = setup(); const initial = tiedScore(); await repository.save(initial);
+  const { dbName, repository } = setup(); const initial = tiedScore(); await persist(repository, initial);
   const before = await raw(dbName, initial.id);
   const save = vi.spyOn(repository, "save");
+  const create = vi.spyOn(repository, "create");
   const spy = vi.spyOn(IDBObjectStore.prototype, "get").mockImplementationOnce(() => { throw new Error("blocked read"); });
   try {
     await expect(openOrCreateScore(repository, { id: initial.id, createdAt: FIXTURE_CREATED_AT })).rejects.toMatchObject({ code: "STORAGE_READ_ERROR" });
   } finally { spy.mockRestore(); }
-  expect(save).not.toHaveBeenCalled(); expect(await raw(dbName, initial.id)).toEqual(before);
+  expect(save).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled(); expect(await raw(dbName, initial.id)).toEqual(before);
 });
 it("a late invalid record between absence lookup and creation cannot be overwritten", async () => {
   const { dbName, repository } = setup();
   const original = { id: "late", updatedAt: "keep", json: "{broken" };
-  const load = repository.load.bind(repository);
-  vi.spyOn(repository, "load").mockImplementationOnce(async (id) => {
+  const load = repository.read.bind(repository);
+  vi.spyOn(repository, "read").mockImplementationOnce(async (id) => {
     const result = await load(id);
     await raw(dbName, id, original);
     return result;

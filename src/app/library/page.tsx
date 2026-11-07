@@ -75,21 +75,22 @@ export default function LibraryPage() {
 
   async function handleCreate() {
     const id = crypto.randomUUID();
-    await createNewScore(getScoreRepository(), {
-      id,
-      createdAt: new Date().toISOString(),
-    });
-    router.push(`/editor/${id}`);
+    try {
+      await createNewScore(getScoreRepository(), { id, createdAt: new Date().toISOString() });
+      router.push(`/editor/${id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "새 악보를 저장하지 못했습니다. JSON 백업 후 다른 탭을 닫고 다시 시도해 주세요.");
+    }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, revision: number) {
     if (!window.confirm("이 악보를 삭제할까요? 되돌릴 수 없습니다.")) return;
     try {
-      await getScoreRepository().delete(id);
+      await getScoreRepository().delete(id, revision);
       await refresh();
       setMessage("삭제했습니다.");
     } catch {
-      setMessage("삭제하지 못했습니다.");
+      setMessage("삭제하지 못했습니다. 다른 탭의 변경 여부를 확인하고 목록을 새로 열어 주세요.");
     }
   }
 
@@ -196,7 +197,7 @@ export default function LibraryPage() {
                   <button
                     type="button"
                     style={button}
-                    onClick={() => void handleDelete(score.id)}
+                    onClick={() => void handleDelete(score.id, score.revision)}
                   >
                     삭제
                   </button>

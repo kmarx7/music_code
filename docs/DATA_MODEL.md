@@ -213,3 +213,14 @@ interface TieLink { from: string; to: string }
 
 - 슬러(slur)·이음줄, 다성부/다중 voice, 조표·박자 변경 지점, 임시표 자동 표기 최적화,
   붙임줄의 임의 길이(비표기가능 tick) 자동 분해 최적화(현재는 그리디 분해, 실패 시 거부).
+
+
+## ADR-010 — Score 외부 저장 메타데이터
+
+음악 타입/Part.ties/schemaVersion 2/Command/JSON 백업은 변경하지 않는다.
+IndexedDB DB version만 1→2로 올려 구버전 writer를 차단한다.
+`scores`의 정상 envelope는 `{id,updatedAt,json,revision}`이며 revision은 저장소 소유다.
+삭제 envelope는 `{id,revision,deleted:true,deletedAt}`다. 삭제 ID는 영구 예약하고 자동 재생성하지 않는다.
+revision 없는 정상 legacy는 0으로 해석하고 읽기 시 원시 row를 보존한다. 정상 편집/삭제의 CAS 커밋에서만 전환한다.
+revision은 Undo/Redo 및 canonical Score 직렬화에 포함하지 않는다. 손상/미지원 row의 자동 변환 없음.
+기존 음악 v1→v2 지원은 유지한다. 구체적인 쓰기/오류/연결 정책은 MODULE_CONTRACTS ADR-010 절 참조.

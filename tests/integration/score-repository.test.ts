@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
@@ -53,7 +54,7 @@ describe("IndexedDB ScoreRepository", () => {
     const repository = freshRepository();
     const score = scoreWith("score-a", "2026-11-07T01:00:00.000Z", "n1");
 
-    await repository.save(score);
+    await persist(repository, score);
     const loaded = await repository.load("score-a");
 
     expect(loaded).toEqual(score);
@@ -67,8 +68,8 @@ describe("IndexedDB ScoreRepository", () => {
 
   it("lists summaries sorted by updatedAt descending", async () => {
     const repository = freshRepository();
-    await repository.save(scoreWith("old", "2026-11-07T01:00:00.000Z", "a"));
-    await repository.save(scoreWith("new", "2026-11-07T05:00:00.000Z", "b"));
+    await persist(repository, scoreWith("old", "2026-11-07T01:00:00.000Z", "a"));
+    await persist(repository, scoreWith("new", "2026-11-07T05:00:00.000Z", "b"));
 
     const list = await repository.list();
     expect(list.map((item) => item.id)).toEqual(["new", "old"]);
@@ -77,10 +78,10 @@ describe("IndexedDB ScoreRepository", () => {
 
   it("deletes a score", async () => {
     const repository = freshRepository();
-    await repository.save(scoreWith("score-del", "2026-11-07T01:00:00.000Z", "a"));
-    await repository.delete("score-del");
+    await persist(repository, scoreWith("score-del", "2026-11-07T01:00:00.000Z", "a"));
+    await repository.delete("score-del", 1);
 
-    expect(await repository.load("score-del")).toBeNull();
+    await expect(repository.load("score-del")).rejects.toMatchObject({ code: "DELETED" });
     expect(await repository.list()).toHaveLength(0);
   });
 
@@ -88,7 +89,7 @@ describe("IndexedDB ScoreRepository", () => {
     const dbName = `test-db-corrupt-${Date.now()}`;
     const repository = createIndexedDbScoreRepository({ dbName });
     const score = scoreWith("corrupt", "2026-11-07T01:00:00.000Z", "a");
-    await repository.save(score);
+    await persist(repository, score);
     await putRaw(dbName, { id: "corrupt", updatedAt: score.updatedAt, json: "{not-json" });
 
     await expect(repository.load("corrupt")).rejects.toMatchObject({ code: "INVALID_JSON" });
@@ -99,7 +100,7 @@ describe("IndexedDB ScoreRepository", () => {
     const dbName = `test-db-schema-${Date.now()}`;
     const repository = createIndexedDbScoreRepository({ dbName });
     const score = scoreWith("schema", "2026-11-07T01:00:00.000Z", "a");
-    await repository.save(score);
+    await persist(repository, score);
     await putRaw(dbName, {
       id: "schema",
       updatedAt: score.updatedAt,
@@ -113,7 +114,7 @@ describe("IndexedDB ScoreRepository", () => {
 it("rejects a transaction aborted after a successful put instead of reporting saved", async () => {
   const repository = freshRepository();
   const initial = scoreWith("abort", "2026-11-08T01:00:00.000Z", "note-abort");
-  await repository.save(initial);
+  await persist(repository, initial);
   const original = IDBObjectStore.prototype.put;
   const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(function (this: IDBObjectStore, ...args) {
     const request = original.apply(this, args);
@@ -121,7 +122,7 @@ it("rejects a transaction aborted after a successful put instead of reporting sa
     return request;
   });
   try {
-    await expect(repository.save({ ...initial, title: "아직 커밋 안 됨" })).rejects.toThrow();
+    await expect(persist(repository, { ...initial, title: "아직 커밋 안 됨" })).rejects.toThrow();
   } finally { spy.mockRestore(); }
   expect(await repository.load(initial.id)).toEqual(initial);
 });

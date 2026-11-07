@@ -78,3 +78,18 @@ it("unmount ignores late UI results without cancelling the storage queue", async
   cleanup?.(); cleanup = undefined; complete(false); await Promise.resolve();
   expect(hooks.values).toEqual(before); expect(flush).toHaveBeenCalledTimes(1);
 });
+it("an automatic save success clears a previous manual storage failure without another click", async () => {
+  flush.mockResolvedValueOnce(false);
+  render().button.props.onClick!(); await Promise.resolve();
+  expect(render("error").message).toContain("다시 시도");
+  expect(render("saving").message).toContain("저장 중");
+  expect(render("saved").message).toContain("저장이 완료");
+  expect(render("saved").message).not.toContain("저장하지 못했습니다");
+  expect(flush).toHaveBeenCalledTimes(1);
+});
+it("conflict and deletion disable manual saving while retaining backup guidance", () => {
+  for (const status of ["conflict", "deleted"] as const) {
+    expect(render(status).button.props.disabled).toBe(true);
+    expect(render(status).message).toContain("JSON 백업");
+  }
+});

@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
@@ -9,14 +10,14 @@ import { tiedScore } from "../fixtures/scores";
 it("persists middle-gap insertion, undo/redo and failed collisions without changing tied events", async () => {
   const repository = createIndexedDbScoreRepository({ dbName: "edit-cursor-persistence" });
   const store = createScoreStore(); const initial = tiedScore(); store.init(initial);
-  await repository.save(initial);
+  await persist(repository, initial);
   const plan = planNoteAt(initial, { pitch: createPitch("E", 0, 4), id: "middle", startTick: 960, durationTicks: 960 });
   if (!plan.ok) throw new Error(plan.message);
   expect(store.dispatch(plan.command)?.ok).toBe(true);
   const edited = store.getState()!.current;
-  store.undo(); await repository.save(store.getState()!.current);
+  store.undo(); await persist(repository, store.getState()!.current);
   expect(await repository.load(initial.id)).toEqual(initial);
-  store.redo(); await repository.save(store.getState()!.current);
+  store.redo(); await persist(repository, store.getState()!.current);
   const reopened = createIndexedDbScoreRepository({ dbName: "edit-cursor-persistence" });
   expect(await reopened.load(initial.id)).toEqual(edited);
   expect(edited.parts[0].ties).toEqual(initial.parts[0].ties);

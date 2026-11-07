@@ -678,3 +678,45 @@ npm run test:e2e
    미완료 저장 및 다중 탭의 정상 레코드 충돌은 기존 미해결 범위이며 수동 저장이 자동 해결하지 않는다.
 
 Score 모델/Part.ties/schemaVersion 2/기존 저장소와 Command/Undo/Redo 유지. GitHub push/Vercel 작업 없음.
+
+
+## 21. ADR-010 저장 안전성 (2026-11-08)
+
+기준 `8d570b0`: 사용자 Mac Chromium **35/35**, 단위·통합 362개 통과.
+기존 Codex EPERM 기록은 당시 결과로 유지하며 새 버전 통과로 대체하지 않는다.
+
+- 기존 362개 시나리오/핵심 assertion 유지. create/update 분리로 setup 호출과 spy를 새 포트에 맞췄다.
+  삭제의 null 기대는 더 엄격한 DELETED/Tombstone 보호로 변경했다.
+  `tests/fixtures/persist.ts`는 기존 단일 writer fixture용 read/create/update setup이며 production/경합 테스트에서는 사용하지 않는다.
+  기존 손상 저장본의 직접 save 거부·원시 불변 assertion도 유지한다.
+- `storage-concurrency.test.ts` 신규 22개: 동시 생성/동일 revision 저장, save/delete 양쪽 순서,
+  Tombstone stale save/create/직접 open, 오래된 목록 삭제 거부, put 후 abort 원시+revision 불변/무알림,
+  legacy revision 0 읽기 불변·지연 쓰기, blocked 원시 보존, versionchange 연결 폐쇄 및 구버전 v1 open 거부,
+  BroadcastChannel 미지원/초기화 실패/전송 실패에도 CAS 유지, 알림 payload/수명 검증,
+  동시 최초 열기의 승자 읽기(쓰기 재시도 없음), 런타임 null/undefined/음수/소수/NaN revision 거부.
+- autosave 신규 5개: 동일 내용 flush의 실제 revision 확인·이후 모든 쓰기 차단/히스토리 보존,
+  알림 없는 삭제 차단, 중복/지연/잘못된 revision 힌트 후 DB 검증,
+  dirty-only beforeunload·hidden 조기 저장·focus/pageshow 재확인·cleanup, 충돌 후 타이·Undo/Redo 보존.
+- SaveButton 신규 2개: 수동 실패 뒤 자동 성공 시 오래된 오류 제거, 충돌/삭제 시 비활성화/백업 안내.
+- 전체 **32파일 / 391개 통과**(기존 362 + 신규 29). fake-indexeddb의 실제 readwrite transaction/abort와
+  원시 레코드 전체 동등성을 검사했다. 사용자의 실제 브라우저 저장소에 마이그레이션을 실행하지 않았다.
+- `npm run typecheck`, `npm run lint`, `npm run check:architecture`, `npm run build` 결과는 TASKS 최신 절 참조.
+- E2E 신규 6개(`storage-concurrency.spec.ts`): 같은 context 두 탭 동시 저장/메모리·Undo·JSON·새 ID 보존,
+  실제 타 탭 삭제/알림/직접 URL Tombstone 보호, stale 목록 삭제, BC 없는 동일 내용 저장/최신본 재열기,
+  수동 실패 후 자동 성공 UI, 실제 beforeunload 취소 및 synthetic hidden 조기 저장/새로고침.
+- 기존 35개 유지. 손상 저장본 주입 helper의 DB open은 고정 v1 대신 현재 DB를 연다(원시 레코드와 무쓰기 검증 그대로).
+  `npm run test:e2e -- --list`: **41종/10파일 수집 성공**.
+- `npm run test:e2e`: 서버 시작 시 **listen EPERM 0.0.0.0:3010**, exit 1 → **41종 미실행**.
+  새 브라우저 충돌/데이터 보존 검증은 완료로 표시하지 않는다. timeout 증가/skip/테스트 삭제 없음.
+
+Mac 일반 터미널:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+수동 인수: 기존 앱 탭을 연 채 새 버전 열기 → blocked 안내/기존 탭 JSON 백업·닫기 → 새 앱 다시 열기,
+두 탭 편집/삭제·백업·새 ID·최신본 선택, 실제 백그라운드 전환·뒤로가기/BFCache·새로고침,
+Safari/모바일에서 이탈 안내 제한을 확인한다. OS 강제 종료·배터리/전원 차단 시 마지막 편집 무손실은
+보장하지 않는다. Web Locks/복구 저널은 미구현(승인 범위 제외). 완료된 transaction과 아직 미커밋 편집을 구분한다.

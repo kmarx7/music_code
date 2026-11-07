@@ -98,8 +98,7 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 - 악보함 파일 입력은 최대 5MiB다. 파싱·검증 실패 시 `save`를 호출하지 않고, 저장 실패도 사용자에게 알린다.
 - `src/adapters/file-export/json.ts`는 Blob/다운로드 URL 수명만 관리한다. 기존 다운로드 구현이 없어
   최소 어댑터를 추가했으며 production 의존성·모델·저장 엔진 변경은 없다.
-- 다중 탭의 ID 생성/확인/저장은 원자적 create-if-absent가 아니다. UI는 매번 새 UUID를 생성하며,
-  임의 덮어쓰기를 제공하지 않는다. 다중 탭 동시 편집 충돌은 기존 미해결 범위다.
+- ADR-010 이후 실제 생성은 원자적 create-if-absent다. UI는 새 UUID를 생성하고 Tombstone ID도 재사용하지 않는다.
 
 ### Phase 1-E — 쉼표 편집 계약 (2026-11-08)
 
@@ -390,7 +389,7 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   진행 중 저장 자체를 취소하거나 전역 저장 상태를 별도 복제하지 않는다.
 - 완료 문구는 수동 요청 반환값만으로 결정하지 않는다. 기존 SaveStatus가 saved일 때만 최신 저장 완료를 표시한다.
   추가 편집은 즉시 saving으로 바뀌므로 이전 성공 문구를 숨긴다. 오류는 저장 재시도/JSON 백업 안내를 제공하며
-  수동 요청 실패 안내는 다음 수동 요청으로 해제한다. 기존 자동 저장 상태 표시도 유지한다.
+  ADR-010 이후 저장 오류는 useAutosave 단일 소유다. 후속 자동 저장 성공도 이전 수동 실패 안내를 해제한다.
   새로운 status/alert role은 추가하지 않아 재생 output/기존 오류 선택자와 충돌하지 않는다.
 - IndexedDB 성공은 기존 transaction.oncomplete 기준이다. transaction 실패는 put이 성공했더라도 실패이며,
   해당 transaction의 쓰기는 롤백되어 직전 커밋된 정상 레코드가 유지된다. 실패 시 메모리 Score와 편집 이력은 유지한다.
@@ -402,3 +401,38 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   기존 포트와 저장 흐름의 호환 가능한 보완이며 구조 변경 ADR은 필요하지 않다.
 - 강제 종료/탭 닫기/직접 URL 이동/뒤로가기의 비동기 저장 완료, 정상 레코드 간 다중 탭 충돌,
   브라우저 데이터 삭제는 여전히 보장 범위 밖이다. 수동 저장은 완료 표시를 확인한 시점의 로컬 저장 확인 수단이다.
+
+
+## ADR-010 — 현재 저장 계약 (이전 절의 저장 계약/제한보다 우선)
+
+- ScoreRepository는 `read(id): Promise<{score: Score; revision: number} | null>`을 제공한다.
+  `load(id)`는 Score만 반환하는 읽기 전용 호환 투영이다. null은 실제 미존재만 뜻한다.
+  Tombstone은 `ScoreConflictError("DELETED")`, revision 불일치는 `CONFLICT`, 읽기/검증 실패는 기존 ScoreReadError다.
+- `create(score): Promise<number>`는 없는 ID에만 최초 revision 1을 커밋한다.
+  `save(score, expectedRevision)` / `delete(id, expectedRevision)`는 필수 CAS이며 새 revision을 반환한다.
+  versionless upsert 없음. 기존 envelope 검증·revision 비교·put은 동일 readwrite transaction에서 실행한다.
+  put 성공이 아닌 transaction.oncomplete 뒤에만 성공한다. abort는 원본 및 revision을 보존한다.
+- `list()`의 summary에도 revision이 포함되며 삭제 UI는 목록에서 받은 revision을 전달한다.
+  삭제는 물리 delete가 아니라 `{id, revision, deleted:true, deletedAt}` Tombstone을 쓴다. 자동 만료/정리 없음.
+- DB version 2 / store `scores` 유지. 음악 JSON의 schemaVersion 2와는 별개다.
+  정상 legacy envelope의 revision 부재는 0이다. 읽기만으로 row를 쓰지 않으며 다음 정상 수정/삭제 때 전환한다.
+  손상/미지원/잘못된 revision 레코드는 쓰기·삭제 모두 거부한다. 지원 음악 v1→v2 메모리 변환은 유지한다.
+- 구버전 v1 연결이 열려 있으면 blocked 오류로 백업/이전 탭 닫기/재진입을 안내한다.
+  이미 발행된 IDB open 요청은 취소할 수 없어 이전 연결 종료 뒤 DB 버전 전환이 완료될 수 있지만 row를 변환하지 않는다.
+  versionchange를 받은 새 코드 연결은 닫고 이후 쓰기를 거부한다. DB2에 구버전 v1 open은 VersionError다.
+  재개하려면 최신 앱을 다시 연다. DB 삭제/다운그레이드/원본 일괄 변환은 하지 않는다.
+- openOrCreateScore는 revision을 반환한다. 동시 최초 생성 경합은 편집 세션 생성 전 승자의 저장본을
+  읽기만 해서 연다(쓰기 재시도 없음). 이미 열린 편집 세션의 충돌은 자동 재열기/병합하지 않는다.
+- `subscribe?`는 `{id,revision,kind}` BroadcastChannel 힌트다. 커밋 후에만 전송한다.
+  수신 시 DB를 재조회하며 payload의 revision을 baseline으로 사용하지 않는다. 누락/중복/지연/전송 실패/미지원에도 CAS는 동일하다.
+- `useAutosave(repository, delayMs, controlRef, initiallySaved, initialRevision)`가 session baseline revision과
+  `idle|saving|saved|error|conflict|deleted` 상태의 단일 소유자다. 자동/수동/cleanup 쓰기를 직렬화한다.
+  같은 내용도 수동 flush에서는 DB revision을 확인한다. 실제 최신 snapshot의 commit 확인 없이 saved로 표시하지 않는다.
+  SaveButton은 요청 진행/handle 호출 예외만 관리하고 영속 저장 오류를 별도로 보존하지 않는다.
+- 충돌/삭제 시 예약·후속 자동/수동/cleanup 저장을 차단하며 메모리 Score와 past/future는 유지한다.
+  JSON 백업, 새 ID로 검증 후 create, 확인 후 최신본 열기만 제공한다. 강제 덮어쓰기/자동 병합/자동 재시도 없음.
+- 앱 내부 홈/악보함 이동은 기존 flush 성공 조건 유지. dirty 상태에만 beforeunload를 연결하고,
+  hidden 시 동일 대기열로 조기 flush, focus/pageshow 시 DB revision을 확인한다. 확인 후 최신본 재열기만
+  allowDiscard로 이탈 안내를 해제한다. 일반 브라우저 강제 종료/SPA 뒤로가기의 최종 비동기 commit은 보장하지 않는다.
+- JSON 백업은 envelope 없는 canonical Score 그대로다. revision/Tombstone/UI 상태는 포함하지 않는다.
+  Web Locks/복구 저널/새 저장소/상태 라이브러리/배포 변경 없음. ADR-010의 사용자 승인을 근거로 포트만 확장했다.

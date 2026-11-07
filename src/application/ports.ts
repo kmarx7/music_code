@@ -4,18 +4,26 @@ export interface ScoreSummary {
   id: string;
   title: string;
   updatedAt: string;
+  revision: number;
 }
 
-/**
- * 영속 저장 포트. Phase 0에서는 인터페이스만 정의하며
- * IndexedDB 어댑터는 Phase 1에서 구현한다.
- */
+/** Storage metadata is not music content and never enters edit history/JSON backups. */
+export interface ScoreSnapshot { score: Score; revision: number }
+export interface ScoreChange { id: string; revision: number; kind: "saved" | "deleted" }
 export interface ScoreRepository {
   list(): Promise<ScoreSummary[]>;
-  /** null only for absent IDs; unreadable records reject with ScoreReadError. */
+  /** Read-only compatibility projection. null means truly absent, never deleted/unreadable. */
   load(id: string): Promise<Score | null>;
-  save(score: Score): Promise<void>;
-  delete(id: string): Promise<void>;
+  read(id: string): Promise<ScoreSnapshot | null>;
+  create(score: Score): Promise<number>;
+  save(score: Score, expectedRevision: number): Promise<number>;
+  delete(id: string, expectedRevision: number): Promise<number>;
+  subscribe?(listener: (change: ScoreChange) => void): () => void;
+}
+export class ScoreConflictError extends Error {
+  constructor(public readonly code: "CONFLICT" | "DELETED", message = "다른 탭에서 악보가 변경되거나 삭제되었습니다.") {
+    super(message); this.name = "ScoreConflictError";
+  }
 }
 
 export type ScoreReadErrorCode =

@@ -1,3 +1,4 @@
+import { persist } from "../fixtures/persist";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
@@ -11,7 +12,7 @@ it("persists a renamed score and restores a JSON backup through IndexedDB withou
   });
   expect(outcome.result.ok).toBe(true);
   const original = outcome.session.current;
-  await repository.save(original);
+  await persist(repository, original);
   const loaded = await repository.load(original.id);
   expect(loaded).toEqual(original);
   const restored = await importScoreBackup(repository, exportScoreBackup(loaded!).json, {

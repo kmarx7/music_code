@@ -18,13 +18,13 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 명시적 수동 저장)
+## 2. 검증 명령 결과 (최신: 2026-11-08 ADR-010 저장 안전성)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 31 파일 / **362 테스트 통과**(기존 353 + 수동 저장 회귀 9) |
+| `npm run test` | ✅ exit 0 | 32 파일 / **391 테스트 통과**(기존 362 + 저장 안전성 29) |
 | `npm run check:architecture` | ✅ exit 0 | 53 모듈·139 의존성, 경계 46파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
@@ -421,16 +421,35 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. Score/schemaVersion 2/Part.ties/Command/Undo/Redo/저장소·production 의존성·배포 설정 유지.
   실제 브라우저·모바일 실기기 검증 전 완전 검증으로 표시하지 않는다. 수동 절차는 TEST_PLAN §20.
 
+### 4.20 ADR-010 저장 안전성 (2026-11-08)
+
+- 기준 `8d570b0`, clean 확인. 사용자 기준선 단위·통합 362개 및 Mac Chromium **35/35 통과**.
+  4.19의 과거 Codex EPERM 기록은 유지한다.
+- 사용자 승인에 따라 ADR-010 Accepted, ARCHITECTURE/DATA_MODEL/MODULE_CONTRACTS 갱신.
+  Score 외부 revision CAS, atomic create/update/delete, 영속 Tombstone, BC 알림 후 DB 확인,
+  useAutosave 단일 저장 상태/충돌 중지, dirty beforeunload/hidden 조기 저장/focus·pageshow 재확인 구현.
+- DB version 2로 구버전 writer 차단. blocked/versionchange 안내/연결 폐쇄, legacy revision 0 지연 전환.
+  손상/미지원 원본은 보존하고 정상 음악 v1→v2 읽기 지원 유지. 사용자의 실제 DB는 건드리지 않았다.
+- 충돌 시 메모리 Score·Undo 보존, JSON 백업/새 ID 저장/확인 후 최신본 열기. 강제 덮어쓰기/병합/재시도 없음.
+  동시 최초 열기는 편집 세션 초기화 전에 승자의 저장본을 읽기만 한다.
+- **32파일 / 391개 통과**(기존 362 + 신규 29). typecheck/lint/architecture/build 결과는 위 최신 표.
+  기존 테스트 setup/spy만 새 생성·수정 계약으로 전환했으며 핵심 검증/기존 시나리오 유지.
+- 기존 35개 + 신규 실제 두 탭/삭제/충돌·보존/상태/이탈 E2E 6개, 총 **41종/10파일 수집 성공**.
+  전체 실행은 **listen EPERM 0.0.0.0:3010**, exit 1로 **41종 미실행**.
+- 상태: **구현·단위/통합 검증 완료, Mac 새 버전 E2E·실기기 인수 대기**. 완전 검증으로 표시하지 않는다.
+- Web Locks/강제 종료 복구 저널은 범위 제외. 강제 종료/SPA 뒤로가기의 최종 비동기 저장과
+  브라우저 데이터 삭제는 무손실 보장하지 않는다. DB2를 모르는 구버전 빌드로 롤백하지 않는다.
+- GitHub push/Vercel 접근·설정 변경·배포 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 수동 저장 추가 후 전체 35종을 검증한다(사용자 기준선 31/31).
+1. Mac 일반 터미널에서 전체 41종을 재검증한다. 사용자 기존 35/35와 새 버전 결과를 구분한다.
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
    npm run test:e2e
    ```
 
-2. TEST_PLAN §17의 입력 미리듣기 실제 청취·Safari/모바일 절차를 수행한다. 실제 오디오로 타이 지속·중복 어택 부재, 메트로놈 강조/템포, Pause/Stop 해제와 SVG 하이라이트 확인.
-   메인 스레드 지연·백그라운드 탭의 커서 갱신, Safari/모바일 실기기는 별도 검증한다.
-3. Phase 1 인수 기준·지원 환경 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석.
-   재생 cursor 시작, 연습 속도/A–B loop는 후속 범위다. Phase 1의 수동 저장/커서 입력 수동 인수도 확인한다.
+2. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
+3. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수 후 Phase 2 조옮김·음이름·음역 분석.
+   강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

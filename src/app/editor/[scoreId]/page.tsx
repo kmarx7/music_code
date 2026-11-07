@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { ScoreReadError, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt } from "@/application";
+import { ScoreConflictError, ScoreReadError, importScoreBackup, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt } from "@/application";
 import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
@@ -67,19 +67,19 @@ export default function EditorPage() {
 
 /** The editing workspace and autosave only mount after a successful validated read. */
 function EditorLoader({ scoreId }: { scoreId: string }) {
-  const [load, setLoad] = useState<{ ready: boolean; error?: { code: string; message: string } }>({ ready: false });
+  const [load, setLoad] = useState<{ ready: boolean; revision?: number; error?: { code: string; message: string } }>({ ready: false });
   const repository = getScoreRepository();
   useEffect(() => {
     let active = true;
     openOrCreateScore(repository, { id: scoreId, createdAt: new Date().toISOString() })
-      .then(({ score }) => {
+      .then(({ score, revision }) => {
         if (!active) return;
         scoreStore.init(score);
-        setLoad({ ready: true });
+        setLoad({ ready: true, revision });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setLoad({ ready: false, error: error instanceof ScoreReadError
+        setLoad({ ready: false, error: error instanceof ScoreReadError || error instanceof ScoreConflictError
           ? { code: error.code, message: error.message }
           : { code: "OPEN_FAILED", message: "악보를 열지 못했습니다." } });
       });
@@ -94,10 +94,10 @@ function EditorLoader({ scoreId }: { scoreId: string }) {
     </main>
   );
   if (!load.ready) return <main style={page}><p>준비 중…</p></main>;
-  return <EditorWorkspace key={scoreId} />;
+  return <EditorWorkspace key={scoreId} initialRevision={load.revision!} />;
 }
 
-function EditorWorkspace() {
+function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const router = useRouter();
   const session = useScoreState();
   const [durationTicks, setDurationTicks] = useState(960);
@@ -116,7 +116,7 @@ function EditorWorkspace() {
   const repository = getScoreRepository();
   const autosave = useRef<AutosaveHandle | null>(null);
   const navigationPending = useRef(false);
-  const saveStatus = useAutosave(repository, 400, autosave, true);
+  const saveStatus = useAutosave(repository, 400, autosave, true, initialRevision);
 
   async function leaveEditor(href: string) {
     if (navigationPending.current) return;
@@ -130,6 +130,26 @@ function EditorWorkspace() {
     } finally {
       navigationPending.current = false;
     }
+  }
+
+  async function saveAsNew() {
+    const current = scoreStore.getState()?.current;
+    if (!current) return;
+    try {
+      const { score } = await importScoreBackup(repository, exportScoreBackup(current).json,
+        { id: crypto.randomUUID(), importedAt: new Date().toISOString() });
+      router.push(`/editor/${score.id}`);
+    } catch { setMessage("새 악보 저장에 실패했습니다. 현재 내용을 JSON으로 백업해 주세요."); }
+  }
+  async function openLatest() {
+    if (!window.confirm("현재 메모리 편집과 Undo 이력을 버리고 최신 저장본을 열까요? 먼저 JSON 백업을 권장합니다.")) return;
+    try {
+      const current = scoreStore.getState()?.current;
+      if (!current) return;
+      if (!await repository.read(current.id)) throw new Error("저장본 없음");
+      autosave.current?.allowDiscard?.();
+      window.location.reload();
+    } catch { setMessage("최신 저장본을 열 수 없습니다. 삭제된 ID는 다시 생성하지 않습니다. JSON 백업 또는 새 악보 저장을 사용해 주세요."); }
   }
 
   const addPitch = useCallback(
@@ -166,6 +186,7 @@ function EditorWorkspace() {
   }
 
   const score = session.current;
+  const storageBlocked = saveStatus === "conflict" || saveStatus === "deleted";
   const part = score.parts[0];
   const events = part.measures.flatMap((measure) => measure.events);
   const notes = events.filter((event) => event.kind === "note");
@@ -252,18 +273,27 @@ function EditorWorkspace() {
         <span
           style={{
             fontSize: 12,
-            color: saveStatus === "error" ? "#b91c1c" : "#5f6773",
+            color: saveStatus === "error" || storageBlocked ? "#b91c1c" : "#5f6773",
           }}
         >
           {saveStatus === "saving"
             ? "저장 중…"
             : saveStatus === "saved"
               ? "저장됨"
+              : saveStatus === "conflict" ? "저장 충돌"
+              : saveStatus === "deleted" ? "삭제됨 · 저장 중단"
               : saveStatus === "error"
                 ? "저장 실패"
                 : ""}
         </span>
         <SaveButton autosave={autosave} status={saveStatus} />
+        {storageBlocked && <section data-testid="storage-conflict" aria-label="저장 충돌" style={panel}>
+          <p role="alert">{saveStatus === "deleted" ? "다른 탭에서 삭제된 악보입니다." : "다른 탭에서 악보가 변경되었습니다."} 자동·수동 저장을 중단했습니다. 현재 편집과 Undo 이력은 유지됩니다.</p>
+          <button type="button" style={button} onClick={() => downloadScoreJson(exportScoreBackup(score))}>현재 내용 JSON 백업</button>{" "}
+          <button type="button" style={button} onClick={() => void saveAsNew()}>새 악보 ID로 저장</button>{" "}
+          <button type="button" style={button} onClick={() => void openLatest()}>최신 저장본 열기</button>
+        </section>}
+
       </div>
 
       <form
