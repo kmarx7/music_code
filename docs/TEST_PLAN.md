@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 9종 + 재생 2종 | Playwright(Chromium, 프로덕션 빌드) | 0af8c15 사용자 Mac 9/11 통과 / 선택자 수정 후 11종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 11종 + 저장/이동 2종 | Playwright(Chromium, 프로덕션 빌드) | 591e02e 사용자 Mac 10/11 통과 / 이동 수정 후 13종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 25 파일 / 266 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 25 파일 / 270 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -414,3 +414,52 @@ Mac 일반 터미널 재검증:
 cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
 npm run test:e2e
 ```
+
+
+## 14. 악보함 이동 전 최신 저장 및 transaction 완료 검증 (2026-11-08)
+
+### 근거와 수정 전 재현
+
+- 사용자 Mac `591e02e`: **10/11 통과**, 제목/JSON E2E의 기존 악보 링크 확인 1종 실패.
+- 실제 trace: 제목 수정·Undo·Redo 후 “백업 연습곡” 표시와 `백업 연습곡.json` 다운로드명 확인 통과.
+  Redo 클릭 시작 10083.440ms → 악보함 이동 클릭 10186.788ms(약 103ms), 디바운스 400ms보다 이르다.
+- error-context의 악보함에는 **동일 ID `/editor/e2e-backup` 링크가 “새 악보”로 존재**한다.
+  잘못된 고정 경로가 아니라 이전 제목을 조회한 것이다. JSON 다운로드는 메모리 Score만 읽는다.
+- `useAutosave`는 cleanup에서 저장을 큐에 넣지만 React cleanup은 그 Promise를 기다리지 않는다.
+  악보함은 처음 한 번 list를 읽으므로 이후 저장이 완료되어도 이미 조회한 목록은 바뀌지 않는다.
+- 실제 IndexedDB의 역사적 dump는 trace에 없어서 당시 영구 데이터 유실은 확정할 수 없다.
+  fake-indexeddb에서 제목 Undo/Redo → cleanup → 즉시 list를 실행하면 이전 제목이 나오는 것으로
+  같은 경합을 재현했다(신규 테스트 수정 전 실패).
+- 별도 transaction 재현: put success 직후 abort를 주입해도 기존 repository.save가 resolve했다.
+  신규 테스트 수정 전 실패. transaction.oncomplete/abort/error를 기다리도록 보완했다.
+
+### 수정 후 검사
+
+- **25파일 / 270개 통과**, 기존 266개 유지, 테스트 삭제/skip 없음.
+- autosave.test.ts **12개**(+3):
+  1. 제목 Rename/Undo/Redo 뒤 명시적 flush → cleanup → list의 ID/제목 일치(fake-indexeddb).
+  2. 디바운스 전 flush 및 저장 대기 중 발생한 후속 편집까지 보존.
+  3. flush 실패의 false/error·Score와 히스토리 보존·재시도 성공.
+  기존 cleanup 최종 저장/이전 쓰기 역전 방지/연속 편집/IndexedDB 복원 9개도 유지한다.
+- score-repository.test.ts **7개**(+1): put 요청 성공 뒤 transaction abort가 save를 reject하고
+  기존 저장본은 보존됨을 실제 IndexedDB 어댑터 + fake-indexeddb로 검증한다.
+- 기존 editor.spec.ts의 JSON 흐름은 ID·제목, 저장됨 및 IndexedDB 전체 Score/다운로드 동등성을
+  검증한 후 이동하며 기존 기대값을 유지한다. timeout 증가 없음.
+- 신규 autosave-navigation.spec.ts **2종**:
+  1. 저장됨을 기다리지 않는 연속 입력·제목 Undo/Redo·악보함 이동, ID/제목/음표·새로고침 복원.
+  2. 실제 put success 이후 transaction abort 주입 → 이동 차단·오류 안내·JSON 백업 가능·재시도 성공.
+- typecheck/lint/check:architecture/build 모두 exit 0.
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- `npm run test:e2e`는 **listen EPERM 0.0.0.0:3010**, exit 1 → **수정 버전 13종 모두 미실행**.
+  `npm run test:e2e -- --list`: exit 0, 13종/5파일 수집 확인. 브라우저 통과를 의미하지 않는다.
+- 원래 실패 증거: `/tmp/music-score-navigation-591e02e-dvlvdcaz/test-results/`에 보존(임시 경로, Git 제외).
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 위험: 새 13종 브라우저 E2E 미검증, 브라우저 강제 종료/직접 URL 이동/뒤로가기의
+비동기 cleanup 저장 완료, 다중 탭 동시 편집. 명시적 저장 후 이동 보장은 편집기 홈/악보함 Link에 적용한다.

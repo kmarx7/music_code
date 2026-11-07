@@ -154,7 +154,9 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
 });
 
 test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·오류 파일 거부", async ({ page }) => {
-  await page.goto("/editor/e2e-backup");
+  const scoreId = "e2e-backup";
+  await page.goto(`/editor/${scoreId}`);
+  await expect(page).toHaveURL(new RegExp(`/editor/${scoreId}$`));
   await expect(page.getByText(/음표 0개/)).toBeVisible();
   for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "MIDI 60" }).click();
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
@@ -183,12 +185,17 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const buffer = Buffer.concat(chunks);
   const backup = JSON.parse(buffer.toString("utf8"));
+  expect(backup.id).toBe(scoreId);
+  expect(backup.title).toBe("백업 연습곡");
   expect(backup.schemaVersion).toBe(2);
   expect(backup.parts[0].ties).toHaveLength(1);
 
-  // 목록 이동 시 기존 autosave cleanup도 flush한다. 이후 새로고침으로 영속 상태를 검증한다.
+  // JSON 다운로드는 저장 완료 신호가 아니다. 실제 저장본과 다운로드 내용을 비교한다.
+  await expect(page.getByText("저장됨", { exact: true })).toBeVisible();
+  await expect.poll(() => storedScore(page, scoreId)).toEqual(backup);
   await page.getByRole("link", { name: "악보함 / JSON 가져오기" }).click();
-  const source = page.locator('a[href="/editor/e2e-backup"]').filter({ hasText: "백업 연습곡" });
+  const source = page.getByRole("link", { name: "백업 연습곡", exact: true })
+    .and(page.locator(`a[href="/editor/${scoreId}"]`));
   await expect(source).toBeVisible();
   await page.locator("#score-import").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer });
   await expect(page.getByRole("status")).toContainText("새 악보로 가져왔습니다");

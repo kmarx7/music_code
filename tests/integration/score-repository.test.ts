@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
 import { createEmptyScore, createNoteEvent } from "@/domain/score/create";
 import { serializeScore } from "@/domain/score/serialize";
@@ -108,4 +108,20 @@ describe("IndexedDB ScoreRepository", () => {
 
     expect(await repository.load("schema")).toBeNull();
   });
+});
+
+it("rejects a transaction aborted after a successful put instead of reporting saved", async () => {
+  const repository = freshRepository();
+  const initial = scoreWith("abort", "2026-11-08T01:00:00.000Z", "note-abort");
+  await repository.save(initial);
+  const original = IDBObjectStore.prototype.put;
+  const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(function (this: IDBObjectStore, ...args) {
+    const request = original.apply(this, args);
+    request.addEventListener("success", () => request.transaction!.abort());
+    return request;
+  });
+  try {
+    await expect(repository.save({ ...initial, title: "아직 커밋 안 됨" })).rejects.toThrow();
+  } finally { spy.mockRestore(); }
+  expect(await repository.load(initial.id)).toEqual(initial);
 });

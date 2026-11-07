@@ -33,6 +33,7 @@
 | Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
+| Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle` |
 | Feature · Playback | `@/features/playback` | `PlaybackControls`, `highlightPlayback` (런타임 UI/DOM 투영) |
 | Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings` |
 
@@ -252,3 +253,24 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   연속 편집 회귀에서 재현된 늦은 저장 덮어쓰기를 막기 위해 기존 `useAutosave`의 쓰기를 순서대로 실행한다.
   cleanup의 마지막 저장도 같은 대기열을 사용하고 실패한 요청 다음의 저장은 계속한다.
   다중 탭 동시 편집과 브라우저 강제 종료 시 비동기 저장 보장은 기존 미해결 범위다.
+
+
+## 저장 완료·편집기 이동 계약 보완 (2026-11-08)
+
+- `useAutosave(repository, delayMs = 400, controlRef?)`의 기존 인자/`SaveStatus` 반환은 유지한다.
+  선택적 React ref를 통해 기존 저장 대기열의 `AutosaveHandle.flush(): Promise<boolean>`을 제공한다.
+  새 상태 시스템·Repository 포트·Score 모델을 만들지 않는다.
+- 일반 자동 저장은 400ms 디바운스와 쓰기 직렬화를 유지한다. 명시적 flush는 대기 타이머를 취소하고
+  기존 in-flight 쓰기 뒤에 최신 snapshot을 저장한다. 저장 중 추가 편집이 생기면 같은 Score의 최신본도
+  저장한 뒤 true를 반환한다. 실패 시 false/error이며 편집 세션은 보존한다. 다음 호출로 재시도할 수 있다.
+- 편집기의 일반 홈/악보함 링크 이동은 Next Link `onNavigate`에서 flush 완료를 기다린 후 진행한다.
+  실패하면 이동하지 않고 “저장하지 못해 이동을 중단했습니다”와 재시도/JSON 백업 안내를 표시한다.
+  cleanup 저장은 예비 수단이며, 악보함 목록 조회와의 동기화 수단으로 사용하지 않는다.
+- IndexedDB의 `save` 성공은 put 요청 성공이 아니라 **transaction.oncomplete** 이후다.
+  요청 성공 뒤 발생한 transaction abort/error도 실패로 전달한다. “저장됨”은 이 완료 시점과
+  현재 Score snapshot 일치가 모두 확인된 경우에만 표시한다. read/delete도 같은 transaction 완료 처리를 쓴다.
+- JSON 다운로드는 현재 메모리 Score를 백업하며 IndexedDB 저장 완료를 의미하지 않는다.
+- Score schemaVersion 2, Part.ties, 기존 Command/Undo/Redo와 Repository 인터페이스는 불변이다.
+  문서 계약의 호환 가능한 추가이며 레이어/의존성/기본 아키텍처 변경은 없다.
+- 브라우저 강제 종료/탭 닫기/직접 URL 이동/브라우저 뒤로가기는 위 Link guard를 거치지 않는다.
+  이 경우 비동기 cleanup 저장 완료는 보장하지 않으며 다중 탭 동시 쓰기도 이번 범위 밖이다.

@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
 import type { ScoreRepository } from "@/application";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { useAutosave } from "@/features/score-library";
+import { useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { scoreStore } from "@/store/score-store";
 import { createPitch } from "@/domain/music-theory";
 import { MemoryScoreRepository } from "../fixtures/memory-repository";
@@ -24,16 +24,18 @@ afterEach(async () => {
   vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks();
 });
 
-function AutosaveHarness({ repository }: { repository: ScoreRepository }) {
-  useAutosave(repository, 400);
+function AutosaveHarness({ repository, control }: { repository: ScoreRepository; control: { current: AutosaveHandle | null } }) {
+  useAutosave(repository, 400, control);
   return null;
 }
 
 function mount(repository: ScoreRepository) {
-  AutosaveHarness({ repository });
+  const control = { current: null as AutosaveHandle | null };
+  AutosaveHarness({ repository, control });
   const result = hooks.setup?.();
   if (typeof result !== "function") throw new Error("autosave effect missing");
   cleanup = result;
+  return control.current!;
 }
 
 function changePitch() {
@@ -167,4 +169,50 @@ it("a failed write does not block the next queued snapshot", async () => {
   resize(); await vi.advanceTimersByTimeAsync(400);
   expect(hooks.status).toBe("saved");
   expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
+});
+
+it("navigation must observe the latest renamed score rather than the pre-cleanup list snapshot", async () => {
+  vi.useRealTimers();
+  const repository = createIndexedDbScoreRepository({ dbName: "autosave-navigation-race" });
+  await repository.save(scoreStore.getState()!.current);
+  const autosave = mount(repository);
+  scoreStore.dispatch({ type: "RenameScore", title: "백업 연습곡", updatedAt: "2026-11-08T03:00:00.000Z" });
+  scoreStore.undo(); scoreStore.redo();
+  expect(await autosave.flush()).toBe(true);
+  cleanup?.(); cleanup = undefined;
+  const list = await repository.list();
+  expect(list[0]).toMatchObject({ id: "score-1", title: "백업 연습곡" });
+  expect(await createIndexedDbScoreRepository({ dbName: "autosave-navigation-race" }).load("score-1"))
+    .toEqual(scoreStore.getState()!.current);
+});
+
+it("explicit flush bypasses debounce and includes edits made during a pending write", async () => {
+  const repository = new MemoryScoreRepository();
+  const original = repository.save.bind(repository);
+  let complete!: () => void;
+  const gate = new Promise<void>((resolve) => { complete = resolve; });
+  vi.spyOn(repository, "save").mockImplementationOnce(async (score) => { await gate; await original(score); });
+  const autosave = mount(repository);
+  changePitch();
+  const flush = autosave.flush();
+  await vi.advanceTimersByTimeAsync(0);
+  resize();
+  complete();
+  expect(await flush).toBe(true);
+  expect(hooks.status).toBe("saved");
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
+});
+
+it("explicit flush reports failure, preserves the session and can be retried", async () => {
+  const repository = new MemoryScoreRepository();
+  const autosave = mount(repository);
+  changePitch(); const edited = scoreStore.getState();
+  vi.spyOn(repository, "save").mockRejectedValueOnce(new Error("quota"));
+  expect(await autosave.flush()).toBe(false);
+  expect(hooks.status).toBe("error");
+  expect(scoreStore.getState()).toBe(edited);
+  expect(await repository.load("score-1")).toBeNull();
+  expect(await autosave.flush()).toBe(true);
+  expect(hooks.status).toBe("saved");
+  expect(await repository.load("score-1")).toEqual(edited!.current);
 });

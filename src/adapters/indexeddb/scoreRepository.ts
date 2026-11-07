@@ -56,7 +56,16 @@ export function createIndexedDbScoreRepository(options?: {
   ): Promise<T> {
     const handle = await db();
     const transaction = handle.transaction(STORE_NAME, mode);
-    return requestToPromise(run(transaction.objectStore(STORE_NAME)));
+    // A request success precedes transaction commit; a later abort must still reject save().
+    const completed = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
+      transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
+    });
+    const [result] = await Promise.all([
+      requestToPromise(run(transaction.objectStore(STORE_NAME))), completed,
+    ]);
+    return result;
   }
 
   return {

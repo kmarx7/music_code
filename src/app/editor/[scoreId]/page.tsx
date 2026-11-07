@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
 import { exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest } from "@/application";
@@ -13,7 +13,7 @@ import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
-import { useAutosave } from "@/features/score-library";
+import { useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import type { PlaybackPosition } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
@@ -61,6 +61,7 @@ const panel: React.CSSProperties = {
 
 export default function EditorPage() {
   const params = useParams<{ scoreId: string }>();
+  const router = useRouter();
   const scoreId = params?.scoreId ?? "demo-score";
   const session = useScoreState();
   const [durationTicks, setDurationTicks] = useState(960);
@@ -73,7 +74,23 @@ export default function EditorPage() {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
   }, []);
   const repository = getScoreRepository();
-  const saveStatus = useAutosave(repository);
+  const autosave = useRef<AutosaveHandle | null>(null);
+  const navigationPending = useRef(false);
+  const saveStatus = useAutosave(repository, 400, autosave);
+
+  async function leaveEditor(href: string) {
+    if (navigationPending.current) return;
+    navigationPending.current = true;
+    try {
+      if (!await autosave.current?.flush()) {
+        setMessage("저장하지 못해 이동을 중단했습니다. 다시 시도하거나 JSON 백업을 다운로드해 주세요.");
+        return;
+      }
+      if (autosave.current) router.push(href);
+    } finally {
+      navigationPending.current = false;
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -200,7 +217,7 @@ export default function EditorPage() {
   return (
     <main ref={rootRef} style={page}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <Link href="/" style={{ fontSize: 13, color: "#1b2a4a" }}>
+        <Link href="/" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/"); }} style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
         </Link>
         <h1 style={{ fontSize: 20, margin: 0, overflowWrap: "anywhere", maxWidth: "100%" }}>{score.title}</h1>
@@ -247,7 +264,7 @@ export default function EditorPage() {
             setMessage("JSON 백업을 만들지 못했습니다.");
           }
         }}>JSON 백업</button>
-        <Link href="/library" style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
+        <Link href="/library" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/library"); }} style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
       </form>
 
       <ScoreSettings score={score} onCommand={runCommand} />

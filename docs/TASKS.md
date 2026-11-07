@@ -273,9 +273,32 @@
   `npm run test:e2e -- --list`는 11종/4파일 수집 확인. 수정 후 브라우저 통과를 뜻하지 않는다.
 - 다음 검증: Mac 일반 터미널에서 `npm run test:e2e` 전체 11종 재실행. GitHub push 없음.
 
+### 4.13 저장 전 악보함 이동 경합 수정 (2026-11-08)
+
+- 시작점 `591e02e`, clean. 사용자 Mac Chromium **10/11 통과**, 제목/JSON E2E 1종 실패.
+- trace/error-context: Redo 후 “백업 연습곡” 표시·JSON 파일명 검증은 통과했고,
+  이동 후 `/editor/e2e-backup` 링크는 존재하지만 제목이 “새 악보”였다. ID/경로 오류가 아니다.
+  Redo 클릭 시작(10083.440ms)에서 이동 클릭(10186.788ms)까지 약 103ms로 디바운스 400ms보다 빠르다.
+- 원인: cleanup의 비동기 저장과 새 악보함의 일회성 list 조회 간 순서 보장 없음.
+  fake-indexeddb 재현에서 cleanup 직후 list가 이전 제목을 반환했다. 과거 trace에는 실제 DB dump가 없으므로
+  영구 데이터 유실을 단정하지 않는다. JSON 다운로드 자체도 영속 저장 완료 신호가 아니다.
+- 별도 무결성 결함도 재현: put 요청 성공 후 transaction abort가 발생해도 이전 save는 성공으로 반환했다.
+  요청 성공 대신 transaction.oncomplete를 기다리고 abort/error를 호출자에 전달하도록 수정한다.
+- 기존 useAutosave의 쓰기 대기열에 선택적 ref/flush 제어 추가. 명시적 flush는 디바운스를 건너뛰고,
+  in-flight 중 발생한 최신 편집까지 보존한다. 일반 400ms 정책 및 기존 SaveStatus 반환은 유지한다.
+- 편집기 홈/악보함 Link는 flush 성공 후 이동한다. 실패 시 편집기에 남아 오류와 재시도/JSON 백업을 안내한다.
+- 기존 JSON E2E에 ID·제목 및 실제 IndexedDB/다운로드 동등성 확인 추가.
+  새 E2E 2종은 저장을 기다리지 않은 이동 및 transaction 실패·이동 차단·백업·재시도를 검사한다.
+- **25파일 / 270개 통과**(기존 266 유지 + 신규 4). typecheck/lint/architecture/build exit 0,
+  아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- 수정 전 새 재현 테스트 2개가 실패했고 수정 후 통과했다(목록 제목 경합, 성공 요청 뒤 abort).
+- 전체 `npm run test:e2e` 시도: listen EPERM 0.0.0.0:3010으로 **13종 미실행**.
+  `--list`로 13종/5파일 수집 확인. Mac 수정 전 10/11을 수정 후 통과로 간주하지 않는다.
+- MODULE_CONTRACTS/TEST_PLAN 갱신, Score/Part.ties/schemaVersion 2/Command/아키텍처 유지. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 선택자 수정 후 총 11종을 검증한다(수정 전 0af8c15 Mac 결과 9/11).
+1. Mac 일반 터미널에서 아래 명령으로 이동 전 저장 수정 후 총 13종을 검증한다(수정 전 591e02e Mac 결과 10/11).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
