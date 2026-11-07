@@ -11,6 +11,7 @@ import {
   noteById,
   splitNoteIntoMeasures,
   withoutTiesTouching,
+  NOTATABLE_DURATIONS,
 } from "@/domain/score/tie";
 import type { NoteSegment, SplitFailureCode } from "@/domain/score/tie";
 import type {
@@ -262,8 +263,53 @@ function addEvent(
     return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${event.id}`);
   }
 
+  if (event.kind === "rest" && !NOTATABLE_DURATIONS.some((spec) => spec.ticks === event.durationTicks)) {
+    return fail("NOT_NOTATABLE", "쉼표 길이는 표기 가능한 음가여야 합니다.");
+  }
+
   const nextPart: Part = mergePlacements(part, [{ measureId, event }]);
   return finalize(replacePart(score, partId, () => nextPart));
+}
+
+function updateRest(
+  score: Score,
+  command: Extract<EditCommand, { type: "UpdateRest" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  if (!part) return fail("PART_NOT_FOUND", "파트를 찾을 수 없습니다.");
+  const found = findEvent(part, command.restId);
+  if (!found || found.event.kind !== "rest") {
+    return fail("EVENT_NOT_FOUND", "쉼표를 찾을 수 없습니다.");
+  }
+  // 허용한 두 필드만 적용한다. ID/kind와 음표·타이 데이터는 수정하지 않는다.
+  const rest = {
+    ...found.event,
+    startTick: command.patch.startTick ?? found.event.startTick,
+    durationTicks: command.patch.durationTicks ?? found.event.durationTicks,
+  };
+  if (!NOTATABLE_DURATIONS.some((spec) => spec.ticks === rest.durationTicks)) {
+    return fail("NOT_NOTATABLE", "쉼표 길이는 표기 가능한 음가여야 합니다.");
+  }
+  if (!Number.isInteger(rest.startTick) || rest.startTick < 0) {
+    return fail("INVALID_SCORE", "쉼표 위치는 유효한 박 위치여야 합니다.");
+  }
+  const target = part.measures.find((measure) => {
+    const start = measureStartTick(measure.index, part.timeSignature);
+    return rest.startTick >= start && rest.startTick < start + measureTicks(part.timeSignature);
+  });
+  if (!target) return fail("MEASURE_NOT_FOUND", "쉼표를 놓을 마디가 없습니다.");
+  const nextPart: Part = {
+    ...part,
+    measures: part.measures.map((measure) => ({
+      ...measure,
+      events: sortEvents([
+        ...measure.events.filter((event) => event.id !== rest.id),
+        ...(measure.id === target.id ? [rest] : []),
+      ]),
+    })),
+  };
+  // 기존 마디 경계·단선율 중첩·타이 검증을 그대로 통과해야 한다.
+  return finalize(replacePart(score, part.id, () => nextPart));
 }
 
 function updateNote(
@@ -406,6 +452,9 @@ export function applyEditCommand(
 
     case "InsertRest":
       return addEvent(score, command.partId, command.measureId, command.rest);
+
+    case "UpdateRest":
+      return updateRest(score, command);
 
     case "AddMeasure": {
       const part = partOf(score, command.partId);

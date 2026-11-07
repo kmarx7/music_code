@@ -45,6 +45,7 @@ type EditCommand =
   | { type: "UpdateNote"; partId; noteId; patch: NotePatch }
   | { type: "DeleteEvent"; partId; eventId }
   | { type: "InsertRest"; partId; measureId; rest: RestEvent }
+  | { type: "UpdateRest"; partId; restId; patch: { startTick?: number; durationTicks?: number } }
   | { type: "AddMeasure"; partId; measureId: string }
   | { type: "ResizeNote"; partId; noteId; durationTicks: number };
 ```
@@ -93,6 +94,25 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
   최소 어댑터를 추가했으며 production 의존성·모델·저장 엔진 변경은 없다.
 - 다중 탭의 ID 생성/확인/저장은 원자적 create-if-absent가 아니다. UI는 매번 새 UUID를 생성하며,
   임의 덮어쓰기를 제공하지 않는다. 다중 탭 동시 편집 충돌은 기존 미해결 범위다.
+
+### Phase 1-E — 쉼표 편집 계약 (2026-11-08)
+
+- `RestEvent`, `NoteEvent`, `Part.ties` 및 schemaVersion 2는 변경하지 않는다.
+- `planAppendRest`는 기존 `append-note.ts`의 끝 위치 계산을 음표 입력과 공유하고,
+  `InsertRest`를 계획한다. 삽입은 마지막 이벤트 뒤이며 중간 삽입은 추가 후 위치 변경으로 한다.
+- `InsertRest`/`UpdateRest`는 `NOTATABLE_DURATIONS`의 단일 음가만 허용한다.
+  UI는 기존 네 길이(온음표/2분/4분/8분)를 재사용한다. 표기 불가 길이는 `NOT_NOTATABLE`로 거부한다.
+- `UpdateRest`는 같은 ID의 쉼표에 `startTick`/`durationTicks`만 적용한다.
+  시작 tick으로 소속 마디를 찾고 다른 마디로 이동할 수 있으나, 쉼표 전체는 한 마디 안에 있어야 한다.
+- **비리플로우 유지:** 쉼표의 삽입·이동·길이 변경·삭제는 다른 이벤트를 이동하지 않는다.
+  마디 초과/음표·쉼표 충돌은 기존 `validateScore`로 거부한다. 자동 분할·자동 마디 추가·타이 생성은 하지 않는다.
+- `Part.ties`와 음표 값은 쉼표 편집에서 보존된다. 기존 `ResizeNote` 리플로우는 그대로이며,
+  그 결과 타이 연속성이 깨지면 기존 검증이 전체 명령을 거부한다. 배치 정책을 바꾸지 않는다.
+- 실패 시 기존 Score와 편집 세션의 past/future는 동일하게 유지된다. 성공 시 기존 Undo/Redo,
+  scoreStore 및 IndexedDB 자동 저장을 사용한다. ScoreRepository 계약은 변경하지 않는다.
+- 마디·박 입력은 UI에서만 tick으로 변환한다. 별도 영속 시간 모델이나 상태 관리 도구는 추가하지 않는다.
+- VexFlow 어댑터는 이벤트를 읽기 전용으로 정렬하고 빈 구간을 `GhostNote`/`Fraction`으로 표시한다.
+  렌더 전용 객체는 Score에 저장하지 않는다. 쉼표는 높은음자리표 B4/낮은음자리표 D3 기준으로 중앙 배치한다.
 
 ## 5. 상태 소유권과 3분할
 

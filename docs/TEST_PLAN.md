@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 입력·편집·저장·복구·재생, 타이 분할, 모바일 레이아웃, 키보드/접근성 | Playwright(Chromium, 프로덕션 빌드) | ✅ 실행(4 통과) |
+| 브라우저 E2E | 기존 5종 + 쉼표 편집/타이 보존 2종 | Playwright(Chromium, 프로덕션 빌드) | 기존 5종 사용자 Mac 통과 / 쉼표 추가 후 7종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 17 파일 / 129 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 20 파일 / 170 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -244,3 +244,41 @@ npm run test:e2e         # exit 0  (4 통과, Chromium / 프로덕션 빌드)
   시작되지 않았다. 별도 `npm run build`는 성공했다. 기존 §5.3의 4/4는 이전 실행 기록이다.
 - 재검증: 포트 리슨 및 Chromium 실행이 허용된 환경에서 `npm run test:e2e` 실행(총 5종).
   다운로드·파일 입력·모바일 레이아웃·실기기 Safari는 현재 검증 완료로 간주하지 않는다.
+
+### 8.1 이후 사용자 Mac 검증 결과 (사용자 제공)
+
+- `exact: true` 선택자 수정 후 사용자가 Mac 일반 터미널에서 `npm run test:e2e` 실행.
+- Chromium **5 passed (13.1s)**: 기존 기능 4종 + 제목 변경·JSON 백업/복원 1종.
+- 위 Codex EPERM 기록은 유지한다. 이 결과는 아래 쉼표 기능 추가 전의 버전이다.
+
+## 9. Phase 1-E 쉼표 편집 검증 (2026-11-08)
+
+- **20파일 / 170 테스트 통과**, 기존 129개 회귀 + 신규 41개. 테스트 삭제/skip 없음.
+- `tests/unit/rest-editing.test.ts` (22):
+  정상 삽입·음가 변경·다른 마디 이동·삭제, 표기 불가/음수/0/비정수 길이 거부,
+  경계 끝 허용·경계 초과 거부, 잘못된 위치·중복 ID·없는 대상 거부,
+  음표/쉼표 충돌, 비리플로우·타이 보존, 실패 시 Score/Undo/Redo 이력 보존,
+  정상 Undo/Redo, 기존 ResizeNote와의 유효 리플로우 및 타이 연속성 위반 시 원자적 거부,
+  음표·쉼표 공통 끝 위치 계산 및 경계 초과를 자동 건너뛰지 않는 입력 계획.
+- `tests/integration/rest-persistence.test.ts` (1): 기존 scoreStore/Command/Undo/Redo와
+  IndexedDB 어댑터(fake-indexeddb)를 사용해 혼합 악보 저장·repository 재생성·동등성 확인.
+- `tests/unit/rest-rendering.test.ts` (18): 실제 VexFlow StaveNote/GhostNote/Fraction/Voice와
+  accidental 처리를 사용해 쉼표 16종 음가, 빈 구간 길이, 타이 양끝 참조,
+  낮은음자리표 중앙 배치, Score 원본 불변을 검증한다.
+  DOM/Formatter/그리기와 StaveTie 생성은 대체하므로 실제 SVG 배치의 시각 검증과 구분한다.
+- `typecheck`, `lint`, `check:architecture`, `build`는 exit 0.
+  아키텍처 44 modules / 110 dependencies, check-boundaries 37 files, 위반 0.
+- `tests/e2e/rest.spec.ts`에 신규 2종 추가:
+  1. 쉼표 선택·위치/길이 변경·충돌/경계 거부·Undo/Redo·삭제·새로고침 복원·SVG 이벤트 수.
+  2. 음표/쉼표 혼합 악보에서 타이 링크·음표 위치·schemaVersion 2 저장 보존 및 SVG 렌더.
+- 전체 `npm run test:e2e` 시도: **exit 1**. 서버가 `listen EPERM 0.0.0.0:3010`으로
+  시작되지 않아 **총 7종 모두 이번 환경에서 미실행**이다. 기능 assertion 실패와 구분한다.
+- 재실행 명령(Mac 일반 터미널):
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 검증: 7종 브라우저 E2E, 실제 SVG 쉼표/빈 구간/타이 배치 육안 확인,
+Safari 및 모바일 실기기. 기존 5종 통과를 쉼표 기능 통과로 확대하지 않는다.

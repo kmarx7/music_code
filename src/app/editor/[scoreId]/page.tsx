@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { exportScoreBackup, openOrCreateScore, planAppendNote } from "@/application";
+import { exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest } from "@/application";
+import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
@@ -65,7 +66,7 @@ export default function EditorPage() {
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
   const [playing, setPlaying] = useState(false);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const playbackRef = useRef<PlaybackHandle | null>(null);
   const repository = getScoreRepository();
@@ -132,9 +133,10 @@ export default function EditorPage() {
   const part = score.parts[0];
   const events = part.measures.flatMap((measure) => measure.events);
   const notes = events.filter((event) => event.kind === "note");
-  const selectedNote = selectedNoteId
-    ? notes.find((note) => note.id === selectedNoteId)
-    : undefined;
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const selectedNote = selectedEvent?.kind === "note" ? selectedEvent : undefined;
+  const ticksPerMeasure = measureTicks(part.timeSignature);
+  const ticksPerBeat = TICKS_PER_QUARTER * 4 / part.timeSignature.denominator;
   const tiedIds = new Set(part.ties.flatMap((tie) => [tie.from, tie.to]));
 
   function runCommand(command: EditCommand): boolean {
@@ -163,23 +165,34 @@ export default function EditorPage() {
   }
 
   function changeDuration(ticks: number) {
-    if (!selectedNote) return;
-    runCommand({
+    if (!selectedEvent) return;
+    runCommand(selectedEvent.kind === "rest" ? {
+      type: "UpdateRest", partId: part.id, restId: selectedEvent.id,
+      patch: { durationTicks: ticks },
+    } : {
       type: "ResizeNote",
       partId: part.id,
-      noteId: selectedNote.id,
+      noteId: selectedEvent.id,
       durationTicks: ticks,
     });
   }
 
   function deleteSelected() {
-    if (!selectedNote) return;
+    if (!selectedEvent) return;
     const ok = runCommand({
       type: "DeleteEvent",
       partId: part.id,
-      eventId: selectedNote.id,
+      eventId: selectedEvent.id,
     });
-    if (ok) setSelectedNoteId(null);
+    if (ok) setSelectedEventId(null);
+  }
+
+  function insertRest() {
+    const plan = planAppendRest(score, { id: crypto.randomUUID(), durationTicks });
+    if (!plan.ok) { setMessage(plan.message); return; }
+    if (runCommand(plan.command) && plan.command.type === "InsertRest") {
+      setSelectedEventId(plan.command.rest.id);
+    }
   }
 
   const labelOf = (pitch: Pitch): string => {
@@ -223,7 +236,7 @@ export default function EditorPage() {
         <span style={{ fontSize: 12, color: "#5f6773" }}>
           {score.tempoBpm} BPM · {part.timeSignature.numerator}/
           {part.timeSignature.denominator} · 음표 {notes.length}개 · 마디{" "}
-          {part.measures.length}개
+          {part.measures.length}개 · 쉼표 {events.length - notes.length}개
         </span>
         <span
           style={{
@@ -304,6 +317,10 @@ export default function EditorPage() {
             {duration.label}
           </button>
         ))}
+        <button type="button" style={button} onClick={insertRest}>
+          쉼표 삽입
+        </button>
+        <span style={{ fontSize: 12, color: "#5f6773" }}>선택한 길이로 악보 끝에 삽입</span>
         <span style={{ width: 1, background: "#d9dee8", margin: "0 4px" }} />
         {(["off", "letter", "korean"] as LabelMode[]).map((mode) => (
           <button
@@ -334,20 +351,20 @@ export default function EditorPage() {
 
       <div style={panel}>
         <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5f6773" }}>
-          음표 목록 (선택해서 편집)
+          음표·쉼표 목록 (선택해서 편집)
         </p>
-        {notes.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#5f6773" }}>아직 음표가 없습니다.</p>
+        {events.length === 0 ? (
+          <p style={{ fontSize: 13, color: "#5f6773" }}>아직 음표·쉼표가 없습니다.</p>
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {notes.map((note) => {
-              const selected = note.id === selectedNoteId;
+            {events.map((event) => {
+              const selected = event.id === selectedEventId;
               return (
-                <li key={note.id}>
+                <li key={event.id}>
                   <button
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => setSelectedNoteId(selected ? null : note.id)}
+                    onClick={() => setSelectedEventId(selected ? null : event.id)}
                     style={{
                       ...button,
                       padding: "6px 10px",
@@ -356,8 +373,8 @@ export default function EditorPage() {
                       border: `1px solid ${selected ? "#1b2a4a" : "#c8cfdb"}`,
                     }}
                   >
-                    {labelOf(note.pitch) || "음표"}
-                    {tiedIds.has(note.id) ? " ⌒" : ""}
+                    {event.kind === "rest" ? "쉼표" : labelOf(event.pitch) || "음표"}
+                    {tiedIds.has(event.id) ? " ⌒" : ""}
                   </button>
                 </li>
               );
@@ -366,22 +383,22 @@ export default function EditorPage() {
         )}
       </div>
 
-      {selectedNote ? (
+      {selectedEvent ? (
         <div style={panel}>
           <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5f6773" }}>
-            선택한 음표 편집
+            {selectedEvent.kind === "rest" ? "선택한 쉼표 편집" : "선택한 음표 편집"}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>
-              {letterName(selectedNote.pitch)} ·{" "}
-              {koreanFixedDo(selectedNote.pitch)} · {selectedNote.durationTicks} ticks
+              {selectedNote ? `${letterName(selectedNote.pitch)} · ${koreanFixedDo(selectedNote.pitch)}` : "쉼표"}
+              {" · "}{selectedEvent.durationTicks} ticks
             </span>
-            {tiedIds.has(selectedNote.id) ? (
+            {tiedIds.has(selectedEvent.id) ? (
               <span style={{ fontSize: 12, color: "#5f6773" }}>
                 ⌒ 붙임줄 연결됨 (음높이는 연결된 음 전체에 적용)
               </span>
             ) : null}
-            <button
+            {selectedNote ? <><button
               type="button"
               aria-label="반음 올리기"
               style={button}
@@ -396,14 +413,14 @@ export default function EditorPage() {
               onClick={() => shiftPitch(-1)}
             >
               반음 ↓
-            </button>
+            </button></> : null}
             {DURATIONS.map((duration) => (
               <button
                 key={duration.ticks}
                 type="button"
-                aria-label={`선택 음표 길이 ${duration.label}`}
+                aria-label={`선택 ${selectedEvent.kind === "rest" ? "쉼표" : "음표"} 길이 ${duration.label}`}
                 style={
-                  selectedNote.durationTicks === duration.ticks
+                  selectedEvent.durationTicks === duration.ticks
                     ? buttonActive
                     : button
                 }
@@ -414,13 +431,37 @@ export default function EditorPage() {
             ))}
             <button
               type="button"
-              aria-label="선택 음표 삭제"
+              aria-label={`선택 ${selectedEvent.kind === "rest" ? "쉼표" : "음표"} 삭제`}
               style={button}
               onClick={deleteSelected}
             >
               삭제
             </button>
           </div>
+          {selectedEvent.kind === "rest" ? (
+            <form key={`${selectedEvent.id}:${selectedEvent.startTick}`} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}
+              onSubmit={(event) => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                const measure = Number(data.get("measure"));
+                const beat = Number(data.get("beat"));
+                if (!Number.isInteger(measure) || measure < 1 || measure > part.measures.length ||
+                    !Number.isFinite(beat) || beat < 1 || beat >= part.timeSignature.numerator + 1) {
+                  setMessage("유효한 마디와 마디 안 박 위치를 입력해 주세요."); return;
+                }
+                runCommand({ type: "UpdateRest", partId: part.id, restId: selectedEvent.id,
+                  patch: { startTick: (measure - 1) * ticksPerMeasure + (beat - 1) * ticksPerBeat } });
+              }}>
+              <label>시작 마디 <input name="measure" type="number" required min={1} max={part.measures.length}
+                defaultValue={Math.floor(selectedEvent.startTick / ticksPerMeasure) + 1} style={{ width: 64 }} /></label>
+              <label>마디 안 박 위치 <input name="beat" type="number" required min={1} step="any"
+                defaultValue={(selectedEvent.startTick % ticksPerMeasure) / ticksPerBeat + 1} style={{ width: 72 }} /></label>
+              <button type="submit" style={button}>쉼표 위치 변경</button>
+              <p style={{ width: "100%", margin: 0, fontSize: 12, color: "#5f6773" }}>
+                박 위치는 1부터 셉니다. 다른 음표·쉼표는 이동하지 않으며 겹침·마디 경계 초과는 적용하지 않습니다.
+              </p>
+            </form>
+          ) : null}
         </div>
       ) : null}
     </main>

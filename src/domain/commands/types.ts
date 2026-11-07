@@ -19,6 +19,8 @@ export type EditCommand =
   /** 이벤트를 삭제하고, 그 이벤트와 연결된 타이 링크를 함께 제거한다. */
   | { type: "DeleteEvent"; partId: string; eventId: string }
   | { type: "InsertRest"; partId: string; measureId: string; rest: RestEvent }
+  /** 쉼표만 이동/길이 변경한다. 다른 이벤트는 이동하지 않으며 마디 초과·충돌은 거부한다. */
+  | { type: "UpdateRest"; partId: string; restId: string; patch: Partial<Pick<RestEvent, "startTick" | "durationTicks">> }
   | { type: "AddMeasure"; partId: string; measureId: string }
   /**
    * 논리 음표(타이 체인) 전체의 길이를 바꾼다.

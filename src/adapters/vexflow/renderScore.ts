@@ -1,5 +1,6 @@
 import type { Part, Score, ScoreEvent } from "@/domain/score/types";
 import { NOTATABLE_DURATIONS } from "@/domain/score/tie";
+import { measureStartTick, TICKS_PER_QUARTER } from "@/domain/score";
 
 const DURATION_ALIAS: Record<number, string> = {
   1: "w",
@@ -77,6 +78,8 @@ export async function renderScoreInto(
     Voice,
     Formatter,
     Accidental,
+    GhostNote,
+    Fraction,
   } = vexflow;
 
   const part = score.parts[0];
@@ -120,11 +123,13 @@ export async function renderScoreInto(
     stave.setContext(context).draw();
     if (measure.events.length === 0) return;
 
-    const notes = measure.events.map((event) => {
+    const events = [...measure.events].sort((a, b) => a.startTick - b.startTick);
+    const notes = events.map((event) => {
       if (event.kind === "rest") {
         return new StaveNote({
-          keys: ["b/4"],
+          keys: [part.clef === "bass" ? "d/3" : "b/4"],
           duration: vexDurationOf(event.durationTicks, true),
+          clef: part.clef,
         });
       }
       return new StaveNote({
@@ -134,18 +139,32 @@ export async function renderScoreInto(
       });
     });
 
+    // 쉼표 이동/삭제로 생긴 빈 구간도 절대 tick 위치대로 간격을 유지한다.
+    // GhostNote는 렌더 전용이며 canonical Score에는 추가하지 않는다.
+    const tickables: InstanceType<typeof StaveNote | typeof GhostNote>[] = [];
+    let cursor = measureStartTick(measure.index, part.timeSignature);
+    events.forEach((event, position) => {
+      if (event.startTick > cursor) {
+        const gap = new GhostNote({ duration: "q" });
+        gap.setDuration(new Fraction(event.startTick - cursor, TICKS_PER_QUARTER * 4));
+        tickables.push(gap);
+      }
+      tickables.push(notes[position]);
+      cursor = event.startTick + event.durationTicks;
+    });
+
     const voice = new Voice({
       numBeats: part.timeSignature.numerator,
       beatValue: part.timeSignature.denominator,
     })
-      .addTickables(notes)
+      .addTickables(tickables)
       .setStrict(false);
 
     Accidental.applyAccidentals([voice], keySpec);
     new Formatter().joinVoices([voice]).format([voice], MEASURE_WIDTH - 40);
     voice.draw(context, stave);
 
-    measure.events.forEach((event, position) => {
+    events.forEach((event, position) => {
       rendered.set(event.id, { note: notes[position], row });
     });
   });

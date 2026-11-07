@@ -1,6 +1,6 @@
 # TASKS.md — Phase 0 작업 및 MVP 추적
 
-- 최종 갱신: 2026-11-07
+- 최종 갱신: 2026-11-08
 - 작업 단위: `docs/PHASE_0_PLAN.md` P0-01 ~ P0-08
 - 상태 표기: `Done` / `Partial` / `Pending` / `Blocked`
 - 증거는 실제 실행 결과만 기록한다(추정 금지).
@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (2026-11-07 실행)
+## 2. 검증 명령 결과 (최신: 2026-11-08 쉼표 편집)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | Phase 1-E: 17 파일 / **129 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | Phase 1-E: 44 모듈·108 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | Phase 1-E 쉼표: 20 파일 / **170 테스트 통과**(기존 129 포함) |
+| `npm run check:architecture` | ✅ exit 0 | 44 모듈·110 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -36,7 +36,7 @@
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
-| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D) + **제목 변경**(1-E, 사용자 Mac Chromium E2E 통과). 조표·박자 편집 미구현 |
+| MVP-005 | 기본 편집 | Partial | 음표 편집·마디·타이·제목 + 쉼표 삽입/선택/삭제/길이/위치 변경 구현. 쉼표 단위/통합 검증 통과, E2E 대기. 조표·박자·원래 템포 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -168,11 +168,32 @@
   `getByRole("button", { name: "새 악보", exact: true })`.
   이후 사용자 Mac 일반 터미널에서 Chromium E2E **5개 모두 통과(13.1s)**. Codex에서 재실행해 통과한 것으로 기록하지 않는다.
 
+### 4.7 Phase 1-E — 쉼표 편집 (2026-11-08)
+
+- 상태: **구현 및 실행 가능한 로컬 검사 완료 / 브라우저 E2E 미검증**.
+- 선행 E2E 수정은 `a0a9646` (`test(e2e): fix new-score locator ambiguity`)으로 분리했다.
+  해당 커밋은 기존 선택자와 검증 기록 2파일만 포함하며 쉼표 소스는 포함하지 않는다.
+- 기존 쉼표 부분 구현을 보존하고 테스트·렌더 보정을 추가했다.
+  기존 RestEvent/Score/schemaVersion 2/Part.ties/Repository/명령·히스토리/store·자동 저장 재사용.
+- 쉼표는 기존 길이 버튼으로 끝에 삽입하며, 음표와 같은 목록/편집 패널에서 선택·삭제·길이 변경한다.
+  마디/박 입력으로 위치를 변경하고, 다른 이벤트는 이동하지 않는다.
+- 기존 InsertRest와 추가 UpdateRest는 표기 불가 길이·마디 초과·충돌을 거부한다.
+  실패 시 원본/히스토리 보존, 성공 시 Undo/Redo와 저장·복원 지원.
+- VexFlow 빈 구간은 렌더 전용 GhostNote로 유지하며, 낮은음자리표 쉼표 중앙 위치를 보정했다.
+  모델·상태 관리·production 의존성·음표 리플로우 정책·아키텍처 변경은 없다.
+- 검증: 기존 129 + 신규 41 = **170개/20파일 통과**, typecheck/lint/architecture/build exit 0.
+  실제 VexFlow 객체·IndexedDB 대역을 사용하며 상세는 TEST_PLAN §9에 기록했다.
+- E2E 2종 추가(총 7종). 전체 실행 시 `listen EPERM 0.0.0.0:3010`으로 서버 시작 실패,
+  이번 환경에서는 7종 미실행. 앞선 사용자 Mac 5종 통과와 구분한다.
+- 쉼표 자동 분할·자동 리플로우·자동 마디 추가는 하지 않는다. 기존 ResizeNote가 타이 연속성을
+  깨뜨리는 배치를 만들면 검증으로 원자적으로 거부하며, 정책 변경은 사전 승인 대상이다.
+- 남은 사항: Mac에서 7종 E2E 및 실제 SVG 배치·Safari/모바일 실기기 확인. GitHub push 없음.
+
 ## 5. 다음 작업
 
 1. Phase 1-E의 기존 4종 + 제목/백업/복원 1종 E2E는 사용자 Mac 터미널에서 통과 확인 완료.
-   이후 기능 변경 시 전체 E2E를 다시 실행한다.
+   쉼표 추가 후 `npm run test:e2e`로 총 7종을 Mac 일반 터미널에서 다시 검증한다.
 2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
-3. Phase 1 잔여 기본 편집(쉼표 UI·원래 템포·조표·박자 편집)의 상세 범위/불변식 검토.
+3. Phase 1 잔여 기본 편집(원래 템포·조표·박자 편집)의 상세 범위/불변식 검토.
    조표·박자 변경이 모델/공개 계약 변경을 요구하면 사전 승인 후 진행.
 4. Phase 1 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석으로 진행.
