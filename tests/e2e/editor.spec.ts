@@ -40,7 +40,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
 
   await page.goto("/library");
   await expect(page.getByText("저장된 악보가 없습니다")).toBeVisible();
-  await page.getByRole("button", { name: "새 악보" }).click();
+  await page.getByRole("button", { name: "새 악보", exact: true }).click();
   await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+$/, { timeout: 30_000 });
   const scoreId = new URL(page.url()).pathname.split("/").pop() as string;
 

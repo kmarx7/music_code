@@ -36,7 +36,7 @@
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
-| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D) + **제목 변경**(1-E, 브라우저 검증 대기). 조표·박자 편집 미구현 |
+| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D) + **제목 변경**(1-E, 사용자 Mac Chromium E2E 통과). 조표·박자 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -44,7 +44,7 @@
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Partial | Tone.js 스케줄 재생(원 Score 템포 기준). 시작/자동 종료 확인, 메트로놈·하이라이트 미구현 |
-| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 제목 변경·JSON 백업/가져오기 구현(1-E), 브라우저 검증 대기 |
+| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 제목 변경·JSON 백업/가져오기 구현(1-E), 사용자 Mac Chromium E2E 통과 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
 ## 4. Phase 1 진행 (2026-11-07)
@@ -138,7 +138,7 @@
 
 ### 4.5 Phase 1-E — 제목 변경·JSON 백업/가져오기
 
-- 상태: **구현 및 단위/통합 검증 완료, 브라우저 E2E 검증 대기**.
+- 상태: **구현 및 단위/통합 검증 완료, 사용자 Mac 일반 터미널에서 Chromium E2E 5종 통과**(아래 최신 결과 참조).
 - 재사용: schemaVersion 2, `Part.ties`, ScoreRepository, serialize/deserialize, Command/Undo/Redo,
   단일 scoreStore와 기존 자동 저장, 기존 악보함. 모델·아키텍처·패키지 변경 없음.
 - 편집기: 제목 변경(RenameScore, 공백 제목 거부, Undo/Redo, 자동 저장), 현재 Score JSON 다운로드.
@@ -149,13 +149,29 @@
 - 신규 파일: 최소 브라우저 다운로드 어댑터, 백업 단위/IndexedDB 통합 테스트 각 1개.
   기존 파일에는 Application use case·명령·화면·E2E를 추가했다.
 - 검증: 17파일 **129 테스트 통과**(기존 101개 포함), typecheck/lint/architecture/build exit 0.
-- `npm run test:e2e`는 서버 시작 시 `listen EPERM 0.0.0.0:3010`으로 exit 1.
-  기존 4종 및 새 1종은 이번 환경에서 실행되지 않았다. 이전 통과 기록과 구분한다.
-- 다중 탭 동시성·브라우저 실기기 및 다운로드 실제 작동은 추가 검증 필요. GitHub push 없음.
+- **Codex 환경 실행 기록:** `npm run test:e2e`는 서버 시작 시 `listen EPERM 0.0.0.0:3010`으로 exit 1.
+  기존 4종 및 새 1종은 해당 Codex 환경에서 실행되지 않았다. 이 오류 기록은 유지한다.
+- **이후 Mac 일반 터미널 실행 결과(사용자 제공):** 사용자가 `npm run test:e2e`를 직접 실행하여
+  Chromium **`5 passed (13.1s)`** 확인. 기존 기능 E2E 4개와 제목 변경·JSON 백업/복원 E2E 1개가 모두 통과했다.
+  이 결과는 아래 `exact: true` 선택자 수정이 포함된 Phase 1-E에 대한 것이며, 진행 중인 쉼표 편집 검증을 뜻하지 않는다.
+- 다중 탭 동시성·Safari/모바일 실기기는 추가 검증 필요. GitHub push 없음.
+
+### 4.6 Phase 1-E — E2E 선택자 수정
+
+- `tests/e2e/editor.spec.ts:43`의 “새 악보” 버튼 locator에 `exact: true`만 추가했다.
+  같은 파일의 유사 locator를 점검했으며 추가 변경·테스트 삭제/skip·앱 변경은 없다.
+- 검증: typecheck/lint/architecture exit 0, 단위·통합 17파일/129개 통과.
+  E2E 전체 실행은 서버 시작 시 `listen EPERM 0.0.0.0:3010`으로 exit 1(5종 미실행).
+- lint 최초 실행은 E2E가 정리 중인 `test-results` 탐색에서 ENOENT로 실패했다.
+  E2E 종료 후 재실행해 exit 0을 확인했다.
+- 선택자 수정 내용: `tests/e2e/editor.spec.ts:43`의
+  `getByRole("button", { name: "새 악보", exact: true })`.
+  이후 사용자 Mac 일반 터미널에서 Chromium E2E **5개 모두 통과(13.1s)**. Codex에서 재실행해 통과한 것으로 기록하지 않는다.
 
 ## 5. 다음 작업
 
-1. 포트 사용이 허용된 환경에서 `npm run test:e2e` 실행: 기존 4종 + 제목/백업/복원 1종 회귀 검증.
+1. Phase 1-E의 기존 4종 + 제목/백업/복원 1종 E2E는 사용자 Mac 터미널에서 통과 확인 완료.
+   이후 기능 변경 시 전체 E2E를 다시 실행한다.
 2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
 3. Phase 1 잔여 기본 편집(쉼표 UI·원래 템포·조표·박자 편집)의 상세 범위/불변식 검토.
    조표·박자 변경이 모델/공개 계약 변경을 요구하면 사전 승인 후 진행.
