@@ -720,3 +720,52 @@ npm run test:e2e
 두 탭 편집/삭제·백업·새 ID·최신본 선택, 실제 백그라운드 전환·뒤로가기/BFCache·새로고침,
 Safari/모바일에서 이탈 안내 제한을 확인한다. OS 강제 종료·배터리/전원 차단 시 마지막 편집 무손실은
 보장하지 않는다. Web Locks/복구 저널은 미구현(승인 범위 제외). 완료된 transaction과 아직 미커밋 편집을 구분한다.
+
+
+## 22. ADR-010 이탈 취소 E2E 대기 수정 (2026-11-08)
+
+- 기준 `c24bc0a`, clean. 사용자 Mac 결과 **40/41 통과**, 단위·통합 391개 통과.
+- 원본 trace/error-context 분석: beforeunload dialog 발생(72085.367ms), type 검증 통과,
+  dismiss 완료(72087.584ms). 그러나 page.reload는 새 document의 load를 기다리며 종료되지 않았다.
+  약 60초 후 test timeout/teardown에서 reload가 reject했고 catch가 이를 삼킨 뒤 heading expect가
+  시작됐다(131785.468ms). locator 충돌이나 제목 불일치로 60초 기다린 것이 아니다.
+- error-context에는 제목 heading 및 textbox에 “숨김 전환 최신 편집”, 저장 중 상태와 기존 편집기가 남아 있다.
+  취소 이후 제목 보존을 확인할 수 있으며 이 기록에서 실제 Score 유실은 발견되지 않았다.
+  과거 실행의 IndexedDB dump/전체 메모리 Score는 없으므로 그 전체 동등성을 추정하지 않는다.
+- Playwright 1.65.0 로컬 소스도 reload가 waitForNavigation(newDocument=true)를 기다리고,
+  evaluate는 JS 실행 결과만 기다리는 것을 확인했다. dialog listener 등록 순서는 이미 올바르다.
+- `storage-concurrency.spec.ts`의 해당 시나리오만 수정: 미리 dialog listener를 등록하고
+  location.reload 요청/evaluate와 dismiss를 함께 기다린다. 실제 새로고침을 취소하므로 새 load 이벤트는 기다리지 않는다.
+  catch로 모든 reload 오류를 무시하던 코드를 제거했다. 마지막 저장 후의 정상 page.reload는 유지한다.
+- 검증 강화: 이탈 직전 제목 표시, 취소 후 동일 document 객체·제목·원시 DB baseline 불변,
+  hidden 이후 저장 제목 및 revision +1, 정상 새로고침 뒤 커밋된 원시 레코드 전체 동등성.
+  timeout 증가/expect 삭제/skip/시나리오 삭제 없음. 앱/Score/schemaVersion 2/Part.ties/OCC/Tombstone 변경 없음.
+- 단독 실행 `npm run test:e2e -- tests/e2e/storage-concurrency.spec.ts:122`:
+  **listen EPERM 0.0.0.0:3010**, exit 1 → 해당 1종 미실행.
+- 전체 재검증: 단위·통합 **32파일 / 391개 통과**, typecheck/lint/architecture/build exit 0.
+  아키텍처 53 modules / 139 dependencies, 경계 46파일 위반 0.
+- 전체 E2E 최초 시도는 병행 build의 잠금으로 시작 실패했다. build 종료 후 순차 재시도한
+  `npm run test:e2e`도 **listen EPERM 0.0.0.0:3010**, exit 1 → **41종 미실행**.
+  `--list`는 기존 **41종/10파일** 수집 확인. 수정 버전의 브라우저 통과로 간주하지 않는다.
+- 원본 실패 증거는 실행 전 `/tmp`에 해당하는 macOS 임시 디렉터리
+  `/var/folders/35/m6dppg413h39y02j8j16qq3h0000gn/T/music-score-c24bc0a-beforeunload-l5q8osl0/`
+  에 trace.zip/error-context.md를 복사 보존했다(임시 경로, Git 제외).
+
+Mac 재검증 순서:
+
+```bash
+npm run test:e2e -- tests/e2e/storage-concurrency.spec.ts:122
+npm run test:e2e
+```
+
+### 이후 사용자 Mac 검증 결과
+
+- 사용자가 Mac 일반 터미널에서 수정된 테스트를 포함한 Chromium E2E **41/41 통과**를 확인했다.
+  위 Codex 환경의 listen EPERM 및 수정 전 Mac 40/41 기록은 당시 결과로 유지한다.
+- 수정된 이탈 경고·취소 후 편집 보존·hidden 조기 저장·IndexedDB 커밋·새로고침 복원 시나리오를
+  포함한 전체 41종의 성공 결과다. Codex에서 직접 실행한 결과로 표기하지 않는다.
+- 최종 diff 검토: 기존 검증 의미 유지, 동일 document/원시 레코드/revision 검증 강화,
+  테스트 삭제·skip·timeout 증가 없음. 변경은 해당 E2E 및 TEST_PLAN/TASKS 3파일에 한정한다.
+
+남은 검증: 실제 Safari/모바일 백그라운드 전환. 강제 종료 무손실은 이번 테스트 수정으로
+보장하지 않는다. GitHub/Vercel 작업 없음.

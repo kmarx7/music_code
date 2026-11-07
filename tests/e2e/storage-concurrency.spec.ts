@@ -121,18 +121,31 @@ test("수동 저장 오류 뒤 정상 자동 저장은 오래된 실패 안내�
 
 test("미저장 이탈 안내와 hidden 조기 저장 후 새로고침 복원을 확인한다", async ({ page }) => {
   const id = "e2e-hidden-save"; await ready(page, id); await freeze(page);
+  const baseline = await raw(page, id);
   await rename(page, "숨김 전환 최신 편집");
-  // Cancel the real browser's beforeunload prompt; no fixed delay or weakened save assertion.
-  const dialog = page.waitForEvent("dialog");
-  const reload = page.reload().catch(() => {});
-  const prompt = await dialog; expect(prompt.type()).toBe("beforeunload"); await prompt.dismiss(); await reload;
   await expect(page.getByRole("heading", { name: "숨김 전환 최신 편집", exact: true })).toBeVisible();
+  const originalDocument = await page.evaluateHandle(() => document);
+  // A cancelled navigation has no new load event. Await the reload request and dialog handling,
+  // not page.reload()'s navigation completion; unexpected evaluation failures must still fail.
+  const dismissed = page.waitForEvent("dialog").then(async (prompt) => {
+    expect(prompt.type()).toBe("beforeunload");
+    await prompt.dismiss();
+  });
+  await Promise.all([dismissed, page.evaluate(() => window.location.reload())]);
+  expect(await originalDocument.evaluate((original) => original === document)).toBe(true);
+  await originalDocument.dispose();
+  await expect(page.getByRole("heading", { name: "숨김 전환 최신 편집", exact: true })).toBeVisible();
+  expect(await raw(page, id)).toEqual(baseline);
   await page.evaluate(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect.poll(async () => (await storedScore(page, id)).title).toBe("숨김 전환 최신 편집");
   await expect(page.getByText("저장됨", { exact: true })).toBeVisible();
+  const committed = await raw(page, id);
+  expect(committed.revision).toBe(baseline.revision + 1);
+  expect(JSON.parse(committed.json!).title).toBe("숨김 전환 최신 편집");
   await page.clock.resume(); await page.reload();
   await expect(page.getByRole("heading", { name: "숨김 전환 최신 편집", exact: true })).toBeVisible();
+  expect(await raw(page, id)).toEqual(committed);
 });

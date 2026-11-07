@@ -441,15 +441,25 @@
   브라우저 데이터 삭제는 무손실 보장하지 않는다. DB2를 모르는 구버전 빌드로 롤백하지 않는다.
 - GitHub push/Vercel 접근·설정 변경·배포 없음.
 
+### 4.21 ADR-010 Mac 이탈 취소 E2E 대기 수정 (2026-11-08)
+
+- 기준 `c24bc0a`, clean. 사용자 Mac **40/41 통과**. 실패는 storage-concurrency.spec.ts:122 시나리오다.
+- trace의 beforeunload 발생/type 검증/dismiss 완료와 오류 snapshot의 변경 제목·기존 편집기 유지 확인.
+  실제 timeout은 `await page.reload()`의 새 document/load 대기였다. 이후 catch가 timeout을 삼켜
+  heading expect가 teardown 때 시작됐다. 제목 locator나 앱 저장 기능의 결함으로 확인된 것이 아니다.
+- 해당 E2E만 location.reload 요청+dialog 처리 대기로 변경하고 오류 삼키기 제거.
+  동일 document/제목/원시 baseline 유지, hidden commit revision +1 및 새로고침 원시 동등성 검증을 추가했다.
+- 단위·통합 **391개/32파일**, typecheck/lint/architecture/build 통과. 앱 및 ADR-010 계약 변경 없음.
+- 단독 E2E와 전체 E2E 모두 **listen EPERM 0.0.0.0:3010**으로 미실행.
+  전체 최초 시도의 build 잠금 오류는 build 종료 후 재시도했으며, 최종 차단 원인은 포트 권한이다.
+  기존 **41종/10파일** 수집 유지. 당시 수정 후 브라우저 통과는 확인하지 못했다.
+- 자세한 trace 시간/원본 증거 보존 위치/검증은 TEST_PLAN §22. GitHub push/Vercel 작업 없음.
+- **이후 사용자 Mac 확인:** 수정된 테스트를 포함한 Chromium E2E **41/41 통과**.
+  위 수정 전 40/41 및 Codex EPERM 기록은 유지하며, 최신 성공은 사용자 실행 결과로 구분한다.
+  최종 검토 결과 변경은 E2E/TEST_PLAN/TASKS 3파일이며 기존 검증 의미를 유지·강화했다.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 전체 41종을 재검증한다. 사용자 기존 35/35와 새 버전 결과를 구분한다.
-
-   ```bash
-   cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
-   npm run test:e2e
-   ```
-
-2. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
-3. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수 후 Phase 2 조옮김·음이름·음역 분석.
+1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
+2. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수 후 Phase 2 조옮김·음이름·음역 분석.
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.
