@@ -1,3 +1,6 @@
+import "fake-indexeddb/auto";
+import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreRepository";
+import type { ScoreRepository } from "@/application";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useAutosave } from "@/features/score-library";
 import { scoreStore } from "@/store/score-store";
@@ -21,12 +24,12 @@ afterEach(async () => {
   vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks();
 });
 
-function AutosaveHarness({ repository }: { repository: MemoryScoreRepository }) {
+function AutosaveHarness({ repository }: { repository: ScoreRepository }) {
   useAutosave(repository, 400);
   return null;
 }
 
-function mount(repository: MemoryScoreRepository) {
+function mount(repository: ScoreRepository) {
   AutosaveHarness({ repository });
   const result = hooks.setup?.();
   if (typeof result !== "function") throw new Error("autosave effect missing");
@@ -98,4 +101,70 @@ it("reports a failed save as error", async () => {
   changePitch();
   await vi.advanceTimersByTimeAsync(400);
   expect(hooks.status).toBe("error");
+});
+
+it("debounces continuous edits and persists the final canonical snapshot", async () => {
+  const repository = new MemoryScoreRepository();
+  const save = vi.spyOn(repository, "save"); mount(repository);
+  for (const tempoBpm of [60, 90, 120, 150, 180]) {
+    scoreStore.dispatch({ type: "SetTempo", tempoBpm, updatedAt: "2026-11-08T02:00:00.000Z" });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hooks.status).toBe("saving");
+  }
+  await vi.advanceTimersByTimeAsync(300);
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(hooks.status).toBe("saved");
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
+});
+
+it("a slow earlier write cannot overwrite the last edit when saves overlap", async () => {
+  const repository = new MemoryScoreRepository();
+  const original = repository.save.bind(repository);
+  let complete!: () => void;
+  const gate = new Promise<void>((resolve) => { complete = resolve; });
+  vi.spyOn(repository, "save").mockImplementationOnce(async (score) => { await gate; await original(score); });
+  mount(repository);
+  changePitch(); await vi.advanceTimersByTimeAsync(400);
+  resize(); await vi.advanceTimersByTimeAsync(400);
+  complete(); await vi.advanceTimersByTimeAsync(0);
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
+  expect(hooks.status).toBe("saved");
+});
+
+it("autosaves the last continuous edit and reopens identical content from IndexedDB", async () => {
+  vi.useRealTimers();
+  const dbName = "autosave-last-edit";
+  const repository = createIndexedDbScoreRepository({ dbName });
+  mount(repository);
+  changePitch(); resize();
+  scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "2026-11-08T02:00:00.000Z" });
+  await vi.waitFor(() => expect(hooks.status).toBe("saved"));
+  const reopened = createIndexedDbScoreRepository({ dbName });
+  expect(await reopened.load("score-1")).toEqual(scoreStore.getState()!.current);
+});
+
+it("cleanup queues the final edit after a slow in-flight save", async () => {
+  const repository = new MemoryScoreRepository();
+  const original = repository.save.bind(repository);
+  let complete!: () => void;
+  const gate = new Promise<void>((resolve) => { complete = resolve; });
+  vi.spyOn(repository, "save").mockImplementationOnce(async (score) => { await gate; await original(score); });
+  mount(repository);
+  changePitch(); await vi.advanceTimersByTimeAsync(400);
+  resize();
+  const final = scoreStore.getState()!.current;
+  cleanup?.(); cleanup = undefined;
+  complete(); await vi.advanceTimersByTimeAsync(0);
+  expect(await repository.load("score-1")).toEqual(final);
+});
+
+it("a failed write does not block the next queued snapshot", async () => {
+  const repository = new MemoryScoreRepository();
+  vi.spyOn(repository, "save").mockRejectedValueOnce(new Error("temporary"));
+  mount(repository);
+  changePitch(); await vi.advanceTimersByTimeAsync(400);
+  expect(hooks.status).toBe("error");
+  resize(); await vi.advanceTimersByTimeAsync(400);
+  expect(hooks.status).toBe("saved");
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
 });

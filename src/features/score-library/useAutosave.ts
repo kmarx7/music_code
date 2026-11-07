@@ -17,28 +17,32 @@ export function useAutosave(
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string | null>(null);
+  // Preserve write order even when an older repository.save is still pending.
+  const pending = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    const flush = async () => {
+    let active = true;
+    const report = (value: SaveStatus) => { if (active) setStatus(value); };
+    const flush = () => {
       const state = scoreStore.getState();
       if (!state) return;
-      const serialized = JSON.stringify(state.current);
-      if (serialized === lastSaved.current) {
-        setStatus("saved");
-        return;
-      }
-
-      setStatus("saving");
-      try {
-        await repository.save(state.current);
-        lastSaved.current = serialized;
-        // 이전 저장이 끝나는 동안 새 편집이 생겼다면 아직 최신 내용은 저장 중이다.
-        if (JSON.stringify(scoreStore.getState()?.current) === serialized) {
-          setStatus("saved");
+      const snapshot = state.current;
+      const serialized = JSON.stringify(snapshot);
+      pending.current = pending.current.then(async () => {
+        if (serialized === lastSaved.current) {
+          if (JSON.stringify(scoreStore.getState()?.current) === serialized) report("saved");
+          return;
         }
-      } catch {
-        setStatus("error");
-      }
+        report("saving");
+        try {
+          await repository.save(snapshot);
+          lastSaved.current = serialized;
+          if (JSON.stringify(scoreStore.getState()?.current) === serialized) report("saved");
+        } catch {
+          report("error");
+        }
+      });
+      return pending.current;
     };
 
     const unsubscribe = scoreStore.subscribe(() => {
@@ -53,10 +57,8 @@ export function useAutosave(
     return () => {
       if (timer.current) clearTimeout(timer.current);
       unsubscribe();
-      const state = scoreStore.getState();
-      if (state) {
-        repository.save(state.current).catch(() => {});
-      }
+      active = false;
+      void flush();
     };
   }, [repository, delayMs]);
 
