@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SCORE_SCHEMA_VERSION, TICKS_PER_QUARTER } from "@/domain/score";
 
 export default function Page() {
@@ -12,12 +13,28 @@ export default function Page() {
         lineHeight: 1.7,
       }}
     >
-      <h1 style={{ fontSize: 22 }}>Music Score Platform — Phase 0</h1>
+      <h1 style={{ fontSize: 22 }}>Music Score Platform</h1>
       <p>
-        구조 설계와 자동 검증 기반만 준비된 상태입니다. 제품 기능(피아노, 채보,
-        렌더링, 재생 등)은 Phase 1부터 구현합니다.
+        단선율 허밍·가상 피아노 입력을 악보로 만들고, 편집·재생·저장·내보내기까지
+        연결하는 로컬 우선 MVP입니다. 현재는 Phase 1 편집 화면까지 구현했습니다.
       </p>
-      <ul>
+      <p>
+        <Link
+          href="/editor/demo-score"
+          style={{
+            display: "inline-block",
+            padding: "8px 14px",
+            borderRadius: 8,
+            background: "#1b2a4a",
+            color: "#ffffff",
+            textDecoration: "none",
+            fontSize: 14,
+          }}
+        >
+          편집기 열기
+        </Link>
+      </p>
+      <ul style={{ fontSize: 13, color: "#5f6773" }}>
         <li>Canonical Score schema v{SCORE_SCHEMA_VERSION}</li>
         <li>{TICKS_PER_QUARTER} ticks per quarter note</li>
       </ul>

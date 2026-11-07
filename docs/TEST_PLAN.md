@@ -19,7 +19,7 @@
 | 브라우저 E2E | 골격 로드·수화 | Playwright | ⏳ 미도입 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위 테스트 목록 (실행 결과: 6 파일 / 38 통과)
+## 2. 단위 테스트 목록 (실행 결과: 8 파일 / 48 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -59,13 +59,25 @@
 - undo/redo
 - 변경 시에만 구독자 알림(구독 해제 후 미알림)
 
+### `tests/unit/piano-keys.test.ts` (3)
+- 88건반(21–108), 흰건 52 / 검건 36
+- MIDI → 표기 일관성(60=C4, 61=C#4, 21=A0, 108=C8)
+- 컴퓨터 키 매핑(흰건/임시표, 대소문자, 미지정 키 null)
+
+### `tests/unit/append-note.test.ts` (5)
+- 첫 음표 tick 0 / measure 0, provenance=piano
+- 순차 추가(두 번째 tick 960)
+- 마디가 차면 다음 마디로 이동(tick 3840, m:1)
+- 악보가 가득 차면 거부
+- 잘못된 길이 거부
+
 ## 3. 실행 명령과 결과 (2026-11-07)
 
 ```bash
 npm run typecheck        # exit 0
 npm run lint             # exit 0
-npm run test             # exit 0  (38 passed)
-npm run check:architecture  # exit 0 (21 modules / 41 deps, 위반 0)
+npm run test             # exit 0  (48 passed)
+npm run check:architecture  # exit 0 (34 modules / 73 deps, 위반 0)
 npm run build            # exit 0
 ```
 
@@ -89,7 +101,22 @@ npm run build            # exit 0
   런타임 라이브러리 규칙이 무력화된다. 현재 설정은 `exclude`에서 node_modules를 제외하지 않고
   `doNotFollow`만 사용한다.
 
-## 5. 브라우저/실기기 테스트 (미실행)
+## 5. 브라우저/실기기 테스트
+
+### 5.1 Phase 1 슬라이스 수동 검증 (2026-11-07, 데스크탑 Chromium/agent-browser)
+
+| 항목 | 결과 |
+|---|---|
+| `/editor/demo-score` 로드 | ✅ 제목·툴바·악보·건반·음표 목록 렌더 |
+| VexFlow 악보 | ✅ SVG 생성(음자리표·4/4·마디·음표·덧줄). 1차 스크린샷 육안 확인은 실패했으나, DOM/SVG 확대 확인으로 음표 2개 렌더 확인 |
+| 건반 클릭 입력 | ✅ C4 클릭 → 음표 1개 + 라벨 "C4" |
+| Undo / Redo | ✅ 1 → 0 → 1 |
+| 재생 토글 | ✅ 클릭 직후 "Stop", 약 0.8초 뒤 자동 "Play" 복귀(Tone.js 15.1.22 로드 확인) |
+| 아키텍처 가드레일 | ✅ 실제 위반(`feature-private-import`) 검출 → 공개 진입점 추가로 수정 |
+
+**미검증**: 실제 오디오 출력(헤드리스 환경), 모바일 Safari/Chrome, 마이크, IndexedDB 저장/복구, E2E 자동화(Playwright 미도입).
+
+### 5.2 브라우저 매트릭스 (E2E 도입 시 기록)
 
 | 항목 | 상태 |
 |---|---|

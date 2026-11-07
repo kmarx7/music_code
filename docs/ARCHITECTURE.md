@@ -35,6 +35,8 @@ Deliver a **local-first, browser-centered modular monolith** that turns monophon
 
 **Phase 0 must validate package/library compatibility.** Introducing or replacing a core production dependency follows `AGENTS.md` approval rules. Python/FastAPI, Supabase, commercial recording separation and AI-agents are not part of the MVP architecture.
 
+> **ADR-008 (Accepted 2026-11-07):** concrete adoption of VexFlow 5.0.0 and Tone.js 15.1.22 for Phase 1 rendering/playback, client-only inside `src/adapters/*`. Playwright remains deferred until the rendering UI exists.
+
 ## 3. High-level flow
 
 ```text

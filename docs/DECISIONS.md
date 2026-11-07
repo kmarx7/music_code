@@ -87,6 +87,26 @@ This file records **architectural choices**, their trade-offs and change history
 
 ---
 
+## ADR-008 — Phase 1 렌더링·재생 의존성 도입 (VexFlow, Tone.js)
+
+- **Status:** Accepted
+- **Date:** 2026-11-07
+- **Requested by:** 사용자 (Phase 1 착수 승인)
+- **Problem:** 악보 렌더링(MVP-004)과 스케줄된 재생(MVP-012)에 검증된 라이브러리가 필요하다. 자체 구현은 리스크와 검증 부담이 크다.
+- **Current contract / affected modules:** ARCHITECTURE §2 기준선, `src/adapters/vexflow`, `src/adapters/tone`, `src/features/score-editor`, `src/features/playback`
+- **Options:**
+  1. 자체 SVG 렌더러/오디오 스케줄러 구현 — 통제력은 높지만 기간·정확도 리스크 큼
+  2. **VexFlow + Tone.js 도입** — 아키텍처 기준선과 일치
+  3. VexFlow만 도입, 재생은 네이티브 Web Audio — 의존성은 줄지만 스케줄러 직접 구현
+- **Recommendation and reasons:** 2안. 기준선과 일치하고, 어댑터 경계 뒤에 격리할 수 있다.
+- **Breaking changes / migration:** 없음(신규 어댑터만 추가). 두 라이브러리는 **클라이언트 어댑터에서만** 초기화하며 SSR/서버 컴포넌트에서 import 하지 않는다. 번들 크기 증가는 어댑터 청크로 국한한다.
+- **Tests and rollback:** 렌더 스모크, 재생 스케줄 단위 테스트, 빌드, 이후 E2E. 문제 시 어댑터 구현만 교체(도메인 불변).
+- **User approval:** **Approved (2026-11-07)** — VexFlow + Tone.js, Playwright는 렌더링 구현 후로 연기
+- **Decision date:** 2026-11-07
+- **Supersedes:** None
+
+---
+
 ## ADR proposal template
 
 ```markdown
@@ -114,3 +134,4 @@ This file records **architectural choices**, their trade-offs and change history
 | Date | Change | Approval status |
 |---|---|---|
 | 2026-11-07 | Created baseline ADR-001–007 | Captures approved project direction; implementation details pending Phase 0 |
+| 2026-11-07 | ADR-008 Accepted — VexFlow 5.0.0 / Tone.js 15.1.22 도입 (사용자 승인) | Approved |

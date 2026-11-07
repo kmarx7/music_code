@@ -98,14 +98,18 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 |---|---|---|---|
 | runtime | `next` | 16.4.4 | App Router 기반 모듈형 모놀리스(ADR-001) |
 | runtime | `react` / `react-dom` | 19.3.0 | Next 16 peer 요구 |
+| runtime | `vexflow` | 5.0.0 | 악보 렌더 어댑터(ADR-008, 승인) |
+| runtime | `tone` | 15.1.22 | 스케줄 재생 어댑터(ADR-008, 승인) |
 | dev | `typescript` | ^5 | strict 타입 검사 |
 | dev | `@types/node` / `@types/react` / `@types/react-dom` | ^22 / ^19 / ^19 | 타입 |
 | dev | `eslint` / `eslint-config-next` | ^9 / 16.4.4 | Next 권장 린트 |
 | dev | `vitest` | ^5.1.0 | 단위 테스트 |
 | dev | `dependency-cruiser` | ^18.7.2 | 레이어·순환 의존성 검사 |
 
-**의도적으로 Phase 0에서 도입하지 않은 것**: Tailwind CSS(제품 UI 없음), VexFlow, Tone.js,
-Zod, IndexedDB 라이브러리, Playwright. 각 기능 Phase에서 필요 시 사유와 함께 도입한다.
+**의도적으로 Phase 0에서 도입하지 않은 것**: Tailwind CSS(제품 UI 없음), Zod, IndexedDB 라이브러리, Playwright. 각 기능 Phase에서 필요 시 사유와 함께 도입한다.
+Phase 1에서 **VexFlow 5.0.0 / Tone.js 15.1.22**를 ADR-008(사용자 승인)로 도입했다. 두 패키지는
+`src/adapters/*`에서만 초기화하고 서버 컴포넌트/SSR에서 import 하지 않는다.
+**Playwright**는 렌더링 화면 구현 이후(사용자 결정) 도입한다.
 
 ## 8. 아키텍처 검사 구성 (P0-07)
 

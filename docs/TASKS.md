@@ -24,30 +24,40 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 6 파일 / **38 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 21 모듈·41 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 8 파일 / **48 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | 34 모듈·73 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
 | ID | 기능 | 상태 | Phase 0에서 확보한 기반 |
 |---|---|---|---|
-| MVP-001 | 가상 피아노 | Pending | `Pitch`, `NoteEvent`, `AddNote` 명령 |
+| MVP-001 | 가상 피아노 | Partial | 88건반(A0–C8) 클릭 + 컴퓨터 키보드 매핑 → `planAppendNote` → `AddNote` |
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
-| MVP-004 | 악보 렌더링 | Pending | 조표·박자·음자리표·철자 모델 |
-| MVP-005 | 기본 편집 | Partial | AddNote/UpdateNote/DeleteEvent/InsertRest + Undo/Redo. UI 없음 |
+| MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표 |
+| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo. 음정/길이 수정 UI·마디 추가·제목 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
-| MVP-012 | 재생 | Pending | 미착수 |
+| MVP-012 | 재생 | Partial | Tone.js 스케줄 재생(원 Score 템포 기준). 시작/자동 종료 확인, 메트로놈·하이라이트 미구현 |
 | MVP-013 | 로컬 악보함 | Pending | `ScoreRepository` 포트 + 직렬화/검증(`serializeScore`/`deserializeScore`). IndexedDB 어댑터는 Phase 1 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
-## 4. 다음 작업 (Phase 1 착수 전)
+## 4. Phase 1 진행 (2026-11-07)
+
+- **ADR-008 승인** 후 VexFlow 5.0.0 / Tone.js 15.1.22 도입(클라이언트 어댑터 전용, 동적 import).
+- 구현 슬라이스: `/editor/[scoreId]` — 88건반 + 컴퓨터 키보드 입력 → 명령 → VexFlow 악보 → Undo/Redo → 재생 → 음표 목록/라벨.
+- 1차 구현에서 **아키텍처 검사기가 실제 위반을 검출**했다(`feature-private-import`: 편집기가 feature 내부 파일 직접 import).
+  공개 진입점(`features/*/index.ts`)을 추가해 수정했고, 이후 위반 0.
+- 브라우저 검증(수동/agent-browser): 악보 SVG 렌더, 건반 클릭으로 음표 추가(C4/E4), Undo→0개, Redo→1개,
+  Play 클릭 시 Stop 전환 후 약 0.8초 뒤 자동 종료. **오디오 실제 출력은 헤드리스에서 미검증.**
+- 남은 Phase 1 작업: IndexedDB 저장/불러오기·악보함, 음표 수정 UI, 마디 추가, 마디 넘김(타이) 정책, 모바일/접근성.
+
+## 5. 다음 작업 (Phase 1 착수 전)
 
 1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.
 2. 직렬화/역직렬화 + 버전 검증(P0-08 잔여) 구현 및 round-trip 테스트.
