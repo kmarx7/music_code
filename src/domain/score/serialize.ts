@@ -1,5 +1,8 @@
 import type { Score } from "@/domain/score/types";
-import { SCORE_SCHEMA_VERSION } from "@/domain/score/constants";
+import {
+  MIGRATABLE_SCHEMA_VERSIONS,
+  SCORE_SCHEMA_VERSION,
+} from "@/domain/score/constants";
 import { validateScore } from "@/domain/score/validate";
 
 export type DeserializeErrorCode =
@@ -9,7 +12,7 @@ export type DeserializeErrorCode =
   | "INVALID_SCORE";
 
 export type DeserializeResult =
-  | { ok: true; score: Score }
+  | { ok: true; score: Score; migrated: boolean }
   | { ok: false; code: DeserializeErrorCode; message: string };
 
 export function serializeScore(score: Score): string {
@@ -34,8 +37,25 @@ function hasScoreShape(value: unknown): value is Score {
 }
 
 /**
+ * v1 → v2: 각 part에 `ties: []`를 추가한다.
+ * v1에는 연결 정보가 존재하지 않으므로 빈 배열이 정보 손실 없는 정확한 변환이다(ADR-009).
+ */
+function migrateToCurrentVersion(
+  score: Record<string, unknown>,
+): Record<string, unknown> {
+  const parts = Array.isArray(score.parts)
+    ? score.parts.map((part) => {
+        if (!isRecord(part)) return part;
+        return { ...part, ties: Array.isArray(part.ties) ? part.ties : [] };
+      })
+    : score.parts;
+
+  return { ...score, schemaVersion: SCORE_SCHEMA_VERSION, parts };
+}
+
+/**
  * 저장/불러오기·import 경계의 검증 진입점.
- * 미지원 버전이나 손상 데이터는 거부하고 원본 문자열을 보존한다(덮어쓰기 금지).
+ * 구버전은 마이그레이션하고, 손상 데이터나 미지원 버전은 거부한다(원본 문자열 보존).
  */
 export function deserializeScore(raw: string): DeserializeResult {
   let parsed: unknown;
@@ -57,15 +77,24 @@ export function deserializeScore(raw: string): DeserializeResult {
     };
   }
 
-  if (parsed.schemaVersion !== SCORE_SCHEMA_VERSION) {
+  const persistedVersion = parsed.schemaVersion;
+  const migrated = (
+    MIGRATABLE_SCHEMA_VERSIONS as readonly number[]
+  ).includes(persistedVersion);
+  const candidate = migrated
+    ? migrateToCurrentVersion(parsed as unknown as Record<string, unknown>)
+    : parsed;
+
+  if (candidate.schemaVersion !== SCORE_SCHEMA_VERSION) {
     return {
       ok: false,
       code: "UNSUPPORTED_SCHEMA",
-      message: `지원하지 않는 schemaVersion 입니다 (${parsed.schemaVersion}, 지원 ${SCORE_SCHEMA_VERSION}).`,
+      message: `지원하지 않는 schemaVersion 입니다 (${persistedVersion}, 지원 ${SCORE_SCHEMA_VERSION}).`,
     };
   }
 
-  const issues = validateScore(parsed);
+  const score = candidate as Score;
+  const issues = validateScore(score);
   if (issues.length > 0) {
     return {
       ok: false,
@@ -74,5 +103,5 @@ export function deserializeScore(raw: string): DeserializeResult {
     };
   }
 
-  return { ok: true, score: parsed };
+  return { ok: true, score, migrated };
 }

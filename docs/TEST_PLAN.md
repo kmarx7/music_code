@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 입력·편집·저장·복구·재생 흐름, 모바일 레이아웃, 키보드/접근성 | Playwright(Chromium, 프로덕션 빌드) | ✅ 실행(3 통과) |
+| 브라우저 E2E | 입력·편집·저장·복구·재생, 타이 분할, 모바일 레이아웃, 키보드/접근성 | Playwright(Chromium, 프로덕션 빌드) | ✅ 실행(4 통과) |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (실행 결과: 11 파일 / 66 통과)
+## 2. 단위·통합 테스트 목록 (실행 결과: 15 파일 / 101 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -86,15 +86,41 @@
 - 마지막 마디 용량 부족 → `MEASURE_CAPACITY_EXCEEDED`
 - 단축 시 뒤 이벤트 압축, 잘못된 길이/없는 note 거부
 
+### 타이(Phase 1-D) — `tests/unit/tie-*.test.ts` (33) + `serialize.test.ts` (+2)
+
+`tests/unit/tie-split.test.ts` (8)
+- 4/4 마지막 박(2880)에서 시작하는 2박 음 → 2 세그먼트 + 타이 1개(2880·960 / 3840·960)
+- 두 마디 이상 지속(5760) → 3 세그먼트 + 타이 2개
+- 단일 음가로 표기 불가한 길이(3600) → 3360 + 240으로 분해해 타이 연결
+- 마디에 들어가는 모든 표기가능 음가(점 포함)는 1 세그먼트
+- 마디보다 긴 음가(5760)는 여러 마디로 분할
+- 표기 불가 길이(1000) → `NOT_NOTATABLE`, 마지막 마디 초과 → `OUT_OF_MEASURES`, 길이 0 → `INVALID_DURATION`
+
+`tests/unit/tie-validation.test.ts` (9)
+- 유효 체인 통과, 미존재 참조, 자기 참조, 중복 링크, 시간 비연속, 음높이 불일치, 분기, 순환, ties 비배열
+
+`tests/unit/tie-playback.test.ts` (6)
+- `chainIdsOf`: 어느 세그먼트에서도 순서 있는 체인, 없는 ID는 `[]`, 타이 없으면 자기 자신 1개
+- `mergeTiedNotes`: 2세그먼트/3세그먼트 체인 → **1개 지속음**(중복 어택 없음), 타이 없는 음표는 개별 유지
+
+`tests/unit/tie-commands.test.ts` (10)
+- 마디를 넘는 `AddNote` 성공·검증 통과, 마지막 마디 초과 → `MEASURE_CAPACITY_EXCEEDED`, 시작 위치가 마디 밖 → `MEASURE_NOT_FOUND`
+- 세그먼트 삭제 시 링크 제거, 음높이 변경은 체인 전체 적용, 위치·길이 패치 → `TIE_EDIT_UNSUPPORTED`
+- 길이를 줄여 1세그먼트로 복귀, continuation 세그먼트 resize로 논리 음표 재구성
+- 직렬화 round-trip에서 ties 보존, Undo/Redo에서 타이 데이터 복원·재적용
+
+`tests/unit/serialize.test.ts` (7, +2)
+- v2 문서 ties round-trip, **v1 문서 → v2 마이그레이션**(`ties: []`, `migrated: true`)
+
 ## 3. 실행 명령과 결과 (2026-11-07)
 
 ```bash
 npm run typecheck        # exit 0
 npm run lint             # exit 0
-npm run test             # exit 0  (11 파일 / 66 통과)
-npm run check:architecture  # exit 0 (42 modules / 97 deps, 위반 0)
+npm run test             # exit 0  (15 파일 / 101 통과)
+npm run check:architecture  # exit 0 (43 modules / 105 deps, 위반 0)
 npm run build            # exit 0
-npm run test:e2e         # exit 0  (3 통과, Chromium / 프로덕션 빌드)
+npm run test:e2e         # exit 0  (4 통과, Chromium / 프로덕션 빌드)
 ```
 
 ## 4. 아키텍처 검사기 자기검증 (의도적 위반 → 탐지 → 제거)
@@ -142,14 +168,26 @@ npm run test:e2e         # exit 0  (3 통과, Chromium / 프로덕션 빌드)
 | 음표 선택/편집 | ✅ 선택 → 편집 패널, 반음 ↑(C4→C#4), 2분음표(1920 ticks) 리플로우, 삭제 |
 | 마디 추가 | ✅ 8 → 9마디 |
 
+### 5.2b 타이(Phase 1-D) 검증 (2026-11-07, agent-browser)
+
+| 항목 | 결과 |
+|---|---|
+| 마디 경계 분할 | ✅ 4/4 마지막 박(2880) 2박 음 → 음표 5개(4분음표 3 + 세그먼트 2), ⌒ 칩 2개 |
+| 붙임줄 표시(패널) | ✅ 선택 시 “⌒ 붙임줄 연결됨” 안내 |
+| 문맥 메뉴/편집 | ✅ 세그먼트 삭제 시 링크 제거, 음높이 변경은 체인 전체 반영 |
+| 저장/복구 | ✅ 새로고침 후에도 음표 5개·⌒ 유지 |
+| **VexFlow 타이 곡선** | ✅ DOM 경로 수 대조: 동일 음표 수 48 → 타이 추가 시 **49**(곡선 path 1개) |
+| dev 경고 | ✅ 0건(수정 전 `border`/`borderColor` 혼용 경고 1건 제거) |
+
 ### 5.3 자동 E2E (Playwright, 2026-11-07)
 
 - 구성: `playwright.config.ts` — `testDir: tests/e2e`, Chromium 단일 프로젝트,
   `webServer`는 `npm run build && npm run start`(프로덕션 빌드, 포트 3010).
-- 결과: **3/3 통과** (`npm run test:e2e`, 11.7s).
+- 결과: **4/4 통과** (`npm run test:e2e`, 11.8s).
   1. 새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → **새로고침** → 악보함 불러오기 → 재생/정지
   2. 모바일(390×844) 가로 스크롤 없음 + 입력/저장
   3. 컴퓨터 키보드(A) 입력, 건반 포커스(`toBeFocused`), 음표 칩 `aria-pressed` 상태
+  4. 4/4 마지막 박에 2박 음 입력 → **마디 경계 분할·⌒ 표시·“붙임줄 연결됨”** → 새로고침 후에도 음표 5개·⌒ 유지
 - 기록된 환경: Playwright 1.65.0 · Chromium headless shell 158.0.8127.18 · Node 22 · macOS
 - 주의: dev 서버를 재사용하면 첫 라우트의 클라이언트 청크 컴파일이 느려 실패로 오인될 수 있어
   **프로덕션 빌드 기준**으로 실행한다.
@@ -182,7 +220,9 @@ npm run test:e2e         # exit 0  (3 통과, Chromium / 프로덕션 빌드)
 - **오디오 실제 출력**은 헤드리스/무음 환경에서 검증하지 않았다(재생 상태 전환만 확인).
 - 브라우저는 Chromium 1종만 실행했다. WebKit/Firefox, 모바일 실기기, 데스크탑 Safari 미실행.
 - IndexedDB는 같은 브라우저의 새로고침 복구까지 검증했다. **프로필 삭제, 저장 용량 초과, 다중 탭 동시 편집 충돌**은 미검증.
-- 타이와 마디 넘김 음표는 미지원이다(정책 검토 결과는 `docs/TASKS.md` §4.2, 모델 변경은 사용자 승인 필요).
+- 타이와 마디를 넘는 음표는 **지원한다**(ADR-009, schemaVersion 2). 슬러/이음줄, 비표기가능 tick의
+  최적 분해(현재는 그리디), 마디 자동 확장은 미지원이다.
+- 재생은 스케줄/상태 전환만 검증했다. **실제 오디오 출력은 검증하지 않았다**(무음·헤드리스).
 - 아키텍처 위반 fixture는 "검증 후 제거" 방식이며, **상시 회귀 테스트로 남아 있지 않다**.
   필요 시 `tests/architecture/` 격리 fixture + 별도 script로 상시화 검토.
 - 채보 정확도·내보내기 호환성은 아직 해당 없음(Phase 4/5).

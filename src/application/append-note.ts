@@ -32,10 +32,11 @@ export function planAppendNote(
   }
   const startTick = endTick;
 
+  // note가 시작하는 마디만 찾으면 된다. 길이가 마디를 넘으면 Command가 분할+타이로 처리한다(ADR-009).
   const target = part.measures.find((measure) => {
     const start = measureStartTick(measure.index, part.timeSignature);
     const end = start + measureTicks(part.timeSignature);
-    return startTick >= start && startTick + input.durationTicks <= end;
+    return startTick >= start && startTick < end;
   });
 
   if (!target) {

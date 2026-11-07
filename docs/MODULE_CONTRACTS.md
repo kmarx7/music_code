@@ -29,7 +29,7 @@
 
 | 모듈 | 진입점 | 제공 내용 |
 |---|---|---|
-| Domain · Score | `@/domain/score` | `Score` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `measureTicks`, `measureStartTick`, 상수 |
+| Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수 |
 | Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
@@ -49,7 +49,10 @@ type EditCommand =
 ```
 
 > Phase 1-B에서 `AddMeasure`, `ResizeNote`를 **추가**했다(기존 파이프라인·모델 유지, 명령 집합의 확장).
-> `ResizeNote`는 편집된 음표 뒤 이벤트를 순서대로 재배치하며, 마디를 넘는 음표(타이)는 만들지 않는다.
+> Phase 1-D(ADR-009)에서 **마디 경계 분할·타이**를 도입했다: `AddNote`는 시작 마디만 지정하면 되고,
+> 길이가 마디를 넘으면 `splitNoteIntoMeasures`가 표기가능 음가로 분할해 `Part.ties`로 연결한다.
+> `ResizeNote`는 논리 음표(체인) 전체를 다시 레이아웃하고 뒤 이벤트를 순서대로 재배치한다.
+> `UpdateNote`의 pitch/velocity 패치는 체인 전체에 적용되고 위치·길이 패치는 거부된다(`TIE_EDIT_UNSUPPORTED`).
 > 자리가 없으면 `MEASURE_CAPACITY_EXCEEDED`로 실패하고, 마디 추가는 `AddMeasure`로 수행한다.
 
 | 항목 | 계약 |
@@ -58,7 +61,7 @@ type EditCommand =
 | 성공 | `{ ok: true, score }` — 새 Score는 전체 검증을 통과해야 한다 |
 | 실패 | `{ ok: false, error: { code, message } }` — 원본 Score는 그대로 |
 | 검증 시점 | 명령 적용 후 `validateScore`를 재실행하여 불변식을 보증 |
-| 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `INVALID_SCORE` |
+| 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` |
 | updatedAt | Command는 스탬프하지 않는다. 시간은 Application/경계에서 주입한다(재현성) |
 | 이름 매핑 | ARCHITECTURE의 예시 `DeleteNote`는 note/rest 모두 삭제 가능한 `DeleteEvent`로 구현했다 |
 
@@ -145,11 +148,11 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 |---|---|
 | C-01 라이브 피치 표시 | Phase 4에서 PRD 기준으로 구현·미지원 시 안내 |
 | C-02 시간 모델 | **확정**(DATA_MODEL §2) |
-| C-03 지원 음가·타이·조표 변경 | Phase 0은 마디 내 이벤트만 허용, 나머지는 후속 승인 |
+| C-03 지원 음가·타이·조표 변경 | **음가·타이 확정**(ADR-009, DATA_MODEL §3). 조표/박자 변경 지점은 후속 승인 |
 | C-04 명령·Undo 계약 | **확정**(§3·§4) |
 | C-05 store 조립 | Phase 1에서 단일 Score 소유자 유지하며 추가 |
 | C-06 의존성 도입 | Phase 0 목록 확정(§7), 이후 기능 Phase별 승인 |
-| C-07 저장 버전·migration | v1 확정, migration은 구버전 발생 시 |
+| C-07 저장 버전·migration | **v2 확정**(`Part.ties`), v1 → v2 마이그레이션 구현·테스트 완료 |
 | C-08 클립보드 의미 | Phase 3 전 확정 |
 | C-09 F1 게이트 | Phase 4 전 데이터셋 확정 |
-| C-10 브라우저 매트릭스 | E2E 도입 시 실제 버전 기록 |
+| C-10 브라우저 매트릭스 | **Chromium(Playwright 1.65.0) 기록됨**. WebKit/Firefox/실기기는 미실행 |

@@ -24,8 +24,8 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 11 파일 / **66 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 42 모듈·97 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 15 파일 / **101 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | 43 모듈·105 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -35,8 +35,8 @@
 | MVP-001 | 가상 피아노 | Partial | 88건반(A0–C8) 클릭 + 컴퓨터 키보드 매핑 → `planAppendNote` → `AddNote` |
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
-| MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표 |
-| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B). 마디 넘김/타이, 제목·조표·박자 편집 미구현 |
+| MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
+| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D). 제목·조표·박자 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -96,6 +96,45 @@
 - 재생 토글 보강: 재생 중이면 `playbackRef`가 없어도 정지하고, 오디오 시작 실패 시 상태를 복구한다.
 - `.gitignore`에 `test-results/`, `playwright-report/`, `blob-report/` 추가.
 - 전체 검사 재실행: typecheck/lint/test(66)/check:architecture/build 전부 exit 0.
+
+### 4.4 Phase 1-D — 마디 경계 분할 + 타이 (2026-11-07)
+
+**계약 (ADR-009, schemaVersion 2)**
+
+- `Part.ties: TieLink[]` — `{ from, to }` note ID 참조. 불리언 플래그가 아니라 **연결 관계 자체**를 한 곳에 저장한다.
+- 마디를 넘는 음은 **마디 경계에서 분할**하고 세그먼트 사이를 타이로 연결한다(개별 이벤트는 여전히 자기 마디 안에 있어야 한다).
+- 세그먼트 길이는 **점 0~2개 음가로 표기가능**해야 한다(`NOTATABLE_DURATIONS`). 아니면 더 작은 음가로 분해한다.
+- ID 규칙: 첫 세그먼트는 원래 ID, 이후 `${id}:tie1`, `${id}:tie2` … — 결정적이며 Command는 랜덤/시간을 쓰지 않는다.
+- 재생은 체인 전체를 **하나의 어택 + 지속음**으로 처리한다(중복 어택 금지).
+- v1 → v2 마이그레이션: 각 part에 `ties: []`를 추가하고 다시 저장한다.
+- 검증 코드 추가: `TIE_INVALID_SHAPE`, `TIE_UNKNOWN_REF`, `TIE_SELF_REF`, `TIE_DUPLICATE`,
+  `TIE_NOT_CONTIGUOUS`, `TIE_PITCH_MISMATCH`, `TIE_BRANCHING`, `TIE_CYCLE`.
+- Command 계약 확장: `AddNote`(분할 허용), `ResizeNote`(체인 재구성 + 뒤 이벤트 리플로우),
+  `DeleteEvent`(관련 링크 제거), `UpdateNote`(음높이는 체인 전체에 적용).
+
+**구현 파일**
+
+- `src/domain/score/tie.ts`(신규): `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`,
+  `mergeTiedNotes`, `tiesTouching`, 이벤트 조회 헬퍼.
+- `src/domain/score/{types,constants,create,validate,serialize,index}.ts`: `TieLink`/`Part.ties`,
+  schemaVersion 2, 검증 규칙, v1 마이그레이션.
+- `src/domain/commands/{types,apply}.ts`: 위 Command 계약 확장.
+- `src/application/append-note.ts`: 시작 마디만 찾으면 되도록 완화(분할은 Command가 수행).
+- `src/adapters/vexflow/renderScore.ts`: 점음표 길이 + `StaveTie`(행 경계는 부분 타이).
+- `src/adapters/tone/playback.ts`: 체인 병합 재생.
+- `src/app/editor/[scoreId]/page.tsx`: 음표 목록/패널에 붙임줄 표시.
+
+**검증 결과 (2026-11-07)**
+
+- 신규 테스트: `tests/unit/tie-split.test.ts`(8), `tie-validation.test.ts`(9), `tie-playback.test.ts`(6),
+  `tie-commands.test.ts`(10), `serialize.test.ts`(+2, v2 round-trip·v1 마이그레이션) → **15 파일 / 101 테스트**.
+- **기존 66개 테스트 회귀 통과**(모델 확장 후 전부 green).
+- E2E: `npm run test:e2e` → **4/4 통과**. 신규 시나리오는 4/4 마지막 박 2박 음 입력 → 분할·⌒ 표시 →
+  패널 “붙임줄 연결됨” → 새로고침 후에도 음표 5개·⌒ 유지.
+- 아키텍처: 43 모듈·105 의존성 위반 0, check-boundaries 36 파일 위반 0.
+- VexFlow 렌더 검증(DOM 경로 수 대조): 동일 음표 수 48 → 타이 1개 추가 시 **49**(타이 곡선 path 1개 추가).
+- 구현 중 발견·수정: `buildPart`가 기존 마디 이벤트를 삭제하던 회귀(회귀 테스트 5건이 검출),
+  React dev 경고(`border` 단축 + `borderColor` 혼용) 2곳.
 
 ## 5. 다음 작업 (Phase 1 착수 전)
 1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.

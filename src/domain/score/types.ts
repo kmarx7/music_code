@@ -49,6 +49,15 @@ export interface RestEvent {
 
 export type ScoreEvent = NoteEvent | RestEvent;
 
+/**
+ * 붙임줄 연결: `from` 음표가 끝나는 지점에서 `to` 음표가 이어진다.
+ * 음표마다 불리언 플래그를 두지 않고 연결 관계 자체를 한 곳(Part.ties)에 저장한다.
+ */
+export interface TieLink {
+  from: string;
+  to: string;
+}
+
 export interface Measure {
   id: string;
   index: number;
@@ -62,6 +71,7 @@ export interface Part {
   keySignature: KeySignature;
   timeSignature: TimeSignature;
   measures: Measure[];
+  ties: TieLink[];
 }
 
 export interface Score {

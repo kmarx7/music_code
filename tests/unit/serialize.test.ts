@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { deserializeScore, serializeScore } from "@/domain/score/serialize";
-import { fourNoteScore, scoreWithZeroDuration } from "../../tests/fixtures/scores";
+import {
+  fourNoteScore,
+  scoreWithZeroDuration,
+  tiedScore,
+} from "../../tests/fixtures/scores";
 
 describe("score serialization", () => {
   it("round-trips a valid score", () => {
@@ -9,6 +13,37 @@ describe("score serialization", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.score).toEqual(score);
+      expect(result.migrated).toBe(false);
+    }
+  });
+
+  it("round-trips tie links", () => {
+    const score = tiedScore();
+    const result = deserializeScore(serializeScore(score));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.migrated).toBe(false);
+      expect(result.score.parts[0].ties).toEqual([{ from: "t1", to: "t1:tie1" }]);
+    }
+  });
+
+  it("migrates a v1 document by adding empty ties", () => {
+    const current = fourNoteScore();
+    const parts = current.parts.map((part) => {
+      const copy: Record<string, unknown> = { ...part };
+      delete copy.ties;
+      return copy;
+    });
+
+    const result = deserializeScore(
+      JSON.stringify({ ...current, schemaVersion: 1, parts }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.migrated).toBe(true);
+      expect(result.score.schemaVersion).toBe(2);
+      expect(result.score.parts[0].ties).toEqual([]);
     }
   });
 

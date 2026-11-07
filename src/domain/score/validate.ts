@@ -14,6 +14,7 @@ import {
   SUPPORTED_MODES,
 } from "@/domain/score/constants";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
+import { findTieIssues } from "@/domain/score/tie";
 import {
   isAlterInRange,
   isDiatonicStep,
@@ -178,7 +179,7 @@ function validateEvents(
         issues.push({
           path: eventPath,
           code: "EVENT_OUT_OF_MEASURE",
-          message: `이벤트가 마디 범위(${start}..${end})를 벗어납니다. Phase 0에서는 마디를 넘는 타이를 지원하지 않습니다.`,
+          message: `이벤트가 마디 범위(${start}..${end})를 벗어납니다. 마디를 넘는 음은 마디 경계에서 분할해 타이로 연결해야 합니다.`,
         });
       }
     }
@@ -291,6 +292,10 @@ export function validateScore(score: Score): ValidationIssue[] {
       }
       validateEvents(part, position, issues);
     });
+
+    for (const issue of findTieIssues(part, { pathPrefix: partPath })) {
+      issues.push(issue);
+    }
   }
 
   return issues;

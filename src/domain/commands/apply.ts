@@ -1,12 +1,18 @@
 import type {
   Measure,
-  NoteEvent,
   Part,
   Score,
   ScoreEvent,
 } from "@/domain/score/types";
 import { validateScore } from "@/domain/score/validate";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
+import {
+  chainIdsOf,
+  noteById,
+  splitNoteIntoMeasures,
+  withoutTiesTouching,
+} from "@/domain/score/tie";
+import type { NoteSegment, SplitFailureCode } from "@/domain/score/tie";
 import type {
   CommandErrorCode,
   CommandResult,
@@ -42,30 +48,8 @@ function sortEvents(events: ScoreEvent[]): ScoreEvent[] {
   );
 }
 
-function replacePart(
-  score: Score,
-  partId: string,
-  update: (part: Part) => Part,
-): Score {
-  return {
-    ...score,
-    parts: score.parts.map((part) => (part.id === partId ? update(part) : part)),
-  };
-}
-
-function replaceMeasureEvents(
-  part: Part,
-  measureId: string,
-  update: (events: ScoreEvent[]) => ScoreEvent[],
-): Part {
-  return {
-    ...part,
-    measures: part.measures.map((measure) =>
-      measure.id === measureId
-        ? { ...measure, events: sortEvents(update(measure.events)) }
-        : measure,
-    ),
-  };
+function partOf(score: Score, partId: string): Part | undefined {
+  return score.parts.find((part) => part.id === partId);
 }
 
 function findEvent(
@@ -79,74 +63,112 @@ function findEvent(
   return null;
 }
 
-function addEvent(
+function replacePart(
   score: Score,
   partId: string,
-  measureId: string,
-  event: ScoreEvent,
-): CommandResult {
-  const part = score.parts.find((candidate) => candidate.id === partId);
-  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${partId}`);
-  if (!part.measures.some((measure) => measure.id === measureId)) {
-    return fail("MEASURE_NOT_FOUND", `마디를 찾을 수 없습니다: ${measureId}`);
-  }
-  if (hasEventId(score, event.id)) {
-    return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${event.id}`);
-  }
-
-  return finalize(
-    replacePart(score, partId, (target) =>
-      replaceMeasureEvents(target, measureId, (events) => [...events, event]),
-    ),
-  );
+  update: (part: Part) => Part,
+): Score {
+  return {
+    ...score,
+    parts: score.parts.map((part) => (part.id === partId ? update(part) : part)),
+  };
 }
 
-interface Placed {
+interface Placement {
   measureId: string;
   event: ScoreEvent;
 }
 
-type ReflowResult =
-  | { ok: true; placements: Placed[] }
-  | { ok: false; code: CommandErrorCode };
+/** 배치 목록을 마디별로 모아 Part를 재구성한다(기존 이벤트는 대체된다). */
+function buildPart(part: Part, placements: Placement[]): Part {
+  return {
+    ...part,
+    measures: part.measures.map((measure) => ({
+      ...measure,
+      events: sortEvents(
+        placements
+          .filter((placement) => placement.measureId === measure.id)
+          .map((placement) => placement.event),
+      ),
+    })),
+  };
+}
+
+/** 새 이벤트를 기존 마디 내용에 추가한다(기존 이벤트 보존). */
+function mergePlacements(part: Part, placements: Placement[]): Part {
+  return {
+    ...part,
+    measures: part.measures.map((measure) => {
+      const added = placements
+        .filter((placement) => placement.measureId === measure.id)
+        .map((placement) => placement.event);
+      if (added.length === 0) return measure;
+      return { ...measure, events: sortEvents([...measure.events, ...added]) };
+    }),
+  };
+}
+
+function flatten(part: Part): { measureId: string; event: ScoreEvent }[] {
+  return part.measures
+    .flatMap((measure) =>
+      measure.events.map((event) => ({ measureId: measure.id, event })),
+    )
+    .sort(
+      (a, b) =>
+        a.event.startTick - b.event.startTick ||
+        a.event.id.localeCompare(b.event.id),
+    );
+}
+
+function mapSplitFailure(code: SplitFailureCode): {
+  code: CommandErrorCode;
+  message: string;
+} {
+  switch (code) {
+    case "INVALID_DURATION":
+      return { code: "INVALID_DURATION", message: "음표 길이가 올바르지 않습니다." };
+    case "NOT_NOTATABLE":
+      return {
+        code: "NOT_NOTATABLE",
+        message: "음가(점 포함)로 표기할 수 없는 길이입니다.",
+      };
+    case "TOO_MANY_SEGMENTS":
+      return {
+        code: "MEASURE_CAPACITY_EXCEEDED",
+        message: "분할 세그먼트가 너무 많습니다.",
+      };
+    case "OUT_OF_MEASURES":
+    default:
+      return {
+        code: "MEASURE_CAPACITY_EXCEEDED",
+        message: "마디 공간이 부족합니다. 마디를 추가하거나 길이를 줄여 주세요.",
+      };
+  }
+}
 
 /**
- * 길이 변경 시 편집된 음표 뒤의 이벤트를 순서대로 다시 배치한다.
- * 마디를 넘는 음표(타이)는 지원하지 않으므로, 다음 마디의 빈 공간으로 이동시킨다.
- * 마지막 마디까지 자리가 없으면 실패한다(마디 추가는 AddMeasure로 수행).
+ * 분할된 논리 음표 뒤의 이벤트를 순서대로 재배치한다.
+ * 마디를 넘는 단일 이벤트는 만들지 않으므로, 자리가 없으면 다음 마디로 넘긴다.
  */
-function reflowFromResizedNote(
+function arrangeFollowing(
   part: Part,
-  targetIndex: number,
-  resized: NoteEvent,
-  ordered: { measureId: string; measureIndex: number; event: ScoreEvent }[],
-): ReflowResult {
+  before: Placement[],
+  segments: NoteSegment[],
+  after: ScoreEvent[],
+): { ok: true; placements: Placement[] } | { ok: false; code: CommandErrorCode } {
   const ticksPerMeasure = measureTicks(part.timeSignature);
-  const placements: Placed[] = [];
+  const placements: Placement[] = [
+    ...before,
+    ...segments.map((segment) => ({
+      measureId: segment.measureId,
+      event: segment.event as ScoreEvent,
+    })),
+  ];
 
-  for (let index = 0; index < targetIndex; index += 1) {
-    placements.push({
-      measureId: ordered[index].measureId,
-      event: ordered[index].event,
-    });
-  }
+  const last = segments[segments.length - 1];
+  let cursor = last.event.startTick + last.event.durationTicks;
 
-  const targetMeasureStart = measureStartTick(
-    ordered[targetIndex].measureIndex,
-    part.timeSignature,
-  );
-  if (
-    resized.startTick + resized.durationTicks >
-    targetMeasureStart + ticksPerMeasure
-  ) {
-    return { ok: false, code: "MEASURE_CAPACITY_EXCEEDED" };
-  }
-  placements.push({ measureId: ordered[targetIndex].measureId, event: resized });
-
-  let cursor = resized.startTick + resized.durationTicks;
-
-  for (let index = targetIndex + 1; index < ordered.length; index += 1) {
-    const item = ordered[index];
+  for (const event of after) {
     let placed = false;
 
     for (
@@ -158,12 +180,12 @@ function reflowFromResizedNote(
       const measureEnd = measureStart + ticksPerMeasure;
       const position = Math.max(cursor, measureStart);
 
-      if (position + item.event.durationTicks <= measureEnd) {
+      if (position + event.durationTicks <= measureEnd) {
         placements.push({
           measureId: part.measures[measureIndex].id,
-          event: { ...item.event, startTick: position },
+          event: { ...event, startTick: position },
         });
-        cursor = position + item.event.durationTicks;
+        cursor = position + event.durationTicks;
         placed = true;
         break;
       }
@@ -175,63 +197,194 @@ function reflowFromResizedNote(
   return { ok: true, placements };
 }
 
+function addNote(
+  score: Score,
+  command: Extract<EditCommand, { type: "AddNote" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+
+  const measure = part.measures.find((candidate) => candidate.id === command.measureId);
+  if (!measure) {
+    return fail("MEASURE_NOT_FOUND", `마디를 찾을 수 없습니다: ${command.measureId}`);
+  }
+  if (hasEventId(score, command.note.id)) {
+    return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${command.note.id}`);
+  }
+
+  const measureStart = measureStartTick(measure.index, part.timeSignature);
+  const measureEnd = measureStart + measureTicks(part.timeSignature);
+  const { startTick } = command.note;
+  if (startTick < measureStart || startTick >= measureEnd) {
+    return fail(
+      "MEASURE_NOT_FOUND",
+      `시작 위치 ${startTick}가 마디 범위(${measureStart}..${measureEnd}) 밖입니다.`,
+    );
+  }
+
+  const split = splitNoteIntoMeasures(part, {
+    id: command.note.id,
+    pitch: command.note.pitch,
+    startTick,
+    durationTicks: command.note.durationTicks,
+    velocity: command.note.velocity,
+    provenance: command.note.provenance,
+  });
+  if (!split.ok) {
+    const mapped = mapSplitFailure(split.code);
+    return fail(mapped.code, mapped.message);
+  }
+
+  for (const segment of split.segments) {
+    if (segment.event.id !== command.note.id && hasEventId(score, segment.event.id)) {
+      return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${segment.event.id}`);
+    }
+  }
+
+  const placed = mergePlacements(part, split.segments);
+  const nextPart: Part = { ...placed, ties: [...part.ties, ...split.ties] };
+
+  return finalize(replacePart(score, command.partId, () => nextPart));
+}
+
+function addEvent(
+  score: Score,
+  partId: string,
+  measureId: string,
+  event: ScoreEvent,
+): CommandResult {
+  const part = partOf(score, partId);
+  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${partId}`);
+  if (!part.measures.some((measure) => measure.id === measureId)) {
+    return fail("MEASURE_NOT_FOUND", `마디를 찾을 수 없습니다: ${measureId}`);
+  }
+  if (hasEventId(score, event.id)) {
+    return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${event.id}`);
+  }
+
+  const nextPart: Part = mergePlacements(part, [{ measureId, event }]);
+  return finalize(replacePart(score, partId, () => nextPart));
+}
+
+function updateNote(
+  score: Score,
+  command: Extract<EditCommand, { type: "UpdateNote" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+
+  const found = findEvent(part, command.noteId);
+  if (!found) return fail("NOTE_NOT_FOUND", `note를 찾을 수 없습니다: ${command.noteId}`);
+  if (found.event.kind !== "note") {
+    return fail("NOTE_NOT_FOUND", `해당 ID는 note가 아닙니다: ${command.noteId}`);
+  }
+
+  const chain = chainIdsOf(part, command.noteId);
+  const chainSet = new Set(chain);
+  const { patch } = command;
+
+  if (
+    chain.length > 1 &&
+    (patch.startTick !== undefined || patch.durationTicks !== undefined)
+  ) {
+    return fail(
+      "TIE_EDIT_UNSUPPORTED",
+      "타이로 연결된 음표의 위치·길이는 ResizeNote로 변경해야 합니다.",
+    );
+  }
+
+  const nextPart: Part = {
+    ...part,
+    measures: part.measures.map((measure) => ({
+      ...measure,
+      events: measure.events.map((event) =>
+        chainSet.has(event.id) && event.kind === "note"
+          ? { ...event, ...patch }
+          : event,
+      ),
+    })),
+  };
+
+  return finalize(replacePart(score, command.partId, () => nextPart));
+}
+
+function deleteEvent(
+  score: Score,
+  command: Extract<EditCommand, { type: "DeleteEvent" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+  if (!findEvent(part, command.eventId)) {
+    return fail("EVENT_NOT_FOUND", `이벤트를 찾을 수 없습니다: ${command.eventId}`);
+  }
+
+  const removed = new Set([command.eventId]);
+  const nextPart: Part = {
+    ...part,
+    ties: withoutTiesTouching(part.ties, removed),
+    measures: part.measures.map((measure) => ({
+      ...measure,
+      events: measure.events.filter((event) => event.id !== command.eventId),
+    })),
+  };
+
+  return finalize(replacePart(score, command.partId, () => nextPart));
+}
+
 function resizeNote(
   score: Score,
   partId: string,
   noteId: string,
   durationTicks: number,
 ): CommandResult {
-  const part = score.parts.find((candidate) => candidate.id === partId);
+  const part = partOf(score, partId);
   if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${partId}`);
   if (!Number.isInteger(durationTicks) || durationTicks <= 0) {
     return fail("INVALID_DURATION", `길이는 1 이상의 정수 tick이어야 합니다 (${durationTicks}).`);
   }
 
-  const found = findEvent(part, noteId);
-  if (!found) return fail("NOTE_NOT_FOUND", `note를 찾을 수 없습니다: ${noteId}`);
-  if (found.event.kind !== "note") {
-    return fail("NOTE_NOT_FOUND", `해당 ID는 note가 아닙니다: ${noteId}`);
+  const chain = chainIdsOf(part, noteId);
+  const head = chain.length > 0 ? noteById(part, chain[0]) : undefined;
+  if (!head) return fail("NOTE_NOT_FOUND", `note를 찾을 수 없습니다: ${noteId}`);
+
+  const chainSet = new Set(chain);
+  const before: Placement[] = [];
+  const after: ScoreEvent[] = [];
+
+  for (const item of flatten(part)) {
+    if (chainSet.has(item.event.id)) continue;
+    if (item.event.startTick < head.startTick) {
+      before.push({ measureId: item.measureId, event: item.event });
+    } else {
+      after.push(item.event);
+    }
   }
 
-  const ordered = part.measures
-    .flatMap((measure) =>
-      measure.events.map((event) => ({
-        measureId: measure.id,
-        measureIndex: measure.index,
-        event,
-      })),
-    )
-    .sort(
-      (a, b) =>
-        a.event.startTick - b.event.startTick ||
-        a.event.id.localeCompare(b.event.id),
-    );
+  const split = splitNoteIntoMeasures(part, {
+    id: head.id,
+    pitch: head.pitch,
+    startTick: head.startTick,
+    durationTicks,
+    velocity: head.velocity,
+    provenance: head.provenance,
+  });
+  if (!split.ok) {
+    const mapped = mapSplitFailure(split.code);
+    return fail(mapped.code, mapped.message);
+  }
 
-  const targetIndex = ordered.findIndex((item) => item.event.id === noteId);
-  if (targetIndex < 0) return fail("NOTE_NOT_FOUND", `note를 찾을 수 없습니다: ${noteId}`);
-
-  const resized: NoteEvent = { ...found.event, durationTicks };
-  const reflow = reflowFromResizedNote(part, targetIndex, resized, ordered);
-
-  if (!reflow.ok) {
+  const arranged = arrangeFollowing(part, before, split.segments, after);
+  if (!arranged.ok) {
     return fail(
-      reflow.code,
+      arranged.code,
       "마디 공간이 부족합니다. 마디를 추가하거나 길이를 줄여 주세요.",
     );
   }
 
-  const { placements } = reflow;
-
+  const placed = buildPart(part, arranged.placements);
   const nextPart: Part = {
-    ...part,
-    measures: part.measures.map((measure) => ({
-      ...measure,
-      events: sortEvents(
-        placements
-          .filter((placed) => placed.measureId === measure.id)
-          .map((placed) => placed.event),
-      ),
-    })),
+    ...placed,
+    ties: [...withoutTiesTouching(part.ties, chainSet), ...split.ties],
   };
 
   return finalize(replacePart(score, partId, () => nextPart));
@@ -243,13 +396,13 @@ export function applyEditCommand(
 ): CommandResult {
   switch (command.type) {
     case "AddNote":
-      return addEvent(score, command.partId, command.measureId, command.note);
+      return addNote(score, command);
 
     case "InsertRest":
       return addEvent(score, command.partId, command.measureId, command.rest);
 
     case "AddMeasure": {
-      const part = score.parts.find((candidate) => candidate.id === command.partId);
+      const part = partOf(score, command.partId);
       if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
       if (part.measures.some((measure) => measure.id === command.measureId)) {
         return fail("DUPLICATE_ID", `이미 존재하는 마디 ID입니다: ${command.measureId}`);
@@ -268,42 +421,11 @@ export function applyEditCommand(
     case "ResizeNote":
       return resizeNote(score, command.partId, command.noteId, command.durationTicks);
 
-    case "UpdateNote": {
-      const part = score.parts.find((candidate) => candidate.id === command.partId);
-      if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+    case "UpdateNote":
+      return updateNote(score, command);
 
-      const found = findEvent(part, command.noteId);
-      if (!found) return fail("NOTE_NOT_FOUND", `note를 찾을 수 없습니다: ${command.noteId}`);
-      if (found.event.kind !== "note") {
-        return fail("NOTE_NOT_FOUND", `해당 ID는 note가 아닙니다: ${command.noteId}`);
-      }
-
-      const updated: NoteEvent = { ...found.event, ...command.patch };
-
-      return finalize(
-        replacePart(score, command.partId, (target) =>
-          replaceMeasureEvents(target, found.measure.id, (events) =>
-            events.map((event) => (event.id === updated.id ? updated : event)),
-          ),
-        ),
-      );
-    }
-
-    case "DeleteEvent": {
-      const part = score.parts.find((candidate) => candidate.id === command.partId);
-      if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
-
-      const found = findEvent(part, command.eventId);
-      if (!found) return fail("EVENT_NOT_FOUND", `이벤트를 찾을 수 없습니다: ${command.eventId}`);
-
-      return finalize(
-        replacePart(score, command.partId, (target) =>
-          replaceMeasureEvents(target, found.measure.id, (events) =>
-            events.filter((event) => event.id !== command.eventId),
-          ),
-        ),
-      );
-    }
+    case "DeleteEvent":
+      return deleteEvent(score, command);
 
     default:
       return fail("INVALID_SCORE", "지원하지 않는 command 입니다.");

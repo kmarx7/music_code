@@ -107,6 +107,35 @@ This file records **architectural choices**, their trade-offs and change history
 
 ---
 
+## ADR-009 — 마디 경계 분할 + 명시적 타이 연결 (Phase 1-D)
+
+- **Status:** Accepted
+- **Date:** 2026-11-07
+- **Requested by:** 사용자 (Phase 1-D 승인 — "①번 조건부 승인")
+- **Problem:** 마디를 넘는 음(예: 4/4 마지막 박에서 시작하는 2박 음)을 표현할 수 없다. 현재는
+  `EVENT_OUT_OF_MEASURE`로 거부한다. 올바른 기보(분할 + 붙임줄), 정확한 재생(중복 어택 없음),
+  Undo/Redo 일관성, 저장·출력 확장 가능성이 필요하다.
+- **Current contract / affected modules:** `Part`(ties 없음), `NoteEvent`(타이 메타데이터 없음), `schemaVersion = 1`,
+  `src/domain/score/{types,create,validate,serialize}`, `src/domain/commands/apply.ts`,
+  `src/application/append-note.ts`, `src/adapters/{vexflow,tone}`, `/editor`
+- **Options:**
+  1. `NoteEvent.tieTo?: string` 단일 플래그 — 관계가 음표마다 흩어지고, 불일치·중복 검증이 필요하다
+  2. **`Part.ties: TieLink[]` 명시적 연결 목록** — 관계를 한 곳에 저장, 체인/분기 검증이 단순, 음표 타입 불변
+  3. 이벤트가 마디를 넘도록 검증 완화 — 모델이 기보 불가능한 상태를 허용하고 렌더러·재생이 매번 분할해야 한다
+- **Recommendation and reasons:** 2안. 사용자가 "단순 tie 플래그보다는 음표 간 연결 관계를 명시적으로 표현"을 요구했다.
+  `TieLink { from, to }`는 ID 참조이므로 복사/이동에도 관계가 명시적이고, 단일 출처라 불일치가 생기지 않는다.
+  `NoteEvent`를 건드리지 않아 기존 커맨드·검증·어댑터의 변경 범위가 최소다.
+- **Breaking changes / migration:** `Part.ties` 추가로 **schemaVersion 2**. v1 문서는 읽을 때
+  각 part에 `ties: []`를 추가해 v2로 마이그레이션한다(원본 거부·손실 없음). 그 외 버전은 계속 거부한다.
+  새 Command 에러 코드 `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`가 추가된다(기존 코드 유지).
+- **Tests and rollback:** 분할·검증·체인 병합·재생·Undo/Redo·저장/복원 단위 테스트 + E2E 회귀.
+  문제 시 `Part.ties`를 제거하고 schemaVersion을 1로 되돌리며, 도메인 함수(`tie.ts`)만 삭제하면 된다.
+- **User approval:** **Approved (2026-11-07)** — 조건: 단순 플래그 대신 명시적 연결 관계 모델
+- **Decision date:** 2026-11-07
+- **Supersedes:** None
+
+---
+
 ## ADR proposal template
 
 ```markdown
@@ -135,3 +164,4 @@ This file records **architectural choices**, their trade-offs and change history
 |---|---|---|
 | 2026-11-07 | Created baseline ADR-001–007 | Captures approved project direction; implementation details pending Phase 0 |
 | 2026-11-07 | ADR-008 Accepted — VexFlow 5.0.0 / Tone.js 15.1.22 도입 (사용자 승인) | Approved |
+| 2026-11-07 | ADR-009 Accepted — 마디 경계 분할 + `Part.ties` 명시적 연결, schemaVersion 2 (사용자 조건부 승인) | Approved |

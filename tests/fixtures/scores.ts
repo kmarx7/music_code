@@ -134,6 +134,47 @@ export function scoreWithSpellingMismatch(): Score {
   };
 }
 
+/**
+ * 4/4 마지막 박(2880)에서 시작해 마디를 넘는 2박 음을 분할+타이로 표현한 fixture.
+ * `t1`(m0, 2880..3840) → `t1:tie1`(m1, 3840..4800)
+ */
+export function tiedScore(): Score {
+  const score = createEmptyScore({
+    id: "score-tie",
+    measureCount: 2,
+    createdAt: FIXTURE_CREATED_AT,
+  });
+  const part = score.parts[0];
+  const head = createNoteEvent({
+    id: "t1",
+    step: "C",
+    octave: 4,
+    startTick: 2880,
+    durationTicks: 960,
+  });
+  const tail = createNoteEvent({
+    id: "t1:tie1",
+    step: "C",
+    octave: 4,
+    startTick: 3840,
+    durationTicks: 960,
+  });
+
+  return {
+    ...score,
+    parts: [
+      {
+        ...part,
+        measures: [
+          { ...part.measures[0], events: [head] },
+          { ...part.measures[1], events: [tail] },
+        ],
+        ties: [{ from: "t1", to: "t1:tie1" }],
+      },
+    ],
+  };
+}
+
 export function countNotes(score: Score): number {
   return score.parts.reduce(
     (acc, part) =>

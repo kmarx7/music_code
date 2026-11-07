@@ -106,3 +106,33 @@ test("키보드 입력과 포커스·접근성 상태가 동작한다", async ({
   await chip.click();
   await expect(chip).toHaveAttribute("aria-pressed", "true");
 });
+
+test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다", async ({ page }) => {
+  await page.goto("/library");
+  await clearScores(page);
+
+  await page.goto("/editor/e2e-tie");
+  await expect(page.getByText(/음표 0개/)).toBeVisible();
+
+  await page.getByRole("button", { name: "MIDI 60" }).click();
+  await page.getByRole("button", { name: "MIDI 60" }).click();
+  await page.getByRole("button", { name: "MIDI 60" }).click();
+  await expect(page.getByText(/음표 3개/)).toBeVisible();
+
+  // 4/4 마지막 박(2880)에서 시작하는 2박 음 → 마디 경계에서 분할 + 타이
+  await page.getByRole("button", { name: "2분음표" }).click();
+  await page.getByRole("button", { name: "MIDI 62" }).click();
+
+  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  const tiedChips = page.locator("button[aria-pressed]", { hasText: "⌒" });
+  await expect(tiedChips).toHaveCount(2);
+  await expect(page.locator("svg")).toHaveCount(1);
+
+  await tiedChips.first().click();
+  await expect(page.getByText(/붙임줄 연결됨/)).toBeVisible();
+  await expect(page.getByText("저장됨")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
+});

@@ -134,6 +134,7 @@ export default function EditorPage() {
   const selectedNote = selectedNoteId
     ? notes.find((note) => note.id === selectedNoteId)
     : undefined;
+  const tiedIds = new Set(part.ties.flatMap((tie) => [tie.from, tie.to]));
 
   function runCommand(command: EditCommand): boolean {
     const result = scoreStore.dispatch(command);
@@ -326,10 +327,11 @@ export default function EditorPage() {
                       padding: "6px 10px",
                       background: selected ? "#1b2a4a" : "#ffffff",
                       color: selected ? "#ffffff" : "#1c1f26",
-                      borderColor: selected ? "#1b2a4a" : "#c8cfdb",
+                      border: `1px solid ${selected ? "#1b2a4a" : "#c8cfdb"}`,
                     }}
                   >
                     {labelOf(note.pitch) || "음표"}
+                    {tiedIds.has(note.id) ? " ⌒" : ""}
                   </button>
                 </li>
               );
@@ -348,6 +350,11 @@ export default function EditorPage() {
               {letterName(selectedNote.pitch)} ·{" "}
               {koreanFixedDo(selectedNote.pitch)} · {selectedNote.durationTicks} ticks
             </span>
+            {tiedIds.has(selectedNote.id) ? (
+              <span style={{ fontSize: 12, color: "#5f6773" }}>
+                ⌒ 붙임줄 연결됨 (음높이는 연결된 음 전체에 적용)
+              </span>
+            ) : null}
             <button
               type="button"
               aria-label="반음 올리기"

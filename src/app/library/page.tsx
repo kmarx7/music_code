@@ -28,7 +28,7 @@ const button: React.CSSProperties = {
 const primary: React.CSSProperties = {
   ...button,
   background: "#1b2a4a",
-  borderColor: "#1b2a4a",
+  border: "1px solid #1b2a4a",
   color: "#ffffff",
 };
 

@@ -61,6 +61,7 @@ export function createEmptyScore(input: CreateScoreInput): Score {
           index,
           events: [],
         })),
+        ties: [],
       },
     ],
   };
