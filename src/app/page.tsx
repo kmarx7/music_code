@@ -20,7 +20,7 @@ export default function Page() {
       </p>
       <p>
         <Link
-          href="/editor/demo-score"
+          href="/library"
           style={{
             display: "inline-block",
             padding: "8px 14px",
@@ -31,7 +31,13 @@ export default function Page() {
             fontSize: 14,
           }}
         >
-          편집기 열기
+          악보함 열기
+        </Link>{" "}
+        <Link
+          href="/editor/demo-score"
+          style={{ fontSize: 13, color: "#1b2a4a", marginLeft: 12 }}
+        >
+          편집기 데모
         </Link>
       </p>
       <ul style={{ fontSize: 13, color: "#5f6773" }}>

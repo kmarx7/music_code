@@ -24,8 +24,8 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 8 파일 / **48 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 34 모듈·73 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 10 파일 / **58 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | 42 모듈·95 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -57,8 +57,19 @@
   Play 클릭 시 Stop 전환 후 약 0.8초 뒤 자동 종료. **오디오 실제 출력은 헤드리스에서 미검증.**
 - 남은 Phase 1 작업: IndexedDB 저장/불러오기·악보함, 음표 수정 UI, 마디 추가, 마디 넘김(타이) 정책, 모바일/접근성.
 
-## 5. 다음 작업 (Phase 1 착수 전)
+### 4.1 Phase 1-A — 데이터 저장 (Done, 2026-11-07)
 
+- `src/adapters/indexeddb/scoreRepository.ts`: `ScoreRepository`의 IndexedDB 구현.
+  저장은 `serializeScore`, 읽기는 `deserializeScore`로 검증하며 손상/미지원 버전 레코드는 무시(덮어쓰지 않음).
+- `src/application/score-library.ts`: `openOrCreateScore`, `createNewScore`, `listScores`.
+- `src/features/score-library/useAutosave.ts`: 400ms 디바운스 자동 저장 + 상태(`idle|saving|saved|error`), 언마운트 시 flush.
+- `/library`: 악보 생성·목록·열기·삭제(확인 후).
+- `/editor/[scoreId]`: 저장본 로드(없으면 생성) + 자동 저장 + 저장 상태 표시.
+- 테스트: `tests/integration/score-repository.test.ts`(6), `tests/unit/score-library.test.ts`(4), `tests/fixtures/memory-repository.ts`.
+- **dev 의존성 추가**: `fake-indexeddb` — Node에 IndexedDB가 없어 어댑터를 테스트하기 위한 테스트 전용 대역. 프로덕션 번들 영향 없음.
+- 브라우저 검증: 새 악보 생성 → 음표 입력 → "저장됨" → **새로고침 후 음표 유지** → 목록/열기 → 삭제.
+
+## 5. 다음 작업 (Phase 1 착수 전)
 1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.
 2. 직렬화/역직렬화 + 버전 검증(P0-08 잔여) 구현 및 round-trip 테스트.
 3. Playwright 도입은 E2E가 실제로 필요한 시점(Phase 1 렌더링)에 승인 후 추가.

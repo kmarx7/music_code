@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { createEmptyScore } from "@/domain/score";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { planAppendNote } from "@/application";
+import { openOrCreateScore, planAppendNote } from "@/application";
+import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { StaffView } from "@/features/score-editor";
 import { PianoKeyboard } from "@/features/piano-input";
+import { useAutosave } from "@/features/score-library";
 import { playScore, type PlaybackHandle } from "@/adapters/tone/playback";
 
 type LabelMode = "off" | "letter" | "korean";
@@ -62,19 +63,31 @@ export default function EditorPage() {
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
   const [playing, setPlaying] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const playbackRef = useRef<PlaybackHandle | null>(null);
+  const repository = getScoreRepository();
+  const saveStatus = useAutosave(repository);
 
   useEffect(() => {
-    if (scoreStore.getState()) return;
-    scoreStore.init(
-      createEmptyScore({
-        id: scoreId,
-        title: "새 악보",
-        measureCount: 8,
-        createdAt: new Date().toISOString(),
-      }),
-    );
-  }, [scoreId]);
+    let active = true;
+    const existing = scoreStore.getState();
+    if (existing?.current.id === scoreId) return;
+
+    openOrCreateScore(repository, {
+      id: scoreId,
+      createdAt: new Date().toISOString(),
+    })
+      .then((result) => {
+        if (active) scoreStore.init(result.score);
+      })
+      .catch(() => {
+        if (active) setLoadError("악보를 불러오지 못했습니다.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [repository, scoreId]);
 
   useEffect(
     () => () => {
@@ -155,7 +168,25 @@ export default function EditorPage() {
           {score.tempoBpm} BPM · {part.timeSignature.numerator}/
           {part.timeSignature.denominator} · 음표 {notes.length}개
         </span>
+        <span
+          style={{
+            fontSize: 12,
+            color: saveStatus === "error" ? "#b91c1c" : "#5f6773",
+          }}
+        >
+          {saveStatus === "saving"
+            ? "저장 중…"
+            : saveStatus === "saved"
+              ? "저장됨"
+              : saveStatus === "error"
+                ? "저장 실패"
+                : ""}
+        </span>
       </div>
+
+      {loadError ? (
+        <p style={{ color: "#b91c1c", fontSize: 13 }}>{loadError}</p>
+      ) : null}
 
       <div style={{ ...panel, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" style={button} onClick={() => scoreStore.undo()}>
