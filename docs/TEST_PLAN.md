@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 11종 + 저장/이동 2종 | Playwright(Chromium, 프로덕션 빌드) | 591e02e 사용자 Mac 10/11 통과 / 이동 수정 후 13종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 13종 + 원본 보존 10종 | Playwright(Chromium, 프로덕션 빌드) | 8141c6b 사용자 Mac 13/13 통과 / 원본 보존 수정 후 23종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 25 파일 / 270 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 26 파일 / 284 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -463,3 +463,42 @@ npm run test:e2e
 
 남은 위험: 새 13종 브라우저 E2E 미검증, 브라우저 강제 종료/직접 URL 이동/뒤로가기의
 비동기 cleanup 저장 완료, 다중 탭 동시 편집. 명시적 저장 후 이동 보장은 편집기 홈/악보함 Link에 적용한다.
+
+
+## 15. 손상·미지원 저장본 직접 열기 원본 보존 (2026-11-08)
+
+- 사용자 기준선 `8141c6b`: 단위·통합 270개, Mac Chromium **13/13** 통과.
+- 이번 결과: **26파일 / 284개 통과**, 기존 270개 + 신규 14개.
+  기존 저장소의 손상/미지원 테스트 2개는 null이 아니라 typed error를 검증하도록 강화했다.
+- 신규 `score-open-preservation.test.ts` **12개**(실제 IndexedDB adapter + fake-indexeddb):
+  손상 JSON/미지원 버전/음악 불변식 실패/중첩 구조 실패/원시 envelope 실패/ID 불일치 6종의
+  직접 open 거부·application save 미호출·직접 save 방어·원시 레코드 전체 불변·list 비파괴 검증,
+  실제 미존재 생성, 정상 타이 악보 무쓰기 로드, 지원 v1 메모리 변환/읽기 원본 보존/편집 저장,
+  get 읽기 실패, 미존재 조회 후 늦게 생긴 손상 레코드 보존, JSON import의 실패 레코드 ID 충돌 거부.
+- autosave.test.ts **14개**(+2): 성공한 baseline은 flush/cleanup으로 재저장하지 않음,
+  baseline 이후 정상 편집·Undo/Redo·영속 복원 유지. 기존 마지막 값/저장 순서/오류 재시도 12개 유지.
+- 신규 `score-open-preservation.spec.ts` **10종**:
+  실제 Chromium IndexedDB에 원시 레코드/추가 메타데이터를 주입하고 편집기 URL로 이동한다.
+  실패 7종(위 6유형 + 읽기 오류)은 오류 화면·편집/Staff 부재·400ms 이후 쓰기 0회·원시 레코드 불변,
+  악보함 복귀 뒤에도 무쓰기를 검사한다. readwrite transaction 시도와 put/add/delete/clear를 함께 계측하므로,
+  save guard에 의해 put만 차단된 자동 저장 시도도 탐지한다. Playwright clock으로 디바운스보다 긴 시간을 진행한다.
+  정상 v1/v2 2종은 읽기/이동만으로 원본 무변경, 명시적 편집 저장·타이·Undo/Redo·새로고침을 검증한다.
+  추가 1종은 이전 정상 편집 세션이 메모리에 남아 있어도 같은 ID의 손상 저장본을 재검증하고 보존함을 확인한다.
+- 기존 13종(정상 생성·편집·저장·백업/가져오기 검증 포함)은 유지하며 timeout 증가/삭제/skip 없음.
+- typecheck/lint/check:architecture/build exit 0, 아키텍처 50 modules / 128 deps,
+  경계 43파일 위반 0. 초기 신규 테스트 계측의 Window 타입 오류/unused fixture 경고는 수정 후 재검증했다.
+- `npm run test:e2e`: 프로덕션 서버 시작 시 **listen EPERM 0.0.0.0:3010**, exit 1.
+  **이번 버전 23종 전부 미실행**이며 브라우저 원본 보존을 검증 완료로 간주하지 않는다.
+- `npm run test:e2e -- --list`: exit 0, **23종/6파일** 수집 확인.
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 검증/범위: 새 전체 E2E 23종, Safari/모바일·실제 오디오/SVG,
+강제 종료·직접 URL 이탈·뒤로가기의 미저장 정상 편집 보존과 정상 저장본 간 다중 탭 충돌.
+이번 atomic save guard는 읽을 수 없는 기존 레코드를 보호하며 정상 레코드 간 충돌 병합은 하지 않는다.
+원시 백업 UI/자동 복구는 미구현이고 실패 원본은 수정 없이 보관한다.

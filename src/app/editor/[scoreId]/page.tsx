@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest } from "@/application";
+import { ScoreReadError, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest } from "@/application";
 import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
@@ -61,14 +61,49 @@ const panel: React.CSSProperties = {
 
 export default function EditorPage() {
   const params = useParams<{ scoreId: string }>();
-  const router = useRouter();
   const scoreId = params?.scoreId ?? "demo-score";
+  return <EditorLoader key={scoreId} scoreId={scoreId} />;
+}
+
+/** The editing workspace and autosave only mount after a successful validated read. */
+function EditorLoader({ scoreId }: { scoreId: string }) {
+  const [load, setLoad] = useState<{ ready: boolean; error?: { code: string; message: string } }>({ ready: false });
+  const repository = getScoreRepository();
+  useEffect(() => {
+    let active = true;
+    openOrCreateScore(repository, { id: scoreId, createdAt: new Date().toISOString() })
+      .then(({ score }) => {
+        if (!active) return;
+        scoreStore.init(score);
+        setLoad({ ready: true });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoad({ ready: false, error: error instanceof ScoreReadError
+          ? { code: error.code, message: error.message }
+          : { code: "OPEN_FAILED", message: "악보를 열지 못했습니다." } });
+      });
+    return () => { active = false; };
+  }, [repository, scoreId]);
+  if (load.error) return (
+    <main style={page} data-testid="score-open-error">
+      <h1>악보를 열 수 없습니다</h1>
+      <p role="alert">{load.error.code}: {load.error.message}</p>
+      <p>저장본을 변경하지 않았습니다. 새 악보 생성과 자동 저장을 시작하지 않습니다.</p>
+      <Link href="/library">악보함으로 돌아가기</Link>
+    </main>
+  );
+  if (!load.ready) return <main style={page}><p>준비 중…</p></main>;
+  return <EditorWorkspace key={scoreId} />;
+}
+
+function EditorWorkspace() {
+  const router = useRouter();
   const session = useScoreState();
   const [durationTicks, setDurationTicks] = useState(960);
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState("");
   const rootRef = useRef<HTMLElement>(null);
   const showPosition = useCallback((position: PlaybackPosition) => {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
@@ -76,7 +111,7 @@ export default function EditorPage() {
   const repository = getScoreRepository();
   const autosave = useRef<AutosaveHandle | null>(null);
   const navigationPending = useRef(false);
-  const saveStatus = useAutosave(repository, 400, autosave);
+  const saveStatus = useAutosave(repository, 400, autosave, true);
 
   async function leaveEditor(href: string) {
     if (navigationPending.current) return;
@@ -91,27 +126,6 @@ export default function EditorPage() {
       navigationPending.current = false;
     }
   }
-
-  useEffect(() => {
-    let active = true;
-    const existing = scoreStore.getState();
-    if (existing?.current.id === scoreId) return;
-
-    openOrCreateScore(repository, {
-      id: scoreId,
-      createdAt: new Date().toISOString(),
-    })
-      .then((result) => {
-        if (active) scoreStore.init(result.score);
-      })
-      .catch(() => {
-        if (active) setLoadError("악보를 불러오지 못했습니다.");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [repository, scoreId]);
 
   const addPitch = useCallback(
     (pitch: Pitch) => {
@@ -269,10 +283,6 @@ export default function EditorPage() {
 
       <ScoreSettings score={score} onCommand={runCommand} />
       <PlaybackControls score={score} onPosition={showPosition} />
-
-      {loadError ? (
-        <p style={{ color: "#b91c1c", fontSize: 13 }}>{loadError}</p>
-      ) : null}
 
       <div style={{ ...panel, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" style={button} onClick={() => scoreStore.undo()}>

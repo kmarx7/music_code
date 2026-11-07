@@ -12,7 +12,24 @@ export interface ScoreSummary {
  */
 export interface ScoreRepository {
   list(): Promise<ScoreSummary[]>;
+  /** null only for absent IDs; unreadable records reject with ScoreReadError. */
   load(id: string): Promise<Score | null>;
   save(score: Score): Promise<void>;
   delete(id: string): Promise<void>;
+}
+
+export type ScoreReadErrorCode =
+  | "INVALID_RECORD"
+  | "INVALID_JSON"
+  | "INVALID_SHAPE"
+  | "INVALID_SCORE"
+  | "UNSUPPORTED_SCHEMA"
+  | "STORAGE_READ_ERROR";
+
+/** Storage failures are never equivalent to a missing score. No raw data is rewritten. */
+export class ScoreReadError extends Error {
+  constructor(public readonly code: ScoreReadErrorCode, message: string) {
+    super(message);
+    this.name = "ScoreReadError";
+  }
 }

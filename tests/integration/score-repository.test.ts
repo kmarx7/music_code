@@ -91,7 +91,7 @@ describe("IndexedDB ScoreRepository", () => {
     await repository.save(score);
     await putRaw(dbName, { id: "corrupt", updatedAt: score.updatedAt, json: "{not-json" });
 
-    expect(await repository.load("corrupt")).toBeNull();
+    await expect(repository.load("corrupt")).rejects.toMatchObject({ code: "INVALID_JSON" });
     expect(await repository.list()).toHaveLength(0);
   });
 
@@ -106,7 +106,7 @@ describe("IndexedDB ScoreRepository", () => {
       json: serializeScore({ ...score, schemaVersion: 999 }),
     });
 
-    expect(await repository.load("schema")).toBeNull();
+    await expect(repository.load("schema")).rejects.toMatchObject({ code: "UNSUPPORTED_SCHEMA" });
   });
 });
 

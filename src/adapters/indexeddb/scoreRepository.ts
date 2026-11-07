@@ -1,4 +1,4 @@
-import type { ScoreRepository, ScoreSummary } from "@/application/ports";
+import { ScoreReadError, type ScoreRepository, type ScoreSummary } from "@/application/ports";
 import type { Score } from "@/domain/score/types";
 import { deserializeScore } from "@/domain/score/serialize";
 import { serializeScore } from "@/domain/score/serialize";
@@ -11,6 +11,22 @@ interface StoredScore {
   id: string;
   updatedAt: string;
   json: string;
+}
+
+
+/** Validate the envelope and canonical content without modifying the raw record. */
+function readStoredScore(record: unknown, expectedId?: string): Score {
+  if (!record || typeof record !== "object" || !("id" in record) ||
+      typeof record.id !== "string" || !("json" in record) || typeof record.json !== "string" ||
+      !("updatedAt" in record) || typeof record.updatedAt !== "string") {
+    throw new ScoreReadError("INVALID_RECORD", "저장된 레코드 구조가 올바르지 않습니다.");
+  }
+  const parsed = deserializeScore(record.json);
+  if (!parsed.ok) throw new ScoreReadError(parsed.code, parsed.message);
+  if (parsed.score.id !== record.id || (expectedId !== undefined && record.id !== expectedId)) {
+    throw new ScoreReadError("INVALID_RECORD", "저장된 ID와 악보 ID가 일치하지 않습니다.");
+  }
+  return parsed.score;
 }
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -37,7 +53,7 @@ function openDatabase(dbName: string): Promise<IDBDatabase> {
 /**
  * ScoreRepository의 IndexedDB 구현.
  * 저장 시 canonical Score를 직렬화하고, 읽을 때 deserializeScore로 검증한다.
- * 손상되었거나 미지원 버전인 레코드는 조용히 덮어쓰지 않고 목록에서 제외/무시한다.
+ * 손상되었거나 미지원 버전인 레코드는 조용히 덮어쓰지 않고 목록에서 제외하며, 직접 load/save는 구분 가능한 오류로 거부한다.
  */
 export function createIndexedDbScoreRepository(options?: {
   dbName?: string;
@@ -52,7 +68,7 @@ export function createIndexedDbScoreRepository(options?: {
 
   async function withStore<T>(
     mode: IDBTransactionMode,
-    run: (store: IDBObjectStore) => IDBRequest<T>,
+    run: (store: IDBObjectStore) => IDBRequest<T> | Promise<T>,
   ): Promise<T> {
     const handle = await db();
     const transaction = handle.transaction(STORE_NAME, mode);
@@ -62,8 +78,9 @@ export function createIndexedDbScoreRepository(options?: {
       transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
       transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
     });
+    const operation = run(transaction.objectStore(STORE_NAME));
     const [result] = await Promise.all([
-      requestToPromise(run(transaction.objectStore(STORE_NAME))), completed,
+      operation instanceof Promise ? operation : requestToPromise(operation), completed,
     ]);
     return result;
   }
@@ -77,26 +94,26 @@ export function createIndexedDbScoreRepository(options?: {
 
       const summaries: ScoreSummary[] = [];
       for (const record of records) {
-        const parsed = deserializeScore(record.json);
-        if (!parsed.ok) continue;
-        summaries.push({
-          id: parsed.score.id,
-          title: parsed.score.title,
-          updatedAt: parsed.score.updatedAt,
-        });
+        try {
+          const score = readStoredScore(record);
+          summaries.push({ id: score.id, title: score.title, updatedAt: score.updatedAt });
+        } catch (error) {
+          if (!(error instanceof ScoreReadError)) throw error;
+        }
       }
 
       return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
 
     async load(id: string): Promise<Score | null> {
-      const record = await withStore<StoredScore | undefined>(
-        "readonly",
-        (store) => store.get(id) as IDBRequest<StoredScore | undefined>,
-      );
-      if (!record) return null;
-      const parsed = deserializeScore(record.json);
-      return parsed.ok ? parsed.score : null;
+      let record: unknown;
+      try {
+        record = await withStore<unknown>("readonly", (store) => store.get(id));
+      } catch {
+        throw new ScoreReadError("STORAGE_READ_ERROR", "IndexedDB에서 악보를 읽지 못했습니다.");
+      }
+      if (record === undefined) return null;
+      return readStoredScore(record, id);
     },
 
     async save(score: Score): Promise<void> {
@@ -107,7 +124,22 @@ export function createIndexedDbScoreRepository(options?: {
       };
       await withStore<IDBValidKey>(
         "readwrite",
-        (store) => store.put(record) as IDBRequest<IDBValidKey>,
+        (store) => new Promise<IDBValidKey>((resolve, reject) => {
+          const existing = store.get(score.id);
+          existing.onerror = () => reject(existing.error);
+          existing.onsuccess = () => {
+            try {
+              // Check and put in the same transaction: a late unreadable record is protected too.
+              if (existing.result !== undefined) readStoredScore(existing.result, score.id);
+              const write = store.put(record);
+              write.onsuccess = () => resolve(write.result);
+              write.onerror = () => reject(write.error);
+            } catch (error) {
+              reject(error);
+              store.transaction.abort();
+            }
+          };
+        }),
       );
     },
 

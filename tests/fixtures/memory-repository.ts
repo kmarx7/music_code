@@ -1,4 +1,4 @@
-import type { ScoreRepository, ScoreSummary } from "@/application/ports";
+import { ScoreReadError, type ScoreRepository, type ScoreSummary } from "@/application/ports";
 import type { Score } from "@/domain/score/types";
 import { deserializeScore, serializeScore } from "@/domain/score/serialize";
 
@@ -25,9 +25,10 @@ export class MemoryScoreRepository implements ScoreRepository {
 
   async load(id: string): Promise<Score | null> {
     const json = this.records.get(id);
-    if (!json) return null;
+    if (json === undefined) return null;
     const parsed = deserializeScore(json);
-    return parsed.ok ? parsed.score : null;
+    if (!parsed.ok) throw new ScoreReadError(parsed.code, parsed.message);
+    return parsed.score;
   }
 
   async save(score: Score): Promise<void> {

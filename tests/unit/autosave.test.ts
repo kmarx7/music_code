@@ -24,14 +24,14 @@ afterEach(async () => {
   vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks();
 });
 
-function AutosaveHarness({ repository, control }: { repository: ScoreRepository; control: { current: AutosaveHandle | null } }) {
-  useAutosave(repository, 400, control);
+function AutosaveHarness({ repository, control, initiallySaved }: { repository: ScoreRepository; control: { current: AutosaveHandle | null }; initiallySaved: boolean }) {
+  useAutosave(repository, 400, control, initiallySaved);
   return null;
 }
 
-function mount(repository: ScoreRepository) {
+function mount(repository: ScoreRepository, initiallySaved = false) {
   const control = { current: null as AutosaveHandle | null };
-  AutosaveHarness({ repository, control });
+  AutosaveHarness({ repository, control, initiallySaved });
   const result = hooks.setup?.();
   if (typeof result !== "function") throw new Error("autosave effect missing");
   cleanup = result;
@@ -215,4 +215,27 @@ it("explicit flush reports failure, preserves the session and can be retried", a
   expect(await autosave.flush()).toBe(true);
   expect(hooks.status).toBe("saved");
   expect(await repository.load("score-1")).toEqual(edited!.current);
+});
+
+it("a successfully loaded baseline is not automatically rewritten on flush or cleanup", async () => {
+  const repository = new MemoryScoreRepository();
+  const save = vi.spyOn(repository, "save");
+  const autosave = mount(repository, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(await autosave.flush()).toBe(true);
+  cleanup?.(); cleanup = undefined;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("edits after a loaded baseline still save and support undo/redo", async () => {
+  const repository = new MemoryScoreRepository();
+  await repository.save(scoreStore.getState()!.current);
+  mount(repository, true);
+  changePitch(); await vi.advanceTimersByTimeAsync(400);
+  expect(hooks.status).toBe("saved");
+  scoreStore.undo(); await vi.advanceTimersByTimeAsync(400);
+  expect((await repository.load("score-1"))!.parts[0].measures[0].events[0]).toMatchObject({ pitch: { midi: 60 } });
+  scoreStore.redo(); await vi.advanceTimersByTimeAsync(400);
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
 });

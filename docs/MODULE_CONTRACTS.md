@@ -274,3 +274,37 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   문서 계약의 호환 가능한 추가이며 레이어/의존성/기본 아키텍처 변경은 없다.
 - 브라우저 강제 종료/탭 닫기/직접 URL 이동/브라우저 뒤로가기는 위 Link guard를 거치지 않는다.
   이 경우 비동기 cleanup 저장 완료는 보장하지 않으며 다중 탭 동시 쓰기도 이번 범위 밖이다.
+
+
+## 실패 저장본 직접 열기와 원본 보존 (2026-11-08)
+
+- `ScoreRepository.load(id): Promise<Score | null>`의 성공 반환 타입을 유지한다.
+  **null은 해당 key가 실제로 없을 때만** 반환한다. 기존 Promise 거부 경로를
+  application/ports의 `ScoreReadError`/`ScoreReadErrorCode`로 구체화한다.
+
+| 조회 상태 | 계약 | Application/UI 동작 |
+|---|---|---|
+| A. 실제 미존재 | null | 기존 정책으로 생성 가능 |
+| B. 정상 또는 지원 v1 | canonical Score(v2) | 검증 성공 후에만 편집 세션 시작 |
+| C. 손상/구조·검증 실패 | INVALID_RECORD / INVALID_JSON / INVALID_SHAPE / INVALID_SCORE 오류 | 생성·편집·자동 저장 금지 |
+| D. 미지원 버전 | UNSUPPORTED_SCHEMA 오류 | 동일, 원본 보존 |
+| E. IndexedDB 읽기 실패 | STORAGE_READ_ERROR 오류 | 동일, 부재로 추정하지 않음 |
+
+- 어댑터가 원시 envelope·문자열 JSON·canonical 검증·ID 일치를 판정하며, application은
+  읽기 오류를 전파한다. `openOrCreateScore`는 실패를 catch하여 생성으로 전환하지 않는다.
+- `save`도 기존 레코드 검증과 put을 **같은 readwrite transaction**에서 수행한다.
+  조회 후 늦게 생긴 손상/미지원 레코드 및 이전 세션의 지연 저장도 덮어쓰지 못하게 차단한다.
+  정상 저장본 간의 다중 탭 충돌 해결까지 제공하는 것은 아니다.
+- 편집기 route의 로딩/오류 화면과 편집 작업 영역은 같은 presentation 파일 안에서 수명만 분리한다.
+  성공 전에는 scoreStore.init/건반/Command UI/StaffView/useAutosave를 연결하지 않는다.
+  실패 시 오류 코드·안내와 악보함 복귀 링크만 표시한다. 이전 세션의 Score를 실패 ID로 표시하지 않는다.
+- `useAutosave`의 선택적 네 번째 `initiallySaved`는 성공적으로 읽은 baseline을 표시한다.
+  편집하지 않았다면 flush/cleanup도 저장하지 않는다. 정상 v1은 메모리 v2 변환을 유지하되,
+  읽기/이동만으로 자동 영속 마이그레이션하지 않는다. 정상 편집 후에는 기존 Command/Undo/Redo/저장을 쓴다.
+- 목록은 읽을 수 없는 레코드를 계속 제외하지만 원본을 삭제·복구·정규화하지 않는다.
+  JSON 가져오기의 새 ID가 읽을 수 없는 레코드와 충돌하는 경우도 저장을 거부한다.
+- 원시 백업 검토: 별도 읽기 전용 export로 원본 json 문자열과 envelope/추가 메타데이터를
+  보존하는 복구용 형식이 필요하다. 이번에는 자동 복구나 원시 백업 UI를 추가하지 않는다.
+  손상 데이터를 canonical Score/일반 JSON 악보 백업으로 내보내지 않으며, 원시 레코드는 그대로 둔다.
+- Score/schemaVersion 2/Part.ties 및 레이어·저장 엔진·상태 관리·생산 의존성은 불변이다.
+  이번 요구로 오류 의미를 강화했으며 포트 반환 모양 교체나 별도 읽기 음악 모델은 만들지 않는다.

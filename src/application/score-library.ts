@@ -36,7 +36,8 @@ export interface OpenScoreResult {
 }
 
 /**
- * 저장된 악보를 불러오고, 없으면 새 악보를 생성해 저장한다.
+ * 저장된 악보를 불러오고, 실제로 없을 때만 새 악보를 생성해 저장한다.
+ * ScoreReadError 등 읽기 실패는 호출자에 전달하며 새 저장을 수행하지 않는다.
  * id/시각은 경계에서 주입한다(재현성).
  */
 export async function openOrCreateScore(

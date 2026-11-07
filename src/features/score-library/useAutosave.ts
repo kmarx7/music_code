@@ -19,10 +19,11 @@ export function useAutosave(
   repository: ScoreRepository,
   delayMs = 400,
   controlRef?: RefObject<AutosaveHandle | null>,
+  initiallySaved = false,
 ): SaveStatus {
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSaved = useRef<string | null>(null);
+  const lastSaved = useRef<string | null>(initiallySaved ? JSON.stringify(scoreStore.getState()?.current) : null);
   // Preserve write order even when an older repository.save is still pending.
   const pending = useRef<Promise<void>>(Promise.resolve());
 

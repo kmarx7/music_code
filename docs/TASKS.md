@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 저장 완료 표시 회귀 수정)
+## 2. 검증 명령 결과 (최신: 2026-11-08 실패 저장본 원본 보존 수정)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 24 파일 / **240 테스트 통과**(기존 236 포함) |
-| `npm run check:architecture` | ✅ exit 0 | 46 모듈·117 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | 26 파일 / **284 테스트 통과**(기존 270 포함) |
+| `npm run check:architecture` | ✅ exit 0 | 50 모듈·128 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -296,9 +296,32 @@
   `--list`로 13종/5파일 수집 확인. Mac 수정 전 10/11을 수정 후 통과로 간주하지 않는다.
 - MODULE_CONTRACTS/TEST_PLAN 갱신, Score/Part.ties/schemaVersion 2/Command/아키텍처 유지. GitHub push 없음.
 
+### 4.14 Phase 1 인수 차단 — 실패 저장본 직접 열기 원본 보존 (2026-11-08)
+
+- 기준 `8141c6b`, clean. 사용자 제공 기준선: 단위·통합 270개 및 Mac Chromium **13/13 통과**.
+  과거 Codex EPERM 기록은 유지한다.
+- 이전 load는 손상·미지원 레코드에도 null을 반환해 openOrCreateScore가 같은 ID로 빈 악보를
+  저장할 수 있었다. 이제 null은 실제 미존재이며 나머지는 구분 가능한 ScoreReadError로 거부한다.
+- Application은 읽기 실패를 전파한다. UI는 성공한 조회 뒤에만 편집 영역/scoreStore.init/자동 저장을
+  연결하며, 실패 시 읽기 전용 오류 화면과 악보함 복귀 링크를 제공한다.
+- save도 같은 transaction에서 기존 레코드 검증 후 put하므로 조회 후 손상 레코드가 생겨도 보존한다.
+- 정상 v1은 메모리에서 v2로 변환·검증한다. 읽기/이동만으로 원본을 자동 재저장하지 않으며,
+  정상 편집 후 기존 저장/Undo/Redo는 유지한다. 실패한 저장본은 자동 수정·삭제·마이그레이션하지 않는다.
+- 원시 백업 방식은 MODULE_CONTRACTS에 검토 기록. 손상 자료를 정상 Score로 내보내지 않고,
+  이번에는 원시 백업 UI/자동 복구를 추가하지 않는다.
+- **26파일 / 284개 통과**: 기존 270개 + 신규 14개. 기존 손상/미지원 저장소 테스트 2개는
+  null 기대 대신 명시적 오류 거부를 검증하도록 강화했다(삭제/skip 없음).
+- typecheck/lint/architecture/build exit 0, 아키텍처 50 modules / 128 deps, 경계 43파일 위반 0.
+- 실제 IndexedDB 레코드 주입 → 편집기 라우트 → 쓰기 0회·원본 불변 검사 E2E 7종 및
+  정상 v1/v2 원본 보존·편집/Undo/Redo/새로고침 2종 추가. 이전 정상 세션 캐시가 남아 있는 같은 ID 재진입 1종도 추가. 기존 13종 유지, 총 23종/6파일 수집 확인.
+- 전체 test:e2e는 **listen EPERM 0.0.0.0:3010**, exit 1로 **23종 미실행**.
+  구현·실행 가능한 로컬 검사는 완료했으나 새 브라우저 원본 보존 검증 전 최종 인수 완료로 표시하지 않는다.
+- DATA_MODEL/MODULE_CONTRACTS/TEST_PLAN 갱신. Score 모델·Part.ties·schemaVersion 2·아키텍처 유지.
+  포트 서명과 레이어를 유지한 오류 처리 강화여서 구조 변경 ADR은 추가하지 않았다. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 이동 전 저장 수정 후 총 13종을 검증한다(수정 전 591e02e Mac 결과 10/11).
+1. Mac 일반 터미널에서 아래 명령으로 원본 보존 수정 후 총 23종을 검증한다(기준 8141c6b Mac 결과 13/13).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
