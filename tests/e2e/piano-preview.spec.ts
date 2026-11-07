@@ -66,6 +66,32 @@ test("미리듣기 오디오 실패가 음표 입력·저장·재시도를 차�
   await expect(page.getByText(/음표 2개/)).toBeVisible();
 });
 
+test("오디오 실패 중 동일 음 반복 입력도 Undo/Redo·저장·복원을 유지한다", async ({ page }) => {
+  const id = "e2e-piano-preview-repeated";
+  await auditAudio(page, true); await page.goto(`/editor/${id}`);
+  const key = page.getByRole("button", { name: "MIDI 60", exact: true });
+  for (let press = 0; press < 3; press += 1) await key.click();
+  await expect(page.getByTestId("piano-preview-message")).toContainText("음표 입력과 저장은 계속됩니다");
+  await expect.poll(() => pitches(page, id)).toEqual([60, 60, 60]);
+  const before = await storedScore(page, id);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(() => pitches(page, id)).toEqual([60, 60]);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect.poll(() => storedScore(page, id)).toEqual(before);
+  await page.reload();
+  await expect(page.getByText(/음표 3개/)).toBeVisible();
+  expect(await storedScore(page, id)).toEqual(before);
+  await page.evaluate(() => { (window as Window & { pianoAudioAudit?: AudioAudit }).pianoAudioAudit!.failOscillator = false; });
+  await key.click(); await heard(page, 60);
+  await expect(page.getByTestId("piano-preview-message")).not.toContainText("시작하지 못했습니다");
+  await expect.poll(() => pitches(page, id)).toEqual([60, 60, 60, 60]);
+  const after = await storedScore(page, id);
+  expect(after.schemaVersion).toBe(2);
+  expect(after.parts[0].ties).toEqual([]);
+  const events = after.parts[0].measures.flatMap((measure: { events: { id: string }[] }) => measure.events);
+  expect(new Set(events.map((event: { id: string }) => event.id)).size).toBe(4);
+});
+
 test("미리듣기 토글은 악보 재생을 정지하거나 Score를 변경하지 않는다", async ({ page }) => {
   const id = "e2e-piano-preview-independent";
   await auditAudio(page); await page.goto(`/editor/${id}`);

@@ -24,7 +24,7 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 28 파일 / **313 테스트 통과**(기존 284 + 신규 29) |
+| `npm run test` | ✅ exit 0 | 28 파일 / **315 테스트 통과**(기존 313 + 반복 입력 회귀 2) |
 | `npm run check:architecture` | ✅ exit 0 | 51 모듈·130 의존성, 경계 44파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
@@ -359,9 +359,27 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. schemaVersion 2/Part.ties/Score 모델/기본 아키텍처/의존성 유지.
   GitHub push 없음.
 
+### 4.17 미리듣기 요구사항 재점검·반복 입력 회귀 보완 (2026-11-08)
+
+- 시작점 `47dc6cf`, clean. 이번 요청의 미리듣기 기능은 이 커밋에 이미 구현되어 있음을 확인했다.
+  PianoKeyboard/전용 Tone 미리듣기 어댑터를 재사용하며 중복 구현이나 production 코드 변경은 하지 않는다.
+- 단위 테스트 2개 추가: 동일 MIDI의 빠른 반복/무음 뒤 재입력에서도 한 음성을 재사용하고 최신 종료만 예약,
+  같은 컴퓨터 키의 별도 누름은 각각 입력·미리듣기하며 held-key repeat만 무시.
+- E2E 1종 추가: 오디오 초기화 실패 중 C4 세 번 입력 → 실제 저장 → Undo/Redo → 저장본 전체 동등성
+  → 새로고침 → 오디오 복구·같은 음 추가. schemaVersion 2/Part.ties/고유 이벤트 ID도 확인한다.
+- 전체 단위·통합 **28파일 / 315개 통과**(기존 313 유지). typecheck/lint/architecture/build exit 0.
+  아키텍처 51 modules / 130 dependencies, 경계 44파일 위반 0.
+- 기존 E2E 23종과 앞선 미리듣기 4종 유지. `--list` **28종/7파일** 수집 성공.
+  전체 `npm run test:e2e` 시도는 **listen EPERM 0.0.0.0:3010**, exit 1 → **28종 미실행**.
+  사용자 Mac 기존 23/23 결과 및 4.16의 과거 27종 미실행 기록과 구분한다.
+- 실제 스피커 출력/빠른 반복 음질/Safari/모바일 실기기 및 첫 활성화 지연은 미검증이다.
+  TEST_PLAN §17의 수동 절차 및 §18의 최신 검증 기록을 따른다.
+- Score/Command/IndexedDB/Part.ties/schemaVersion 2/전체 악보 재생 정책/의존성/아키텍처 유지.
+  문서·테스트만 보완하며 GitHub push, Vercel 접근·설정 변경·배포는 수행하지 않는다.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 미리듣기 추가 후 전체 27종을 검증한다(사용자 기준선 23/23).
+1. Mac 일반 터미널에서 아래 명령으로 반복 입력 회귀 추가 후 전체 28종을 검증한다(사용자 기준선 23/23).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code

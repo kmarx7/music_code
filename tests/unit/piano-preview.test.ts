@@ -69,6 +69,23 @@ it("rapid notes share one voice and cancel old note-offs instead of cutting off 
   expect(zeros).toHaveLength(1); expect(zeros[0].time).toBeCloseTo(0.28);
   expect(audio.gains[0].param.cancelAndHoldAtTime).toHaveBeenCalledTimes(3);
 });
+it("repeated same-pitch inputs replace the release envelope and remain playable after silence", async () => {
+  const preview = create();
+  for (const time of [0, 40, 80, 400]) {
+    vi.setSystemTime(time);
+    expect(await preview.play(60)).toBe(true);
+  }
+  expect(audio.oscillators).toHaveLength(1);
+  expect(audio.oscillators[0].start).toHaveBeenCalledTimes(1);
+  expect(audio.oscillators[0].frequency.events).toHaveLength(4);
+  expect(audio.oscillators[0].frequency.events.every((event) => Math.abs(event.value - 261.625565) < 0.001)).toBe(true);
+  const param = audio.gains[0].param;
+  expect(param.cancelAndHoldAtTime.mock.calls.map(([time]) => time)).toEqual([0, 0.04, 0.08, 0.4]);
+  const releases = param.events.filter((event) => event.time >= 0.4 && event.value === 0);
+  expect(releases).toHaveLength(1);
+  expect(releases[0].time).toBeCloseTo(0.6);
+  expect(vi.getTimerCount()).toBe(0);
+});
 it("an initial burst keeps only the latest preview without replaying delayed old inputs", async () => {
   const preview = create();
   const results = await Promise.all([preview.play(60), preview.play(62), preview.play(64)]);

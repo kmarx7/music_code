@@ -63,6 +63,11 @@ it("computer keys audition while repeat events do not multiply entries", () => {
   expect(onPitch.mock.calls.map((call) => call[0].midi)).toEqual([60, 62]);
   expect(mock.play.mock.calls.map((call) => call[0])).toEqual([60, 62]);
 });
+it("separate presses of the same key each insert and audition without being treated as held-key repeat", () => {
+  keyboard("a"); keyboard("a"); keyboard("a", true); keyboard("a");
+  expect(onPitch.mock.calls.map(([pitch]) => pitch.midi)).toEqual([60, 60, 60]);
+  expect(mock.play.mock.calls.map(([midi]) => midi)).toEqual([60, 60, 60]);
+});
 it("muting cancels preview only and leaves note input active", () => {
   const toggle = find((element) => element.props["aria-label"] === "입력 소리 미리듣기");
   emit(toggle, "onChange", { target: { checked: false } });

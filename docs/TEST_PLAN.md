@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 23종 + 피아노 미리듣기 4종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 23/23 통과 / 미리듣기 추가 후 27종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 23종 + 피아노 미리듣기 5종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 23/23 통과 / 반복 입력 회귀 추가 후 28종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 28 파일 / 313 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 28 파일 / 315 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -571,3 +571,27 @@ npm run test:e2e
    느린 최초 번들 로딩에서는 첫 입력이 지연되거나 다음 사용자 동작이 필요할 수 있다.
 7. 브라우저/OS/장치·첫 입력 지연·청취 결과를 기록한다. 실제 오디오·Safari·모바일 실기기는
    이번 자동 검사로 통과 처리하지 않는다. 지속음/동시 다성 미리듣기는 이번 짧은 단선율 입력음 범위 밖이다.
+
+
+## 18. 미리듣기 재점검·동일 음 반복 및 저장/히스토리 회귀 (2026-11-08)
+
+- 기준 `47dc6cf`에 기능이 이미 있으므로 production 코드·의존성·배포 설정은 변경하지 않는다.
+- 단위 2개 보완: 어댑터의 동일 음 빠른 반복/종료 후 재입력(단일 음성·주파수·최신 종료),
+  UI의 별도 동일 키 누름과 held-key repeat 구분. 미리듣기 단위는 어댑터 21개 + UI 10개다.
+- 전체 단위·통합 **315개 / 28파일 통과**. typecheck/lint/check:architecture/build exit 0,
+  51 modules / 130 dependencies, 경계 44파일 위반 0. 기존 313개를 유지한다.
+- `piano-preview.spec.ts` 1종 추가: 오디오 초기화 실패 상태의 동일 음 3회 입력·저장,
+  Undo/Redo 후 IndexedDB Score 전체 일치, 새로고침 복원, 오디오 복구 후 같은 음 재입력,
+  schemaVersion 2·Part.ties·ID 중복 부재. 단순 수량뿐 아니라 저장된 전체 Score를 비교한다.
+- 이전 미리듣기 4종 및 기준선 E2E 23종 유지. 전체 **28종/7파일** 수집 성공.
+  `npm run test:e2e`는 **listen EPERM 0.0.0.0:3010**으로 서버 시작 실패(exit 1), **28종 미실행**.
+  신규 E2E 통과나 실제 소리 검증을 주장하지 않는다. 삭제/skip/timeout 증가는 없다.
+- Mac 일반 터미널에서 아래 명령으로 전체 28종을 재실행한다. 실제 청취/Safari/모바일 실기기
+  검증은 §17 절차를 따른다. 짧은 단일 음성/최신 음 우선 정책 및 기존 Score 편집 시 재생 정지는 유지한다.
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+이번 작업은 GitHub push 및 Vercel 접근·설정 변경·배포를 수행하지 않는다.
