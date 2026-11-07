@@ -18,13 +18,13 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 악보 설정)
+## 2. 검증 명령 결과 (최신: 2026-11-08 저장 완료 표시 회귀 수정)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | Phase 1-E 설정: 23 파일 / **236 테스트 통과**(기존 170 포함) |
+| `npm run test` | ✅ exit 0 | 24 파일 / **240 테스트 통과**(기존 236 포함) |
 | `npm run check:architecture` | ✅ exit 0 | 46 모듈·117 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
@@ -213,10 +213,28 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. 구조 변경이 없어 ADR 추가·기준 아키텍처 수정은 필요하지 않았다.
 - 남은 검증: Mac 전체 9종, 실제 SVG/오디오·Safari/모바일. GitHub push 없음.
 
+### 4.9 Phase 1-E — 저장 완료 표시 회귀 수정 (2026-11-08)
+
+- 조사 시작: `a4fc0ac`, clean. 사용자 Mac에서 9개 중 8개 통과(신규 설정 2개 통과),
+  기존 저장/새로고침 시나리오만 1920 ticks 확인에 실패.
+- trace/error-context에서 실제 클릭은 음표 칩이고 편집 패널도 열렸음을 확인했다.
+  편집 전후 C4/960 → C#4/1920 → 새로고침 후 C4/960의 변화와,
+  마지막 길이 변경 약 43ms 후 reload가 시작된 기록을 확인했다.
+- 원인: 400ms 자동 저장 대기 중 이전 "저장됨" 표시가 유지되고 이전 저장 완료도 최신 편집을
+  saved로 표시할 수 있었다. 악보 설정 버튼의 aria-pressed 충돌이 아니다.
+- 기존 useAutosave만 최소 보완: 변경 즉시 saving, 최신 snapshot 저장 완료 시에만 saved,
+  저장된 내용으로 Undo하면 중복 쓰기 없이 saved 복귀. 저장소/모델/명령/아키텍처 변경 없음.
+- 실패 E2E의 DOM 순서 선택을 C4/C#4 정확한 접근성 이름으로 바꾸고,
+  reload 전에 IndexedDB의 실제 음정/길이/위치를 검증한다. 기대값/timeout 유지, 삭제/skip 없음.
+- 신규 자동 저장 4종 중 수정 전 2종 실패로 재현, 수정 후 기존 236 포함 **240개/24파일 통과**.
+  typecheck/lint/architecture/build 통과. 자세한 분석은 TEST_PLAN §11.
+- 이번 E2E 재실행은 Codex의 listen EPERM으로 9종 미실행. Mac 수정 버전의 통과는 아직 확인하지 않았다.
+- 원래 실패 trace와 error-context는 `/tmp/music-score-e2e-a4fc0ac/`에 보존했다. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. 기존 쉼표 포함 7종은 사용자 Mac 통과 확인 완료. 설정 추가 후 `npm run test:e2e`로
-   총 9종을 Mac 일반 터미널에서 다시 검증한다.
+1. Mac 일반 터미널에서 `npm run test:e2e`로 저장 완료 표시 수정 후 전체 9종을 다시 검증한다.
+   수정 전 a4fc0ac 결과는 사용자 8/9 통과이며, 수정 후 성공으로 간주하지 않는다.
 2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
 3. Phase 1 인수 기준과 남은 지원 환경 검증을 확인한다. 기존 이벤트의 박자 변경·중간 조표/박자
    변경이 필요하면 영향 분석과 사전 승인 후 진행한다.

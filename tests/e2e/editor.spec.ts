@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { storedScore } from "./storage";
 
 const DB_NAME = "music-score-platform";
 const STORE_NAME = "scores";
@@ -48,7 +49,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
   await page.getByRole("button", { name: "MIDI 62" }).click();
   await expect(page.getByText(/음표 2개/)).toBeVisible();
 
-  await page.locator("button[aria-pressed]").first().click();
+  await page.getByRole("button", { name: "C4", exact: true }).click();
   await expect(page.getByText("선택한 음표 편집")).toBeVisible();
   await page.getByRole("button", { name: "반음 올리기" }).click();
   await expect(page.getByText(/C#4 · /)).toBeVisible();
@@ -58,14 +59,29 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
 
   await expect(page.getByText("저장됨")).toBeVisible();
 
+  // 이전 저장 상태가 아니라 이번 음정/길이 변경이 실제로 저장됐는지 확인한다.
+  await expect.poll(async () => {
+    const saved = await storedScore(page, scoreId);
+    if (!saved) return null;
+    return saved.parts[0].measures.flatMap((measure: { events: { kind: string; pitch: { midi: number }; startTick: number; durationTicks: number }[] }) => measure.events)
+      .map((note: { pitch: { midi: number }; startTick: number; durationTicks: number }) => ({
+        midi: note.pitch.midi, startTick: note.startTick, durationTicks: note.durationTicks,
+      }));
+  }).toEqual([
+    { midi: 61, startTick: 0, durationTicks: 1920 },
+    { midi: 62, startTick: 1920, durationTicks: 960 },
+  ]);
+
   await page.reload();
   await expect(page.getByText(/음표 2개/)).toBeVisible();
-  await page.locator("button[aria-pressed]").first().click();
+  const restoredNote = page.getByRole("button", { name: "C#4", exact: true });
+  await restoredNote.click();
+  await expect(restoredNote).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/1920 ticks/)).toBeVisible();
 
   await page.goto("/library");
   await expect(page.getByRole("link", { name: "열기" })).toHaveCount(1);
-  await page.getByRole("link", { name: "열기" }).first().click();
+  await page.getByRole("link", { name: "열기", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/editor/${scoreId}$`));
   await expect(page.getByText(/음표 2개/)).toBeVisible();
 

@@ -19,7 +19,7 @@
 | 브라우저 E2E | 기존 7종 + 악보 설정 2종 | Playwright(Chromium, 프로덕션 빌드) | 기존 7종 사용자 Mac 통과 / 설정 추가 후 9종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 23 파일 / 236 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 24 파일 / 240 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -320,3 +320,29 @@ npm run test:e2e
 
 남은 검증: 전체 9개 브라우저 회귀·설정 중 오디오 초기화 취소·실제 SVG 및 오디오 출력,
 Safari/모바일 실기기. 기존 이벤트의 박자 재배치와 악보 중간 조표/박자 변경은 구현하지 않는다.
+
+## 11. 저장 완료 표시 회귀 수정 (2026-11-08)
+
+- 사용자 Mac 결과: `a4fc0ac`에서 기존 1종 실패, 설정 신규 2종 포함 **8/9 통과**.
+  실패는 `editor.spec.ts`의 새로고침 후 `1920 ticks` 확인이다.
+- 실제 `trace.zip`과 `error-context.md` 분석:
+  `aria-pressed`는 음표/쉼표 칩에만 있으며 설정 버튼에는 없다.
+  첫 클릭은 C4 칩, 새로고침 후 클릭도 C4 칩으로 해석됐다. 선택 패널은 열려 있었다.
+  새로고침 전 C#4/1920 표시 assertion은 통과했지만 이후 화면은 C4/960이었다.
+- trace의 길이 변경 클릭 시각 13298.911ms, reload 시작 13341.708ms(약 43ms 간격).
+  자동 저장 디바운스는 400ms인데 이전 편집의 "저장됨" 표시가 남아 완료 assertion을 통과했다.
+  설정 UI가 선택 대상을 바꾼 것이 아니라 자동 저장 상태가 최신 편집을 반영하지 못한 문제다.
+- 수정: store 변경 시 즉시 `saving`, 저장 완료 시 현재 Score와 저장한 snapshot이 같을 때만 `saved`.
+  Undo로 이미 저장된 내용에 돌아왔을 때는 중복 저장 없이 `saved`로 복귀한다.
+- 신규 `tests/unit/autosave.test.ts` 4종:
+  디바운스 전 stale saved 무효화와 음정/길이 저장 동등성, 이전 in-flight 저장 완료의 stale saved 차단,
+  저장된 내용으로 Undo 시 중복 저장 억제, 저장 실패 error 상태.
+  React hooks는 효과/상태 테스트 대역으로 실행하며 실제 DOM 렌더는 E2E 검증 대상으로 남긴다.
+- 수정 전 신규 4개 중 **2개 실패**로 문제를 재현했고, 수정 후 **기존 236 + 신규 4 = 240개/24파일 통과**.
+- E2E는 원래 기대값 1920을 유지하며 C4/C#4 정확한 이름으로 선택한다.
+  새로고침 전 실제 IndexedDB의 MIDI/시작 tick/길이를 확인하도록 보강했다. timeout 증가·삭제·skip 없음.
+- typecheck/lint/check:architecture/build 통과. 아키텍처 46 modules / 117 deps, 경계 39파일 위반 0.
+- 전체 E2E 실행 시도: `listen EPERM 0.0.0.0:3010`, exit 1 → 수정 버전의 9종 **미실행**.
+  기존 사용자 8/9 결과와 구분한다. Mac 일반 터미널에서 `npm run test:e2e` 재실행 필요.
+- 원래 실패 증거는 재실행 전 `/tmp/music-score-e2e-a4fc0ac/{trace.zip,error-context.md}`에 보존했다.
+  임시 보관 경로이며 Git에는 포함하지 않는다.

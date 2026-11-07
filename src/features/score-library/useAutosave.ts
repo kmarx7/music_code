@@ -23,19 +23,27 @@ export function useAutosave(
       const state = scoreStore.getState();
       if (!state) return;
       const serialized = JSON.stringify(state.current);
-      if (serialized === lastSaved.current) return;
+      if (serialized === lastSaved.current) {
+        setStatus("saved");
+        return;
+      }
 
       setStatus("saving");
       try {
         await repository.save(state.current);
         lastSaved.current = serialized;
-        setStatus("saved");
+        // 이전 저장이 끝나는 동안 새 편집이 생겼다면 아직 최신 내용은 저장 중이다.
+        if (JSON.stringify(scoreStore.getState()?.current) === serialized) {
+          setStatus("saved");
+        }
       } catch {
         setStatus("error");
       }
     };
 
     const unsubscribe = scoreStore.subscribe(() => {
+      // 디바운스 대기 중에도 이전 편집의 "저장됨"을 표시하지 않는다.
+      setStatus("saving");
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         void flush();
