@@ -5,6 +5,7 @@ import type {
   ScoreEvent,
 } from "@/domain/score/types";
 import { validateScore } from "@/domain/score/validate";
+import { isSupportedKeySignature } from "@/domain/music-theory";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
 import {
   chainIdsOf,
@@ -441,6 +442,34 @@ export function applyEditCommand(
   command: EditCommand,
 ): CommandResult {
   switch (command.type) {
+    case "SetTempo":
+      return finalize({ ...score, tempoBpm: command.tempoBpm, updatedAt: command.updatedAt });
+
+    case "SetKeySignature": {
+      const part = partOf(score, command.partId);
+      if (!part) return fail("PART_NOT_FOUND", "파트를 찾을 수 없습니다.");
+      if (!isSupportedKeySignature(command.keySignature)) {
+        return fail("INVALID_KEY_SIGNATURE", "으뜸음·장단조·조표가 일치하는 조표를 선택해 주세요.");
+      }
+      // 조표 변경은 조옮김이 아니다. Pitch/MIDI·음표 위치·타이 링크를 그대로 보존한다.
+      return finalize({
+        ...replacePart(score, part.id, (current) => ({ ...current, keySignature: { ...command.keySignature } })),
+        updatedAt: command.updatedAt,
+      });
+    }
+
+    case "SetTimeSignature": {
+      const part = partOf(score, command.partId);
+      if (!part) return fail("PART_NOT_FOUND", "파트를 찾을 수 없습니다.");
+      if (score.parts.some((candidate) => candidate.ties.length > 0 || candidate.measures.some((measure) => measure.events.length > 0))) {
+        return fail("TIME_SIGNATURE_REQUIRES_EMPTY_SCORE", "박자는 음표·쉼표가 없는 빈 악보에서만 변경할 수 있습니다.");
+      }
+      return finalize({
+        ...replacePart(score, part.id, (current) => ({ ...current, timeSignature: { ...command.timeSignature } })),
+        updatedAt: command.updatedAt,
+      });
+    }
+
     case "RenameScore": {
       const title = command.title.trim();
       if (!title) return fail("INVALID_TITLE", "제목을 입력해 주세요.");

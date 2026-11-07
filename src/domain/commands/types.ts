@@ -1,4 +1,4 @@
-import type { NoteEvent, RestEvent } from "@/domain/score/types";
+import type { KeySignature, NoteEvent, RestEvent, TimeSignature } from "@/domain/score/types";
 
 export type NotePatch = Partial<
   Pick<NoteEvent, "pitch" | "startTick" | "durationTicks" | "velocity">
@@ -6,6 +6,9 @@ export type NotePatch = Partial<
 
 export type EditCommand =
   | { type: "RenameScore"; title: string; updatedAt: string }
+  | { type: "SetTempo"; tempoBpm: number; updatedAt: string }
+  | { type: "SetKeySignature"; partId: string; keySignature: KeySignature; updatedAt: string }
+  | { type: "SetTimeSignature"; partId: string; timeSignature: TimeSignature; updatedAt: string }
   /**
    * `measureId`는 note가 **시작하는** 마디다.
    * 길이가 마디 끝을 넘으면 마디 경계에서 분할하고 타이로 연결한다(ADR-009).
@@ -30,6 +33,8 @@ export type EditCommand =
 
 export type CommandErrorCode =
   | "INVALID_TITLE"
+  | "INVALID_KEY_SIGNATURE"
+  | "TIME_SIGNATURE_REQUIRES_EMPTY_SCORE"
   | "PART_NOT_FOUND"
   | "MEASURE_NOT_FOUND"
   | "NOTE_NOT_FOUND"

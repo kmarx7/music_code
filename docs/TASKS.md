@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 쉼표 편집)
+## 2. 검증 명령 결과 (최신: 2026-11-08 악보 설정)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | Phase 1-E 쉼표: 20 파일 / **170 테스트 통과**(기존 129 포함) |
-| `npm run check:architecture` | ✅ exit 0 | 44 모듈·110 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | Phase 1-E 설정: 23 파일 / **236 테스트 통과**(기존 170 포함) |
+| `npm run check:architecture` | ✅ exit 0 | 46 모듈·117 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -36,7 +36,7 @@
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
-| MVP-005 | 기본 편집 | Partial | 음표 편집·마디·타이·제목 + 쉼표 삽입/선택/삭제/길이/위치 변경 구현. 쉼표 단위/통합 검증 통과, E2E 대기. 조표·박자·원래 템포 편집 미구현 |
+| MVP-005 | 기본 편집 | Partial | 음표·쉼표·타이·제목·기본 템포·조표·빈 악보 박자 편집 구현. 설정의 단위/통합 검증 통과, 브라우저 E2E 대기. 기존 이벤트의 박자 변경은 안전하게 제한 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -189,11 +189,35 @@
   깨뜨리는 배치를 만들면 검증으로 원자적으로 거부하며, 정책 변경은 사전 승인 대상이다.
 - 남은 사항: Mac에서 7종 E2E 및 실제 SVG 배치·Safari/모바일 실기기 확인. GitHub push 없음.
 
+#### 이후 사용자 검증 결과
+
+- 사용자 제공: `d539a2f` 기준 Mac Chromium **E2E 7개 통과**.
+  위 Codex EPERM 기록은 당시 결과로 유지한다. 다음 설정 기능의 검증 결과와 구분한다.
+
+### 4.8 Phase 1-E — 악보 설정 (2026-11-08)
+
+- 상태: **구현 및 실행 가능한 로컬 검사 완료 / 설정 추가 후 브라우저 E2E 미검증**.
+- 시작점: `d539a2f`, clean 작업 트리. 기존 schemaVersion 2/Part.ties/ScoreRepository/Command/
+  finalize·검증/Undo·Redo/scoreStore/자동 저장/재생·VexFlow를 재사용한다.
+- SetTempo: 정수 20–400 BPM. SetKeySignature: 장조 15개·단조 15개 조표 선택,
+  기존 MIDI와 Pitch 및 음표/쉼표·타이 보존. 조옮김·자동 이명동음 재표기는 수행하지 않는다.
+- SetTimeSignature: UI 2/4·3/4·4/4·6/8, 빈 악보에서만 변경한다.
+  이벤트 또는 타이 연결이 하나라도 있으면 UI/명령에서 거부한다. 이벤트 재배치나 타이 변경 없음.
+- 기존 score-editor에 ScoreSettings UI와 music-theory에 조표 조합 목록/검증을 추가했다.
+  기존에 없는 UI/조표 조합 검증을 위한 최소 추가이며 새 모델·상태 관리·의존성·아키텍처 변경은 없다.
+- 설정 적용 시 재생을 정지하고 이후 재생에서 새 템포를 사용한다. 초기화 중인 이전 재생 요청도 취소한다.
+- 검증: 기존 170 + 신규 66 = **236개/23파일 통과**, typecheck/lint/architecture/build exit 0.
+  실패 시 상태/이력 보존, MIDI·타이 불변, 저장 복원, Tone 스케줄·VexFlow 임시표 검사 포함.
+- 설정 E2E 2종 추가(전체 9종). `npm run test:e2e`는 서버 시작 시
+  `listen EPERM 0.0.0.0:3010`으로 exit 1 → **이번 버전의 9종 미실행**.
+- MODULE_CONTRACTS/TEST_PLAN 갱신. 구조 변경이 없어 ADR 추가·기준 아키텍처 수정은 필요하지 않았다.
+- 남은 검증: Mac 전체 9종, 실제 SVG/오디오·Safari/모바일. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Phase 1-E의 기존 4종 + 제목/백업/복원 1종 E2E는 사용자 Mac 터미널에서 통과 확인 완료.
-   쉼표 추가 후 `npm run test:e2e`로 총 7종을 Mac 일반 터미널에서 다시 검증한다.
+1. 기존 쉼표 포함 7종은 사용자 Mac 통과 확인 완료. 설정 추가 후 `npm run test:e2e`로
+   총 9종을 Mac 일반 터미널에서 다시 검증한다.
 2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
-3. Phase 1 잔여 기본 편집(원래 템포·조표·박자 편집)의 상세 범위/불변식 검토.
-   조표·박자 변경이 모델/공개 계약 변경을 요구하면 사전 승인 후 진행.
+3. Phase 1 인수 기준과 남은 지원 환경 검증을 확인한다. 기존 이벤트의 박자 변경·중간 조표/박자
+   변경이 필요하면 영향 분석과 사전 승인 후 진행한다.
 4. Phase 1 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석으로 진행.

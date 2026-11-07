@@ -11,7 +11,7 @@ import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { StaffView } from "@/features/score-editor";
+import { ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { useAutosave } from "@/features/score-library";
 import { playScore, type PlaybackHandle } from "@/adapters/tone/playback";
@@ -69,6 +69,7 @@ export default function EditorPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const playbackRef = useRef<PlaybackHandle | null>(null);
+  const playbackRequest = useRef(0);
   const repository = getScoreRepository();
   const saveStatus = useAutosave(repository);
 
@@ -95,6 +96,7 @@ export default function EditorPage() {
 
   useEffect(
     () => () => {
+      playbackRequest.current += 1;
       playbackRef.current?.stop();
     },
     [],
@@ -203,6 +205,7 @@ export default function EditorPage() {
 
   async function togglePlay() {
     if (playbackRef.current || playing) {
+      playbackRequest.current += 1;
       playbackRef.current?.stop();
       playbackRef.current = null;
       setPlaying(false);
@@ -213,14 +216,19 @@ export default function EditorPage() {
       return;
     }
     setPlaying(true);
+    const request = ++playbackRequest.current;
     try {
-      playbackRef.current = await playScore(score, {
+      const handle = await playScore(score, {
         onEnd: () => {
+          if (request !== playbackRequest.current) return;
           playbackRef.current = null;
           setPlaying(false);
         },
       });
+      if (request !== playbackRequest.current) handle.stop();
+      else playbackRef.current = handle;
     } catch {
+      if (request !== playbackRequest.current) return;
       setPlaying(false);
       setMessage("재생을 시작하지 못했습니다.");
     }
@@ -278,6 +286,14 @@ export default function EditorPage() {
         }}>JSON 백업</button>
         <Link href="/library" style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
       </form>
+
+      <ScoreSettings score={score} onCommand={(command) => {
+        if (!runCommand(command)) return;
+        playbackRequest.current += 1;
+        playbackRef.current?.stop();
+        playbackRef.current = null;
+        setPlaying(false);
+      }} />
 
       {loadError ? (
         <p style={{ color: "#b91c1c", fontSize: 13 }}>{loadError}</p>

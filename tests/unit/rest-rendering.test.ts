@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Tickable, StaveNote } from "vexflow";
+import type { Accidental, Tickable, StaveNote } from "vexflow";
 import { renderScoreInto } from "@/adapters/vexflow/renderScore";
-import { createRestEvent, NOTATABLE_DURATIONS } from "@/domain/score";
+import { createNoteEvent, createRestEvent, NOTATABLE_DURATIONS } from "@/domain/score";
+import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
+import { applyEditCommand } from "@/domain/commands";
 import { baseScore, tiedScore, withMeasureEvents } from "../fixtures/scores";
 
-const captured = vi.hoisted(() => ({ voices: [] as Tickable[][], ties: [] as { firstNote?: StaveNote; lastNote?: StaveNote }[] }));
+const captured = vi.hoisted(() => ({ voices: [] as Tickable[][], ties: [] as { firstNote?: StaveNote; lastNote?: StaveNote }[], keys: [] as string[], meters: [] as string[] }));
 
 // 실제 VexFlow StaveNote/GhostNote/Fraction을 사용한다. DOM 그리기만 대체한다.
 vi.mock("vexflow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vexflow")>();
   class Stave {
-    addClef() { return this; } addKeySignature() { return this; }
-    addTimeSignature() { return this; } setContext() { return this; } draw() {}
+    addClef() { return this; } addKeySignature(key: string) { captured.keys.push(key); return this; }
+    addTimeSignature(meter: string) { captured.meters.push(meter); return this; } setContext() { return this; } draw() {}
   }
   return { ...actual,
     Renderer: class { static Backends = { SVG: 1 }; resize() {} getContext() { return {}; } },
@@ -30,8 +32,41 @@ vi.mock("vexflow", async (importOriginal) => {
 
 beforeEach(() => {
   captured.voices.length = 0; captured.ties.length = 0;
+  captured.keys.length = 0; captured.meters.length = 0;
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+describe("score settings rendering", () => {
+  it.each([
+    { id: "major:1", step: "F", alter: 0, spec: "G", accidental: "n" },
+    { id: "major:-2", step: "B", alter: 0, spec: "Bb", accidental: "n" },
+    { id: "major:1", step: "F", alter: 1, spec: "G", accidental: undefined },
+    { id: "major:0", step: "F", alter: 1, spec: "C", accidental: "#" },
+    { id: "major:0", step: "B", alter: -1, spec: "C", accidental: "b" },
+    { id: "minor:-1", step: "B", alter: 0, spec: "F", accidental: "n" },
+  ] as const)("renders $id with correct sounding spelling ($step/$alter)", async ({ id, step, alter, spec, accidental }) => {
+    const score = withMeasureEvents(baseScore(), [createNoteEvent({ id: "n", step, alter, octave: 4, startTick: 0, durationTicks: 960 })]);
+    const keySignature = KEY_SIGNATURE_OPTIONS.find((option) => option.id === id)!.key;
+    const changed = applyEditCommand(score, { type: "SetKeySignature", partId: score.parts[0].id, keySignature,
+      updatedAt: "2026-11-08T01:00:00.000Z" });
+    if (!changed.ok) throw new Error(changed.error.message);
+    await renderScoreInto({ innerHTML: "" } as HTMLDivElement, changed.score);
+    expect(captured.keys).toContain(spec);
+    const note = captured.voices[0][0] as StaveNote;
+    const accidentals = note.getModifiers().filter((modifier) => modifier.getCategory() === "Accidental") as Accidental[];
+    expect(accidentals.map((modifier) => modifier.type)).toEqual(accidental ? [accidental] : []);
+    expect(changed.score.parts[0].measures[0].events).toBe(score.parts[0].measures[0].events);
+  });
+
+  it("renders the changed empty-score meter", async () => {
+    const score = baseScore();
+    const changed = applyEditCommand(score, { type: "SetTimeSignature", partId: score.parts[0].id,
+      timeSignature: { numerator: 6, denominator: 8 }, updatedAt: "2026-11-08T01:00:00.000Z" });
+    if (!changed.ok) throw new Error(changed.error.message);
+    await renderScoreInto({ innerHTML: "" } as HTMLDivElement, changed.score);
+    expect(captured.meters).toEqual(["6/8"]);
+  });
 });
 afterEach(() => vi.restoreAllMocks());
 

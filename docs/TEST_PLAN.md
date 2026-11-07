@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 5종 + 쉼표 편집/타이 보존 2종 | Playwright(Chromium, 프로덕션 빌드) | 기존 5종 사용자 Mac 통과 / 쉼표 추가 후 7종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 7종 + 악보 설정 2종 | Playwright(Chromium, 프로덕션 빌드) | 기존 7종 사용자 Mac 통과 / 설정 추가 후 9종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 20 파일 / 170 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 23 파일 / 236 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -282,3 +282,41 @@ npm run test:e2e
 
 남은 검증: 7종 브라우저 E2E, 실제 SVG 쉼표/빈 구간/타이 배치 육안 확인,
 Safari 및 모바일 실기기. 기존 5종 통과를 쉼표 기능 통과로 확대하지 않는다.
+
+### 9.1 이후 사용자 Mac 검증 결과 (사용자 제공)
+
+- 사용자가 `d539a2f` 기준 Mac Chromium **E2E 7개 통과**를 확인했다.
+- 위 Codex EPERM 실행 기록은 유지한다. 이 결과는 악보 설정 추가 전의 버전이다.
+
+## 10. Phase 1-E 악보 설정 검증 (2026-11-08)
+
+- `npm run test`: **23파일 / 236개 통과**. 기존 170개 유지, 신규 66개 추가.
+- `tests/unit/score-settings.test.ts` (54): 정수 20–400 BPM 및 Undo/Redo,
+  장조/단조 30개에서 Pitch/MIDI·이벤트·타이 보존, 빈 악보 4개 박자의 마디 길이,
+  음표/쉼표가 있는 악보의 변경 제한, 잘못된 템포/조표/박자/없는 파트 거부,
+  실패 시 Score 및 past/future 동일성.
+- `tests/integration/settings-persistence.test.ts` (2): 기존 store/명령·IndexedDB 어댑터를
+  사용한 템포/조표/빈 악보 박자 저장·복원과 Undo 저장 동등성(fake-indexeddb).
+- `tests/unit/settings-playback.test.ts` (3): Tone 대역으로 60/120/240 BPM의 스케줄 간격과
+  음높이 보존 확인. 실제 스피커 출력·브라우저 오디오 권한 검증은 아니다.
+- 기존 `rest-rendering.test.ts`에 7개 추가: 실제 VexFlow 객체/임시표 처리를 재사용해
+  샵/플랫 및 제자리표, 조표에 포함된 음의 불필요한 임시표 억제, 단조 조표와 빈 악보 6/8 확인.
+  DOM/그리기 대역은 기존과 같으며 실제 SVG 시각 검증과 구별한다.
+- `npm run typecheck`, `lint`, `check:architecture`, `build`: 모두 exit 0.
+  아키텍처 46 modules / 117 dependencies, check-boundaries 39 files, 위반 0.
+- `tests/e2e/settings.spec.ts` 2종 추가: 빈 악보 박자·템포·조표·Undo/Redo·재생 정지·저장 복원,
+  이벤트가 있는 악보의 박자 잠금·단조 조표 변경 후 Pitch 보존.
+  기존 IndexedDB 조회 코드는 `tests/e2e/storage.ts`로 옮겨 쉼표/설정 시나리오에서 재사용한다.
+  기존 7개 테스트의 assertion과 시나리오는 유지한다.
+- `npm run test:e2e`: **exit 1**, 서버 시작 시 `listen EPERM 0.0.0.0:3010`.
+  이번 버전의 전체 9개는 **미실행·미검증**이며 assertion 실패가 아니다.
+- `npm run test:e2e -- --list`: exit 0, 3개 spec에서 총 9개 수집 확인. 브라우저 실행 통과를 뜻하지 않는다.
+- Mac 일반 터미널 재실행:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+남은 검증: 전체 9개 브라우저 회귀·설정 중 오디오 초기화 취소·실제 SVG 및 오디오 출력,
+Safari/모바일 실기기. 기존 이벤트의 박자 재배치와 악보 중간 조표/박자 변경은 구현하지 않는다.

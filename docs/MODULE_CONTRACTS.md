@@ -30,9 +30,10 @@
 | 모듈 | 진입점 | 제공 내용 |
 |---|---|---|
 | Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수 |
-| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep` |
+| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
+| Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings` |
 
 내부 파일 직접 import는 같은 feature/모듈 내부에서만 허용한다.
 
@@ -41,6 +42,9 @@
 ```ts
 type EditCommand =
   | { type: "RenameScore"; title: string; updatedAt: string }
+  | { type: "SetTempo"; tempoBpm: number; updatedAt: string }
+  | { type: "SetKeySignature"; partId; keySignature: KeySignature; updatedAt: string }
+  | { type: "SetTimeSignature"; partId; timeSignature: TimeSignature; updatedAt: string }
   | { type: "AddNote"; partId; measureId; note: NoteEvent }
   | { type: "UpdateNote"; partId; noteId; patch: NotePatch }
   | { type: "DeleteEvent"; partId; eventId }
@@ -63,8 +67,8 @@ type EditCommand =
 | 성공 | `{ ok: true, score }` — 새 Score는 전체 검증을 통과해야 한다 |
 | 실패 | `{ ok: false, error: { code, message } }` — 원본 Score는 그대로 |
 | 검증 시점 | 명령 적용 후 `validateScore`를 재실행하여 불변식을 보증 |
-| 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` |
-| updatedAt | Command는 현재 시각을 생성하지 않는다. `RenameScore`는 경계에서 주입받은 `updatedAt`을 적용한다(재현성) |
+| 에러 코드 | `INVALID_TITLE`, `INVALID_KEY_SIGNATURE`, `TIME_SIGNATURE_REQUIRES_EMPTY_SCORE`, `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` |
+| updatedAt | Command는 현재 시각을 생성하지 않는다. `RenameScore`와 설정 명령은 경계에서 주입받은 `updatedAt`을 적용한다(재현성) |
 | 이름 매핑 | ARCHITECTURE의 예시 `DeleteNote`는 note/rest 모두 삭제 가능한 `DeleteEvent`로 구현했다 |
 
 ## 4. 편집 세션/히스토리 계약
@@ -113,6 +117,27 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 - 마디·박 입력은 UI에서만 tick으로 변환한다. 별도 영속 시간 모델이나 상태 관리 도구는 추가하지 않는다.
 - VexFlow 어댑터는 이벤트를 읽기 전용으로 정렬하고 빈 구간을 `GhostNote`/`Fraction`으로 표시한다.
   렌더 전용 객체는 Score에 저장하지 않는다. 쉼표는 높은음자리표 B4/낮은음자리표 D3 기준으로 중앙 배치한다.
+
+### Phase 1-E — 악보 설정 계약 (2026-11-08)
+
+- `SetTempo`: 기존 정수 20–400 BPM 검증을 사용한다. 연습 속도와 구별되는 Score의 원래 템포다.
+- `SetKeySignature`: `music-theory/key-signatures.ts`의 장조 15개/단조 15개(-7..+7 fifths) 중
+  으뜸음·alter·mode·fifths가 일치하는 값을 허용한다. 불일치는 `INVALID_KEY_SIGNATURE`로 거부한다.
+  이 목록은 기존 도메인에 조표 조합 검증이 없어 추가한 순수 조회 데이터이며 새로운 음악 모델이 아니다.
+- 조표 변경은 **MIDI와 기존 Pitch(step/alter/octave), 이벤트 위치/길이/ID 및 Part.ties를 보존**한다.
+  자동 이명동음 재표기나 조옮김은 하지 않는다. VexFlow가 새 조표에 따른 샵/플랫/제자리표를 계산한다.
+  예: G 장조로 바꿔도 기존 F4는 F4이며 필요한 제자리표가 표시된다.
+- `SetTimeSignature`: Score 전체의 모든 part에 이벤트와 타이가 없을 때만 대상 part의 박자를 변경한다.
+  음표 또는 쉼표가 하나라도 있으면 `TIME_SIGNATURE_REQUIRES_EMPTY_SCORE`로 거부한다.
+  UI 선택지는 2/4·3/4·4/4·6/8이다. 도메인에서는 기존 박자 분자/분모 검증을 재사용한다.
+  마디 ID/index/수는 유지하며 이벤트 재배치·자동 분할·타이 모델 수정은 하지 않는다.
+- 세 명령은 경계에서 받은 `updatedAt`을 적용하고 기존 finalize/Undo/Redo/자동 저장/복원을 사용한다.
+  잘못된 설정은 Score와 편집 세션의 past/future를 변경하지 않는다.
+- `ScoreSettings`는 기존 score-editor feature 공개 진입점에 추가한 UI다.
+  Score를 직접 변경하지 않고 기존 Command 진입점으로 요청한다. 별도 store나 영속 상태가 없다.
+- UI에서 설정이 적용되면 재생을 정지하고, 다음 재생은 변경된 Score를 사용한다.
+  초기화 중인 이전 재생 요청도 무효화한다. 재생 중 즉시 템포를 다시 스케줄하는 기능은 이번 범위에 없다.
+- Score schemaVersion 2, Part.ties, ScoreRepository 및 아키텍처 레이어는 변경하지 않는다.
 
 ## 5. 상태 소유권과 3분할
 
@@ -186,7 +211,7 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 |---|---|
 | C-01 라이브 피치 표시 | Phase 4에서 PRD 기준으로 구현·미지원 시 안내 |
 | C-02 시간 모델 | **확정**(DATA_MODEL §2) |
-| C-03 지원 음가·타이·조표 변경 | **음가·타이 확정**(ADR-009, DATA_MODEL §3). 조표/박자 변경 지점은 후속 승인 |
+| C-03 지원 음가·타이·조표 변경 | 음가·타이 ADR-009 유지. 현재 요청으로 전체 조표 편집·빈 악보 박자 편집 구현. 악보 중간 변경 지점/기존 이벤트 재배치는 미지원·별도 승인 대상 |
 | C-04 명령·Undo 계약 | **확정**(§3·§4) |
 | C-05 store 조립 | Phase 1에서 단일 Score 소유자 유지하며 추가 |
 | C-06 의존성 도입 | Phase 0 목록 확정(§7), 이후 기능 Phase별 승인 |
