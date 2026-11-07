@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ScoreSummary } from "@/application";
-import { createNewScore, listScores } from "@/application";
+import { createNewScore, exportScoreBackup, importScoreBackup, listScores } from "@/application";
+import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { formatDate } from "@/shared";
 
@@ -43,6 +44,7 @@ export default function LibraryPage() {
   const router = useRouter();
   const [scores, setScores] = useState<ScoreSummary[] | null>(null);
   const [message, setMessage] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -91,9 +93,37 @@ export default function LibraryPage() {
     }
   }
 
+  async function handleBackup(id: string) {
+    try {
+      const score = await getScoreRepository().load(id);
+      if (!score) throw new Error("악보를 불러오지 못했습니다.");
+      downloadScoreJson(exportScoreBackup(score));
+      setMessage("JSON 백업을 다운로드했습니다.");
+    } catch {
+      setMessage("JSON 백업을 만들지 못했습니다.");
+    }
+  }
+
+  async function handleImport(file: File) {
+    setImporting(true);
+    setMessage("");
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error("5MB 이하의 JSON 파일을 선택해 주세요.");
+      const result = await importScoreBackup(getScoreRepository(), await file.text(), {
+        id: crypto.randomUUID(), importedAt: new Date().toISOString(),
+      });
+      await refresh();
+      setMessage(`${result.migrated ? "v1 악보를 v2로 변환하여 " : ""}새 악보로 가져왔습니다. 기존 악보는 유지됩니다.`);
+    } catch (error) {
+      setMessage(`가져오기 실패: ${error instanceof Error ? error.message : "파일을 읽거나 저장하지 못했습니다."}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <main style={page}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Link href="/" style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
         </Link>
@@ -103,8 +133,20 @@ export default function LibraryPage() {
         </button>
       </div>
 
+      <div style={{ ...panel, marginBottom: 16 }}>
+        <label htmlFor="score-import">JSON 가져오기 (새 악보로 저장, 최대 5MB)</label>
+        <input id="score-import" type="file" accept=".json,application/json" disabled={importing}
+          style={{ display: "block", maxWidth: "100%", marginTop: 8 }}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) void handleImport(file);
+          }} />
+        {importing ? <p role="status">가져오는 중…</p> : null}
+      </div>
+
       {message ? (
-        <p style={{ color: "#5f6773", fontSize: 13 }}>{message}</p>
+        <p role="status" style={{ color: "#5f6773", fontSize: 13 }}>{message}</p>
       ) : null}
 
       <div style={panel}>
@@ -121,6 +163,7 @@ export default function LibraryPage() {
                 key={score.id}
                 style={{
                   display: "flex",
+                  flexWrap: "wrap",
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 12,
@@ -132,7 +175,7 @@ export default function LibraryPage() {
                 <div style={{ minWidth: 0 }}>
                   <Link
                     href={`/editor/${score.id}`}
-                    style={{ fontSize: 14, color: "#1b2a4a", fontWeight: 600 }}
+                    style={{ fontSize: 14, color: "#1b2a4a", fontWeight: 600, overflowWrap: "anywhere" }}
                   >
                     {score.title}
                   </Link>
@@ -140,7 +183,10 @@ export default function LibraryPage() {
                     {formatDate(score.updatedAt)}
                   </p>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button type="button" style={button} onClick={() => void handleBackup(score.id)}>
+                    JSON 백업
+                  </button>
                   <Link
                     href={`/editor/${score.id}`}
                     style={{ ...button, textDecoration: "none", color: "#1c1f26" }}

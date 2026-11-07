@@ -40,6 +40,7 @@
 
 ```ts
 type EditCommand =
+  | { type: "RenameScore"; title: string; updatedAt: string }
   | { type: "AddNote"; partId; measureId; note: NoteEvent }
   | { type: "UpdateNote"; partId; noteId; patch: NotePatch }
   | { type: "DeleteEvent"; partId; eventId }
@@ -62,7 +63,7 @@ type EditCommand =
 | 실패 | `{ ok: false, error: { code, message } }` — 원본 Score는 그대로 |
 | 검증 시점 | 명령 적용 후 `validateScore`를 재실행하여 불변식을 보증 |
 | 에러 코드 | `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` |
-| updatedAt | Command는 스탬프하지 않는다. 시간은 Application/경계에서 주입한다(재현성) |
+| updatedAt | Command는 현재 시각을 생성하지 않는다. `RenameScore`는 경계에서 주입받은 `updatedAt`을 적용한다(재현성) |
 | 이름 매핑 | ARCHITECTURE의 예시 `DeleteNote`는 note/rest 모두 삭제 가능한 `DeleteEvent`로 구현했다 |
 
 ## 4. 편집 세션/히스토리 계약
@@ -75,6 +76,23 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 - 실패한 명령은 **session 객체를 그대로 반환**한다(히스토리·Score 불변).
 - `undo`/`redo`는 히스토리가 없으면 동일 session을 반환한다.
 - 과거 스냅샷은 불변 Score 참조로 보관한다(원본 변경 금지).
+
+### Phase 1-E — 제목 및 JSON 백업/가져오기
+
+- `RenameScore`: 제목의 앞뒤 공백을 제거하며 빈 제목은 `INVALID_TITLE`로 거부한다.
+  기존 명령/히스토리/store/자동 저장을 그대로 사용하며 음표와 `Part.ties`는 변경하지 않는다.
+- `@/application`의 기존 score-library에 `exportScoreBackup`, `importScoreBackup`을 추가했다.
+  기존 `ScoreRepository` 인터페이스는 변경하지 않았다.
+- JSON은 envelope 없는 canonical Score다. `serializeScore`/`deserializeScore`를 재사용하며,
+  중첩 구조를 먼저 확인하고 도메인 불변식·타이 연결을 검증한다. schemaVersion 2 유지, v1 변환 재사용.
+- 가져오기는 경계에서 생성한 **새 Score ID**로 저장한다. 원래 ID와 동일하거나 기존 ID와 충돌하면
+  거부한다. 음표/마디/파트 ID와 타이 참조, 원래 생성 시각은 보존하고 `updatedAt`은 가져온 시각이다.
+  이는 검증된 저장본으로 새 악보를 생성하는 Application 작업이며 기존 편집 세션을 덮어쓰지 않는다.
+- 악보함 파일 입력은 최대 5MiB다. 파싱·검증 실패 시 `save`를 호출하지 않고, 저장 실패도 사용자에게 알린다.
+- `src/adapters/file-export/json.ts`는 Blob/다운로드 URL 수명만 관리한다. 기존 다운로드 구현이 없어
+  최소 어댑터를 추가했으며 production 의존성·모델·저장 엔진 변경은 없다.
+- 다중 탭의 ID 생성/확인/저장은 원자적 create-if-absent가 아니다. UI는 매번 새 UUID를 생성하며,
+  임의 덮어쓰기를 제공하지 않는다. 다중 탭 동시 편집 충돌은 기존 미해결 범위다.
 
 ## 5. 상태 소유권과 3분할
 

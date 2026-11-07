@@ -395,6 +395,12 @@ export function applyEditCommand(
   command: EditCommand,
 ): CommandResult {
   switch (command.type) {
+    case "RenameScore": {
+      const title = command.title.trim();
+      if (!title) return fail("INVALID_TITLE", "제목을 입력해 주세요.");
+      return finalize({ ...score, title, updatedAt: command.updatedAt });
+    }
+
     case "AddNote":
       return addNote(score, command);
 

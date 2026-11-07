@@ -19,7 +19,7 @@
 | 브라우저 E2E | 입력·편집·저장·복구·재생, 타이 분할, 모바일 레이아웃, 키보드/접근성 | Playwright(Chromium, 프로덕션 빌드) | ✅ 실행(4 통과) |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (실행 결과: 15 파일 / 101 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 17 파일 / 129 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -226,3 +226,21 @@ npm run test:e2e         # exit 0  (4 통과, Chromium / 프로덕션 빌드)
 - 아키텍처 위반 fixture는 "검증 후 제거" 방식이며, **상시 회귀 테스트로 남아 있지 않다**.
   필요 시 `tests/architecture/` 격리 fixture + 별도 script로 상시화 검토.
 - 채보 정확도·내보내기 호환성은 아직 해당 없음(Phase 4/5).
+
+## 8. Phase 1-E 실행 기록
+
+- 단위/통합: `npm run test` → **17 파일 / 129 통과**, 기존 101개 회귀 포함.
+- `tests/unit/score-backup.test.ts` (27): 제목 변경/Undo/Redo/원본 불변/빈 제목 거부,
+  JSON 동등성·파일명 정리·타이 보존·v1 migration·새 ID 충돌/빈 ID 거부,
+  잘못된 입력의 저장 미호출·저장 실패 시 기존 악보 보존·잘못된 중첩 구조/provenance 안전 거부.
+- `tests/integration/score-backup.test.ts` (1): 실제 IndexedDB 어댑터(fake-indexeddb)로
+  제목 변경 저장 → JSON 백업 → 새 악보로 가져오기 → repository 재생성 후 동등성·원본 보존.
+- `typecheck`, `lint`, `check:architecture`, `build` → exit 0.
+  아키텍처: 44 modules / 108 dependencies, check-boundaries 37 files, 위반 0.
+- E2E 새 시나리오: 제목 변경/Undo/Redo/빈 제목 거부 → 타이 있는 JSON 다운로드 내용 확인 →
+  악보함에서 새 악보로 복원 → 잘못된 JSON 거부 → 새로고침 후 제목·음표 보존.
+- `npm run test:e2e` → **exit 1, 브라우저 테스트 미실행**.
+  프로덕션 빌드 이후 webServer가 `listen EPERM: operation not permitted 0.0.0.0:3010`으로
+  시작되지 않았다. 별도 `npm run build`는 성공했다. 기존 §5.3의 4/4는 이전 실행 기록이다.
+- 재검증: 포트 리슨 및 Chromium 실행이 허용된 환경에서 `npm run test:e2e` 실행(총 5종).
+  다운로드·파일 입력·모바일 레이아웃·실기기 Safari는 현재 검증 완료로 간주하지 않는다.

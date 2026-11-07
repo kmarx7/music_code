@@ -36,6 +36,44 @@ function hasScoreShape(value: unknown): value is Score {
   );
 }
 
+/** 외부 JSON은 중첩 필드까지 확인한 뒤에만 typed 도메인 검증에 전달한다. */
+function hasNestedScoreShape(score: Score): boolean {
+  return score.parts.every((part: unknown) => {
+    if (!isRecord(part) || typeof part.id !== "string" ||
+        typeof part.name !== "string" || typeof part.clef !== "string" ||
+        !isRecord(part.timeSignature) || !isRecord(part.keySignature) ||
+        !Array.isArray(part.measures) || !Array.isArray(part.ties)) return false;
+    const time = part.timeSignature;
+    const key = part.keySignature;
+    return typeof time.numerator === "number" && typeof time.denominator === "number" &&
+      typeof key.tonic === "string" && typeof key.mode === "string" &&
+      typeof key.alter === "number" && typeof key.fifths === "number" &&
+      part.ties.every((tie: unknown) => isRecord(tie) &&
+        typeof tie.from === "string" && typeof tie.to === "string") &&
+      part.measures.every((measure: unknown) => isRecord(measure) &&
+        typeof measure.id === "string" && typeof measure.index === "number" &&
+        Array.isArray(measure.events) && measure.events.every(hasEventShape));
+  });
+}
+
+function hasEventShape(event: unknown): boolean {
+  if (!isRecord(event) || typeof event.id !== "string" ||
+      typeof event.startTick !== "number" || typeof event.durationTicks !== "number") return false;
+  if (event.kind === "rest") return true;
+  if (event.kind !== "note" || !isRecord(event.pitch) || typeof event.velocity !== "number") return false;
+  const pitch = event.pitch;
+  if (typeof pitch.midi !== "number" || typeof pitch.step !== "string" ||
+      typeof pitch.alter !== "number" || typeof pitch.octave !== "number") return false;
+  if (event.provenance !== undefined) {
+    const provenance = event.provenance;
+    if (!isRecord(provenance) || typeof provenance.source !== "string" ||
+        !["piano", "transcription", "import", "system"].includes(provenance.source) ||
+        (provenance.confidence !== undefined &&
+          (typeof provenance.confidence !== "number" || provenance.confidence < 0 || provenance.confidence > 1))) return false;
+  }
+  return true;
+}
+
 /**
  * v1 → v2: 각 part에 `ties: []`를 추가한다.
  * v1에는 연결 정보가 존재하지 않으므로 빈 배열이 정보 손실 없는 정확한 변환이다(ADR-009).
@@ -94,6 +132,9 @@ export function deserializeScore(raw: string): DeserializeResult {
   }
 
   const score = candidate as Score;
+  if (!hasNestedScoreShape(score)) {
+    return { ok: false, code: "INVALID_SHAPE", message: "악보의 파트·마디·음표·붙임줄 구조가 올바르지 않습니다." };
+  }
   const issues = validateScore(score);
   if (issues.length > 0) {
     return {

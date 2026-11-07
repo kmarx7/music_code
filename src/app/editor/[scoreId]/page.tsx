@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { koreanFixedDo, letterName } from "@/domain/music-theory";
-import { openOrCreateScore, planAppendNote } from "@/application";
+import { exportScoreBackup, openOrCreateScore, planAppendNote } from "@/application";
+import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
@@ -214,11 +215,11 @@ export default function EditorPage() {
 
   return (
     <main style={page}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Link href="/" style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
         </Link>
-        <h1 style={{ fontSize: 20, margin: 0 }}>{score.title}</h1>
+        <h1 style={{ fontSize: 20, margin: 0, overflowWrap: "anywhere", maxWidth: "100%" }}>{score.title}</h1>
         <span style={{ fontSize: 12, color: "#5f6773" }}>
           {score.tempoBpm} BPM · {part.timeSignature.numerator}/
           {part.timeSignature.denominator} · 음표 {notes.length}개 · 마디{" "}
@@ -239,6 +240,31 @@ export default function EditorPage() {
                 : ""}
         </span>
       </div>
+
+      <form
+        style={{ ...panel, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          const title = String(new FormData(event.currentTarget).get("title") ?? "");
+          if (title.trim() === score.title) return;
+          runCommand({ type: "RenameScore", title, updatedAt: new Date().toISOString() });
+        }}
+      >
+        <label htmlFor="score-title">악보 제목</label>
+        <input id="score-title" name="title" aria-label="악보 제목" required
+          key={`${score.id}:${score.title}`} defaultValue={score.title}
+          style={{ minWidth: 0, maxWidth: "100%", flex: "1 1 160px", padding: 8 }} />
+        <button type="submit" style={button}>제목 변경</button>
+        <button type="button" style={button} onClick={() => {
+          try {
+            downloadScoreJson(exportScoreBackup(score));
+            setMessage("JSON 백업을 다운로드했습니다.");
+          } catch {
+            setMessage("JSON 백업을 만들지 못했습니다.");
+          }
+        }}>JSON 백업</button>
+        <Link href="/library" style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
+      </form>
 
       {loadError ? (
         <p style={{ color: "#b91c1c", fontSize: 13 }}>{loadError}</p>
@@ -303,7 +329,7 @@ export default function EditorPage() {
       </div>
 
       {message ? (
-        <p style={{ color: "#b91c1c", fontSize: 13 }}>{message}</p>
+        <p role="status" style={{ color: "#b91c1c", fontSize: 13 }}>{message}</p>
       ) : null}
 
       <div style={panel}>

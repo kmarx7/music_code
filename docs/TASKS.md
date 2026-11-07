@@ -24,8 +24,8 @@
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 15 파일 / **101 테스트 통과** |
-| `npm run check:architecture` | ✅ exit 0 | 43 모듈·105 의존성, 위반 0 |
+| `npm run test` | ✅ exit 0 | Phase 1-E: 17 파일 / **129 테스트 통과** |
+| `npm run check:architecture` | ✅ exit 0 | Phase 1-E: 44 모듈·108 의존성, 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -36,7 +36,7 @@
 | MVP-002 | 허밍 녹음 | Pending | 런타임/음악 상태 분리 원칙만 정의 |
 | MVP-003 | 단선율 채보 | Pending | 후보→명령 반영 계약(문서), 구현 없음 |
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
-| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D). 제목·조표·박자 편집 미구현 |
+| MVP-005 | 기본 편집 | Partial | 추가·삭제·Undo/Redo + **음정/길이 수정·마디 추가**(1-B) + **마디 넘김·타이**(1-D) + **제목 변경**(1-E, 브라우저 검증 대기). 조표·박자 편집 미구현 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
 | MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
@@ -44,7 +44,7 @@
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Partial | Tone.js 스케줄 재생(원 Score 템포 기준). 시작/자동 종료 확인, 메트로놈·하이라이트 미구현 |
-| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 이름 변경·백업/복구 미구현 |
+| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 제목 변경·JSON 백업/가져오기 구현(1-E), 브라우저 검증 대기 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
 ## 4. Phase 1 진행 (2026-11-07)
@@ -136,8 +136,27 @@
 - 구현 중 발견·수정: `buildPart`가 기존 마디 이벤트를 삭제하던 회귀(회귀 테스트 5건이 검출),
   React dev 경고(`border` 단축 + `borderColor` 혼용) 2곳.
 
-## 5. 다음 작업 (Phase 1 착수 전)
-1. P0-06 마무리: React store 도입 여부·형태를 ADR로 확정(승인 필요) 후 단일 Score 소유자 연결.
-2. 직렬화/역직렬화 + 버전 검증(P0-08 잔여) 구현 및 round-trip 테스트.
-3. Playwright 도입은 E2E가 실제로 필요한 시점(Phase 1 렌더링)에 승인 후 추가.
-4. Phase 1: 가상 피아노 → 편집 → VexFlow 렌더링 → 재생 → IndexedDB 저장.
+### 4.5 Phase 1-E — 제목 변경·JSON 백업/가져오기
+
+- 상태: **구현 및 단위/통합 검증 완료, 브라우저 E2E 검증 대기**.
+- 재사용: schemaVersion 2, `Part.ties`, ScoreRepository, serialize/deserialize, Command/Undo/Redo,
+  단일 scoreStore와 기존 자동 저장, 기존 악보함. 모델·아키텍처·패키지 변경 없음.
+- 편집기: 제목 변경(RenameScore, 공백 제목 거부, Undo/Redo, 자동 저장), 현재 Score JSON 다운로드.
+- 악보함: 각 저장 악보 JSON 다운로드, JSON 파일 가져오기(5MiB 이하), 진행/실패 상태.
+- 가져오기는 검증 후 새 UUID의 악보로 저장하며 기존 악보를 덮어쓰지 않는다.
+  음표 ID·마디·파트·타이 참조를 보존하며 v1 → v2 변환을 재사용한다.
+- 중첩 구조 검증 보강: 잘못된 part/measure/event/pitch/tie/provenance를 안전하게 거부한다.
+- 신규 파일: 최소 브라우저 다운로드 어댑터, 백업 단위/IndexedDB 통합 테스트 각 1개.
+  기존 파일에는 Application use case·명령·화면·E2E를 추가했다.
+- 검증: 17파일 **129 테스트 통과**(기존 101개 포함), typecheck/lint/architecture/build exit 0.
+- `npm run test:e2e`는 서버 시작 시 `listen EPERM 0.0.0.0:3010`으로 exit 1.
+  기존 4종 및 새 1종은 이번 환경에서 실행되지 않았다. 이전 통과 기록과 구분한다.
+- 다중 탭 동시성·브라우저 실기기 및 다운로드 실제 작동은 추가 검증 필요. GitHub push 없음.
+
+## 5. 다음 작업
+
+1. 포트 사용이 허용된 환경에서 `npm run test:e2e` 실행: 기존 4종 + 제목/백업/복원 1종 회귀 검증.
+2. 모바일에서 긴 제목, 파일 선택/다운로드와 접근성 확인. Safari/모바일 실기기는 별도 확인.
+3. Phase 1 잔여 기본 편집(쉼표 UI·원래 템포·조표·박자 편집)의 상세 범위/불변식 검토.
+   조표·박자 변경이 모델/공개 계약 변경을 요구하면 사전 승인 후 진행.
+4. Phase 1 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석으로 진행.

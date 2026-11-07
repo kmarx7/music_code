@@ -136,3 +136,58 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
   await expect(page.getByText(/음표 5개/)).toBeVisible();
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
 });
+
+test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·오류 파일 거부", async ({ page }) => {
+  await page.goto("/editor/e2e-backup");
+  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "MIDI 60" }).click();
+  await page.getByRole("button", { name: "2분음표", exact: true }).click();
+  await page.getByRole("button", { name: "MIDI 62" }).click();
+  await expect(page.getByText(/음표 5개/)).toBeVisible();
+
+  const title = page.getByRole("textbox", { name: "악보 제목" });
+  await title.fill("백업 연습곡");
+  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "새 악보", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(title).toHaveValue("백업 연습곡");
+  await title.fill("   ");
+  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("제목을 입력해 주세요.");
+  await expect(page.getByText(/음표 5개/)).toBeVisible();
+
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("백업 연습곡.json");
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const buffer = Buffer.concat(chunks);
+  const backup = JSON.parse(buffer.toString("utf8"));
+  expect(backup.schemaVersion).toBe(2);
+  expect(backup.parts[0].ties).toHaveLength(1);
+
+  // 목록 이동 시 기존 autosave cleanup도 flush한다. 이후 새로고침으로 영속 상태를 검증한다.
+  await page.getByRole("link", { name: "악보함 / JSON 가져오기" }).click();
+  const source = page.locator('a[href="/editor/e2e-backup"]').filter({ hasText: "백업 연습곡" });
+  await expect(source).toBeVisible();
+  await page.locator("#score-import").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer });
+  await expect(page.getByRole("status")).toContainText("새 악보로 가져왔습니다");
+  const restored = page.getByRole("link", { name: "백업 연습곡", exact: true });
+  await expect(restored).toHaveCount(2);
+  const restoredHref = await page.locator('a:not([href="/editor/e2e-backup"])').filter({ hasText: /^백업 연습곡$/ }).getAttribute("href");
+  expect(restoredHref).not.toBe("/editor/e2e-backup");
+
+  await page.locator("#score-import").setInputFiles({ name: "broken.json", mimeType: "application/json", buffer: Buffer.from("{broken") });
+  await expect(page.getByRole("status")).toContainText("가져오기 실패");
+  await expect(page.getByRole("link", { name: "백업 연습곡", exact: true })).toHaveCount(2);
+  await page.goto(restoredHref!);
+  await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
+  await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
+  await page.reload();
+  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
+});
