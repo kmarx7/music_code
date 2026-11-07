@@ -308,3 +308,30 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   손상 데이터를 canonical Score/일반 JSON 악보 백업으로 내보내지 않으며, 원시 레코드는 그대로 둔다.
 - Score/schemaVersion 2/Part.ties 및 레이어·저장 엔진·상태 관리·생산 의존성은 불변이다.
   이번 요구로 오류 의미를 강화했으며 포트 반환 모양 교체나 별도 읽기 음악 모델은 만들지 않는다.
+
+
+## 피아노 입력 소리 미리듣기 (2026-11-08)
+
+- 기존 `PianoKeyboard`의 88건반·`midiToPitch`·컴퓨터 키 매핑과 기존 `onPitch` → Command →
+  자동 저장 흐름을 재사용한다. Score/schemaVersion 2/Part.ties/Repository/재생 포트는 변경하지 않는다.
+- `adapters/tone/pianoPreview.ts`의 `createPianoPreview()`는 MIDI를 받아 소리만 내는 런타임 어댑터다.
+  기존 `playScore`는 전체 Score의 이벤트·타이·커서·메트로놈을 예약하므로 입력음 하나에 재사용하면
+  임시 Score 또는 재생 세션 간섭이 필요하다. 같은 Tone 경계 안에 최소 미리듣기 음성을 추가한다.
+  새 음악 모델·상태 관리·의존성·레이어 변경은 없다.
+- `prepare`는 동적 import만 수행한다. `play(midi): Promise<boolean>`은 사용자 입력에서 Tone.start를
+  호출하고 running context를 확인한 뒤 소리를 낸다. 준비된 경우 활성화 호출은 입력 핸들러 안에서
+  동기적으로 시작한다. 차단/초기화 실패는 오류로 전달하고 다음 입력에서 재시도할 수 있다.
+- 단일 triangle oscillator와 gain을 재사용해 약 200ms의 짧은 입력음을 낸다. 최신 입력이 음높이를
+  교체하고 기존 gain 예약(이전 음의 종료 포함)을 취소한다. 음성 누적·오래된 비동기 활성화·종료가
+  최신 음을 덮거나 끊지 않는다. JS 종료 타이머나 Tone.Transport를 사용하지 않는다.
+- 포인터 누름은 미리듣기, 기존 click은 음표 입력을 각각 담당한다. 정상 미리듣기를 호환 click으로
+  중복 재생하지 않으며, 대기/차단된 경우 native click에서 오디오 활성화를 재시도한다.
+  터치 스크롤 취소는 해당 포인터의 소리만 정지하고 음표를 추가하지 않는다.
+  컴퓨터 키/접근성 click도 지원하며 key repeat는 무시한다.
+- 기본 ON인 “입력 소리 미리듣기”는 컴포넌트 로컬 UI 상태다. OFF/blur/탭 숨김은 미리듣기만
+  정지하고 늦은 요청을 무효화한다. 언마운트는 노드를 dispose한다. 전역 AudioContext를 닫거나
+  중단하지 않으므로 악보 재생·메트로놈의 수명과 독립적이다. 기존 Score 편집 시 재생 정지 정책은 유지한다.
+- 미리듣기 오류는 안내 문구로 표시하며 `onPitch`/Command/저장 결과를 실패로 바꾸지 않는다.
+  새 status/alert role을 추가하지 않아 기존 저장/오류 선택자와 충돌하지 않는다.
+- 최초 Tone 번들 로딩 또는 브라우저 정책에 따라 첫 입력이 지연되거나 다음 사용자 입력이 필요할 수 있다.
+  실제 스피커 출력·Safari·모바일 실기기의 활성화/지연/음질은 별도 수동 검증 대상이다.
