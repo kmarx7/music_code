@@ -28,9 +28,9 @@ test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Re
   await page.getByLabel("시작 마디").fill("1");
   await page.getByLabel("마디 안 박 위치").fill("1");
   await page.getByRole("button", { name: "쉼표 위치 변경", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("OVERLAPPING_EVENTS");
+  await expect(page.locator('p[role="status"]')).toContainText("OVERLAPPING_EVENTS");
   await page.getByRole("button", { name: "선택 쉼표 길이 온음표", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("EVENT_OUT_OF_MEASURE");
+  await expect(page.locator('p[role="status"]')).toContainText("EVENT_OUT_OF_MEASURE");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 960, durationTicks: 480 });
   await page.getByRole("button", { name: "Redo", exact: true }).click();

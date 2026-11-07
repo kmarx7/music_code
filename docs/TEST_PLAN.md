@@ -16,7 +16,7 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 9종 + 재생 2종 | Playwright(Chromium, 프로덕션 빌드) | 42e29bb 사용자 Mac 9/9 통과 / 이번 버전 11종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 9종 + 재생 2종 | Playwright(Chromium, 프로덕션 빌드) | 0af8c15 사용자 Mac 9/11 통과 / 선택자 수정 후 11종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
 ## 2. 단위·통합 테스트 목록 (최신 실행 결과: 25 파일 / 266 통과)
@@ -386,3 +386,31 @@ npm run test:e2e
 SVG 하이라이트 시각 확인, 느린 메인 스레드·백그라운드 탭·Safari·모바일 실기기.
 커서 알림은 25ms 목표 주기지만 브라우저 메인 스레드 지연의 영향을 받는다.
 브라우저 강제 종료 시 비동기 cleanup 저장 및 다중 탭 동시 편집 충돌은 보장하지 않는다.
+
+
+## 13. E2E status 선택자 충돌 수정 (2026-11-08)
+
+- 사용자 제공 수정 전 `0af8c15` Mac Chromium 결과: **11개 중 9개 통과 / 2개 실패**.
+- 실제 두 실패의 `error-context.md`는 `<output data-testid="playback-position">`와
+  오류 `<p role="status">`에 대한 `getByRole("status")`의 strict mode violation을 기록한다.
+  소스에서도 output과 메시지 p가 편집기에 함께 존재함을 확인했다.
+- `tests/e2e/editor.spec.ts:174`의 빈 제목 오류, `tests/e2e/rest.spec.ts:31,33`의
+  `OVERLAPPING_EVENTS`/`EVENT_OUT_OF_MEASURE` 검증만 `page.locator('p[role="status"]')`로 한정한다.
+  기대값/전체 문구 일치·부분 문구 포함 검증/timeout을 유지하고 순서 기반 선택은 사용하지 않는다.
+- editor.spec.ts:194,201의 나머지 `getByRole("status")`는 악보함 가져오기 결과다.
+  그 화면에는 재생 output이 없으므로 유지한다. 애플리케이션 코드 및 재생 UI는 수정하지 않는다.
+- `npm run typecheck`, `npm run lint`, `npm run test`, `npm run check:architecture`,
+  `npm run build`: 모두 exit 0. **25파일 / 266개 통과**, 아키텍처 50 modules / 128 deps,
+  경계 43파일 위반 0. 테스트 삭제/skip/timeout 증가 없음.
+- 전체 `npm run test:e2e`: 서버가 **listen EPERM 0.0.0.0:3010**으로 시작하지 못해 exit 1.
+  수정 버전 **전체 11종 미실행**이며 수정 전 Mac 9/11 결과와 구분한다.
+- `npm run test:e2e -- --list`: exit 0, **11종/4파일** 수집 확인(브라우저 검증 아님).
+- 원래 Mac 실패의 trace/error-context는 실행 전
+  `/tmp/music-score-status-0af8c15-lt3dp2yv/test-results/`에 보존했다(임시 경로, Git 제외).
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```

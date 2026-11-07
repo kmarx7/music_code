@@ -256,9 +256,26 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. AGENTS/ARCHITECTURE/DECISIONS/Score 스키마는 변경하지 않음.
 - 실제 오디오 출력·SVG 시각 배치, Safari/모바일 실기기는 미검증. GitHub push 없음.
 
+### 4.12 E2E 오류 메시지 선택자 충돌 수정 (2026-11-08)
+
+- 시작점 `0af8c15`, clean. 사용자 Mac Chromium 실행은 **9/11 통과**, 제목/JSON 시나리오와
+  쉼표 편집 시나리오 2종 실패. 기존 Codex EPERM 기록은 유지한다.
+- 두 `error-context.md`에서 `getByRole("status")`가 재생 위치 `<output>`의 암시적 status와
+  오류 메시지 `<p role="status">`를 동시에 선택한 strict mode violation을 확인했다.
+- `editor.spec.ts:174` 및 `rest.spec.ts:31,33`의 오류 메시지 검증 **3곳**을
+  `page.locator('p[role="status"]')`로 한정한다. 기존 기대 문구/검증 방식/timeout은 유지한다.
+- 같은 파일의 나머지 status 검증 2곳(editor.spec.ts:194,201)은 재생 output이 없는 악보함 화면의
+  가져오기 성공/실패 메시지 확인이므로 유지한다. 테스트 삭제/skip 없음.
+- 애플리케이션·재생 위치 UI·Score 모델·아키텍처 변경 없음. 테스트 2파일과 TASKS/TEST_PLAN만 변경한다.
+- typecheck/lint/test/check:architecture/build exit 0, **25파일 / 266개 통과**,
+  아키텍처 50 modules / 128 deps 및 경계 43파일 위반 0.
+- 전체 `npm run test:e2e` 실행 시도: `listen EPERM 0.0.0.0:3010`, exit 1 → **수정 버전 11종 미실행**.
+  `npm run test:e2e -- --list`는 11종/4파일 수집 확인. 수정 후 브라우저 통과를 뜻하지 않는다.
+- 다음 검증: Mac 일반 터미널에서 `npm run test:e2e` 전체 11종 재실행. GitHub push 없음.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 기존 9종+신규 재생 2종, 총 11종을 검증한다.
+1. Mac 일반 터미널에서 아래 명령으로 선택자 수정 후 총 11종을 검증한다(수정 전 0af8c15 Mac 결과 9/11).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code

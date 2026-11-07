@@ -171,7 +171,7 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await expect(title).toHaveValue("백업 연습곡");
   await title.fill("   ");
   await page.getByRole("button", { name: "제목 변경", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("제목을 입력해 주세요.");
+  await expect(page.locator('p[role="status"]')).toHaveText("제목을 입력해 주세요.");
   await expect(page.getByText(/음표 5개/)).toBeVisible();
 
   const downloadEvent = page.waitForEvent("download");
