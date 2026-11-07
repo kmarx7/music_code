@@ -239,3 +239,77 @@ it("edits after a loaded baseline still save and support undo/redo", async () =>
   scoreStore.redo(); await vi.advanceTimersByTimeAsync(400);
   expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
 });
+
+it("concurrent manual/navigation flushes share one promise and bypass the debounce", async () => {
+  const repository = new MemoryScoreRepository();
+  const original = repository.save.bind(repository);
+  let complete!: () => void;
+  const gate = new Promise<void>((resolve) => { complete = resolve; });
+  const save = vi.spyOn(repository, "save").mockImplementationOnce(async (score) => { await gate; await original(score); });
+  const autosave = mount(repository);
+  changePitch();
+  const first = autosave.flush(); const second = autosave.flush();
+  expect(second).toBe(first);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(save).toHaveBeenCalledTimes(1);
+  complete(); expect(await first).toBe(true); expect(await second).toBe(true);
+  await vi.advanceTimersByTimeAsync(400);
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(hooks.status).toBe("saved");
+});
+
+it("manual save joins an automatic write, includes further edits and never reports the old snapshot as latest", async () => {
+  const repository = new MemoryScoreRepository(); const original = repository.save.bind(repository);
+  const releases: (() => void)[] = []; let active = 0; let maximum = 0;
+  const save = vi.spyOn(repository, "save").mockImplementation(async (score) => {
+    active += 1; maximum = Math.max(maximum, active);
+    await new Promise<void>((resolve) => releases.push(resolve));
+    await original(score); active -= 1;
+  });
+  const autosave = mount(repository);
+  changePitch(); await vi.advanceTimersByTimeAsync(400); // First automatic write waits.
+  const manual = autosave.flush();
+  resize(); await vi.advanceTimersByTimeAsync(400); // Queued autosave for the latest edit.
+  expect(save).toHaveBeenCalledTimes(1);
+  releases[0](); await vi.advanceTimersByTimeAsync(0);
+  expect(hooks.status).toBe("saving");
+  expect(save).toHaveBeenCalledTimes(2);
+  releases[1](); expect(await manual).toBe(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(save).toHaveBeenCalledTimes(2); expect(maximum).toBe(1);
+  expect(hooks.status).toBe("saved");
+  expect(await repository.load("score-1")).toEqual(scoreStore.getState()!.current);
+});
+
+it("manual save failure preserves the previous raw IndexedDB record and history, then retries the latest edit", async () => {
+  vi.useRealTimers();
+  const dbName = "manual-save-atomic-failure";
+  const repository = createIndexedDbScoreRepository({ dbName });
+  const baseline = scoreStore.getState()!.current; await repository.save(baseline);
+  async function raw() {
+    const request = indexedDB.open(dbName);
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    try {
+      const read = db.transaction("scores", "readonly").objectStore("scores").get(baseline.id);
+      return await new Promise<unknown>((resolve, reject) => { read.onsuccess = () => resolve(read.result); read.onerror = () => reject(read.error); });
+    } finally { db.close(); }
+  }
+  const before = await raw(); const autosave = mount(repository, true);
+  changePitch(); resize(); const edited = scoreStore.getState()!;
+  const put = IDBObjectStore.prototype.put;
+  const abort = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(function (this: IDBObjectStore, ...args) {
+    const request = put.apply(this, args);
+    request.addEventListener("success", () => request.transaction!.abort());
+    return request;
+  });
+  expect(await autosave.flush()).toBe(false);
+  expect(hooks.status).toBe("error"); expect(scoreStore.getState()).toBe(edited);
+  expect(await raw()).toEqual(before);
+  expect(await repository.load(baseline.id)).toEqual(baseline);
+  abort.mockRestore();
+  expect(await autosave.flush()).toBe(true);
+  expect(hooks.status).toBe("saved"); expect(scoreStore.getState()).toBe(edited);
+  expect(await createIndexedDbScoreRepository({ dbName }).load(baseline.id)).toEqual(edited.current);
+});

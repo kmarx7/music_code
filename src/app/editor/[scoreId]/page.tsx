@@ -13,7 +13,7 @@ import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { EditCursor, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
-import { useAutosave, type AutosaveHandle } from "@/features/score-library";
+import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import type { PlaybackPosition } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
@@ -263,6 +263,7 @@ function EditorWorkspace() {
                 ? "저장 실패"
                 : ""}
         </span>
+        <SaveButton autosave={autosave} status={saveStatus} />
       </div>
 
       <form

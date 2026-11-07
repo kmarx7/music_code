@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 편집 커서 위치 입력)
+## 2. 검증 명령 결과 (최신: 2026-11-08 명시적 수동 저장)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 30 파일 / **353 테스트 통과**(기존 315 + 커서 회귀 38) |
-| `npm run check:architecture` | ✅ exit 0 | 52 모듈·136 의존성, 경계 45파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 31 파일 / **362 테스트 통과**(기존 353 + 수동 저장 회귀 9) |
+| `npm run check:architecture` | ✅ exit 0 | 53 모듈·139 의존성, 경계 46파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -44,7 +44,7 @@
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Partial | 커서·하이라이트·일시정지/재개·메트로놈 구현, 단위 검증 완료. 새 브라우저 E2E 미검증, cursor 시작/loop/rate는 후속 범위 |
-| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동 저장·목록·열기·삭제**(1-A). 제목 변경·JSON 백업/가져오기 구현(1-E), 사용자 Mac Chromium E2E 통과 |
+| MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동/수동 저장·목록·열기·삭제**. 제목/JSON 백업·가져오기/실패 저장본 보호 유지. 기존 Mac E2E 통과, 신규 수동 저장 브라우저 검증 대기 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
 
 ## 4. Phase 1 진행 (2026-11-07)
@@ -399,9 +399,31 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. Score/schemaVersion 2/Part.ties/기존 Command·VexFlow·Tone·저장 경계 유지.
   신규 음악 모델/상태 라이브러리/production 의존성/구조 변경 없음. GitHub push/Vercel 접근·변경·배포 없음.
 
+### 4.19 명시적 수동 저장 (2026-11-08)
+
+- 기준 `e89ac0d`, clean. 사용자 기준선: 단위·통합 353개 및 Mac Chromium **31/31 통과**.
+  4.18의 과거 Codex EPERM 기록은 유지한다. 이번 작업은 GitHub/Vercel에 접근·변경·배포하지 않는다.
+- 상단 저장 버튼/진행·완료·실패 안내, 실패 후 재시도와 JSON 백업 안내 추가. 모바일 최소 높이 44px.
+  기존 score-library의 useAutosave/AutosaveHandle/SaveStatus/쓰기 대기열과 ScoreRepository를 재사용한다.
+- 수동 저장은 400ms 디바운스를 건너뛰고 진행 중 자동 저장 뒤에서 최신 편집까지 저장한다.
+  같은 렌더의 연속 클릭은 ref로 차단하고 버튼만 비활성화한다. 편집·Undo/Redo·자동 저장은 계속 동작한다.
+  동시 명시적 flush(수동/이동)는 같은 Promise를 공유하고 완료/실패 후 재시도할 수 있다.
+- 최신 Score 일치와 transaction 커밋을 확인한 기존 saved 상태로만 완료 표시한다.
+  이전 쓰기가 완료되어도 추가 편집이 남으면 저장 중이며, 이전 완료 문구는 즉시 숨긴다.
+- 단위 9개 추가: 버튼 6개 및 저장 훅 3개(중복/경합/실제 fake-indexeddb 실패·재시도).
+  put 성공 후 transaction abort를 주입해 기존 원시 레코드 전체 및 메모리 Score/이력 불변을 확인한다.
+  전체 **31파일 / 362개 통과**, 기존 353개 유지. typecheck/lint/architecture/build exit 0.
+  아키텍처 53 modules / 139 dependencies, 경계 46파일 위반 0.
+- 신규 E2E 4종: 디바운스 중 수동 저장/Undo/Redo/복원, 실제 transaction 지연 중 연속 클릭·추가 편집,
+  실패 원본 보존·재시도, 모바일 터치/복원. 기존 31종 유지, **35종/9파일** 수집 성공.
+  전체 test:e2e는 **listen EPERM 0.0.0.0:3010**, exit 1 → **35종 미실행**.
+  신규 테스트의 타입/린트 오류는 수정 후 typecheck/lint/build를 재검증했다.
+- MODULE_CONTRACTS/TEST_PLAN 갱신. Score/schemaVersion 2/Part.ties/Command/Undo/Redo/저장소·production 의존성·배포 설정 유지.
+  실제 브라우저·모바일 실기기 검증 전 완전 검증으로 표시하지 않는다. 수동 절차는 TEST_PLAN §20.
+
 ## 5. 다음 작업
 
-1. Mac 일반 터미널에서 아래 명령으로 편집 커서 추가 후 전체 31종을 검증한다(사용자 기준선 28/28).
+1. Mac 일반 터미널에서 아래 명령으로 수동 저장 추가 후 전체 35종을 검증한다(사용자 기준선 31/31).
 
    ```bash
    cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
@@ -411,4 +433,4 @@
 2. TEST_PLAN §17의 입력 미리듣기 실제 청취·Safari/모바일 절차를 수행한다. 실제 오디오로 타이 지속·중복 어택 부재, 메트로놈 강조/템포, Pause/Stop 해제와 SVG 하이라이트 확인.
    메인 스레드 지연·백그라운드 탭의 커서 갱신, Safari/모바일 실기기는 별도 검증한다.
 3. Phase 1 인수 기준·지원 환경 게이트 확인 후 Phase 2 조옮김·음이름·음역 분석.
-   명시적 수동 저장 UI 및 재생 cursor 시작, 연습 속도/A–B loop는 후속 범위다.
+   재생 cursor 시작, 연습 속도/A–B loop는 후속 범위다. Phase 1의 수동 저장/커서 입력 수동 인수도 확인한다.

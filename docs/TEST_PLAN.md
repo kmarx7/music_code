@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 28종 + 편집 커서 3종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 28/28 통과 / 편집 커서 추가 후 31종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 31종 + 수동 저장 4종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 31/31 통과 / 수동 저장 추가 후 35종 Codex EPERM으로 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 30 파일 / 353 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 31 파일 / 362 통과)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -639,3 +639,42 @@ npm run test:e2e
 
 Score/Command/Repository/Tone 및 schemaVersion 2/Part.ties/의존성/기본 아키텍처 유지.
 GitHub push 및 Vercel 설정·배포 변경은 수행하지 않는다.
+
+
+## 20. 명시적 수동 저장 (2026-11-08)
+
+- 사용자 기준선 `e89ac0d`: 단위·통합 353개, Mac Chromium **31/31 통과**(§19 과거 EPERM과 구분).
+- `manual-save-button.test.ts` 신규 **6개**: 연속 클릭 단일 요청/버튼 잠금, 성공 뒤 추가 편집 시
+  이전 완료 숨김, 실패/재시도·백업 안내, handle 부재의 거짓 성공 방지, 예상 밖 거부, 언마운트 후 늦은 UI 결과 무시.
+  React 핸들러 대역 검증이며 실제 DOM/모바일 검증은 E2E와 별도 수동 확인이 필요하다.
+- 기존 `autosave.test.ts`에 **3개** 추가: 동시 명시적 flush의 동일 Promise/중복 쓰기 부재,
+  느린 자동 저장 + 수동 저장 + 추가 편집/자동 저장의 직렬화·최신 snapshot 일치,
+  실제 fake-indexeddb put 성공 뒤 transaction abort 시 기존 원시 레코드/메모리 Score/편집 이력 불변 및 재시도/새 repository 복원.
+- 전체 **31파일 / 362개 통과**(기존 353 유지). typecheck/lint/check:architecture/build exit 0.
+  아키텍처 53 modules / 139 dependencies, 경계 46파일 위반 0. 초기 테스트 코드 타입/린트 오류는 수정 후 재검증했다.
+- `manual-save.spec.ts` 신규 **4종**: 시계를 멈춘 디바운스 상태의 수동 저장·Undo/Redo·실제 DB/새로고침,
+  네이티브 IndexedDB transaction을 읽기 요청으로 지연시켜 연속 클릭·추가 편집·최신 제목 저장 및 쓰기 수 검증,
+  transaction abort의 전체 원시 레코드 보존·재시도, 모바일 touch·44px 버튼·가로 넘침/저장·복원.
+- 기존 31종 유지, `npm run test:e2e -- --list` **35종/9파일** 수집 성공.
+  전체 `npm run test:e2e`는 **listen EPERM 0.0.0.0:3010**, exit 1 → **35종 미실행**.
+  신규 DOM/네이티브 transaction 계측이 브라우저에서 통과했다고 주장하지 않는다. 삭제/skip/timeout 증가 없음.
+
+Mac 일반 터미널 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+수동 확인(미실행):
+
+1. `npm run dev` → localhost:3010에서 악보를 편집한 직후 상단 “저장”을 누르고 최신 저장 완료 안내를 확인한다.
+   저장 버튼을 여러 번 누르고, 처리 중에도 음표·제목(제목 변경 적용)을 더 편집해 마지막 값이 저장되는지 확인한다.
+2. Undo/Redo 후 저장 및 새로고침으로 정확한 제목/음표/타이가 복원되는지 확인한다. 수동 저장 후에도
+   추가 편집만으로 자동 저장이 계속되는지 확인한다. 미적용 폼 입력값은 저장 대상 Score가 아님을 구분한다.
+3. 저장 실패 시 안내/재시도/JSON 백업, 원본 유지와 편집 내용 유지 확인은 신규 실패 주입 E2E를 사용한다.
+   사용자 실제 악보나 브라우저 데이터를 삭제하는 방식으로 오류를 만들지 않는다.
+4. 실제 모바일·Safari에서 버튼 터치/포커스/오류·완료 안내를 확인한다. 강제 종료·탭 닫기/뒤로가기/직접 URL 이탈의
+   미완료 저장 및 다중 탭의 정상 레코드 충돌은 기존 미해결 범위이며 수동 저장이 자동 해결하지 않는다.
+
+Score 모델/Part.ties/schemaVersion 2/기존 저장소와 Command/Undo/Redo 유지. GitHub push/Vercel 작업 없음.

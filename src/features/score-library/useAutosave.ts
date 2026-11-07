@@ -29,6 +29,7 @@ export function useAutosave(
 
   useEffect(() => {
     let active = true;
+    let explicitFlush: Promise<boolean> | undefined;
     const report = (value: SaveStatus) => { if (active) setStatus(value); };
     const flush = async (includeLatest = false): Promise<boolean> => {
       if (timer.current) clearTimeout(timer.current);
@@ -59,7 +60,11 @@ export function useAutosave(
         // Explicit navigation flush includes edits made during an older write.
       }
     };
-    if (controlRef) controlRef.current = { flush: () => flush(true) };
+    if (controlRef) controlRef.current = { flush: () => {
+      // Manual save and navigation share one request while it includes the latest edits.
+      explicitFlush ??= flush(true).finally(() => { explicitFlush = undefined; });
+      return explicitFlush;
+    } };
 
     const unsubscribe = scoreStore.subscribe(() => {
       // 디바운스 대기 중에도 이전 편집의 "저장됨"을 표시하지 않는다.

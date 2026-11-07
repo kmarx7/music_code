@@ -33,7 +33,7 @@
 | Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
-| Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle` |
+| Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle`, `SaveButton` |
 | Feature · Playback | `@/features/playback` | `PlaybackControls`, `highlightPlayback` (런타임 UI/DOM 투영) |
 | Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings`, `EditCursor` |
 
@@ -373,3 +373,32 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   이 선은 읽기 전용 UI 투영이며 SVG 클릭으로 위치를 계산하거나 Score를 역산하지 않는다.
 - Score/schemaVersion 2/Part.ties/Command/Repository/Tone 재생·미리듣기/의존성/레이어는 불변이다.
   호환 가능한 입력 계획·UI 확장이며 구조 변경 ADR은 필요하지 않다.
+
+
+## Phase 1 — 명시적 수동 저장 (2026-11-08)
+
+- `SaveButton`을 기존 score-library 공개 진입점에 추가하고 편집기 상단에 배치한다.
+  기존 화면에 저장 버튼이 없으므로 작은 UI만 추가한다. Score/Repository를 소유하거나 직접 쓰지 않으며
+  기존 `AutosaveHandle` ref와 `SaveStatus`만 받는다. 모바일 터치 영역은 최소 높이 44px다.
+- 저장 클릭은 기존 `useAutosave.flush()`를 호출한다. 400ms 디바운스를 건너뛰고 기존 쓰기 대기열에 합류하며,
+  저장 도중 바뀐 같은 악보의 최신 Score도 저장한 뒤 성공한다. 자동 저장과 편집/Undo/Redo는 계속 활성화한다.
+- `useAutosave`의 진행 중 명시적 flush는 같은 Promise를 공유한다. 수동 저장/이동이 동시에 요청되어도
+  별도 쓰기 루프를 시작하지 않는다. 완료/실패 후 공유 요청을 해제해 재시도를 허용한다.
+  일반 자동 저장/cleanup은 기존 같은 직렬 쓰기 대기열을 유지한다. 동일 직렬화 내용은 중복 저장하지 않는다.
+- 버튼은 동기 ref로 같은 렌더 사이의 연속 클릭도 차단하며, 요청 동안 버튼만 disabled/aria-busy로 표시한다.
+  초기화되지 않은 handle/예상 밖 거부도 성공으로 표시하지 않으며, 언마운트 후 늦은 UI 결과는 무시한다.
+  진행 중 저장 자체를 취소하거나 전역 저장 상태를 별도 복제하지 않는다.
+- 완료 문구는 수동 요청 반환값만으로 결정하지 않는다. 기존 SaveStatus가 saved일 때만 최신 저장 완료를 표시한다.
+  추가 편집은 즉시 saving으로 바뀌므로 이전 성공 문구를 숨긴다. 오류는 저장 재시도/JSON 백업 안내를 제공하며
+  수동 요청 실패 안내는 다음 수동 요청으로 해제한다. 기존 자동 저장 상태 표시도 유지한다.
+  새로운 status/alert role은 추가하지 않아 재생 output/기존 오류 선택자와 충돌하지 않는다.
+- IndexedDB 성공은 기존 transaction.oncomplete 기준이다. transaction 실패는 put이 성공했더라도 실패이며,
+  해당 transaction의 쓰기는 롤백되어 직전 커밋된 정상 레코드가 유지된다. 실패 시 메모리 Score와 편집 이력은 유지한다.
+  여러 snapshot을 저장하는 flush 전체를 하나의 DB transaction으로 바꾸지는 않는다.
+- 편집하지 않은 정상 baseline은 이미 저장된 것으로 확인하므로 버튼을 눌러도 중복 쓰기하지 않는다.
+  지원 v1의 읽기만으로 자동 재저장하지 않는 정책과 손상/미지원 저장본의 쓰기 차단도 유지한다.
+  제목/설정 폼의 미적용 입력값은 canonical Score가 아니므로 저장 버튼이 그 폼을 자동 적용하지 않는다.
+- ScoreRepository 반환 계약/저장소/상태 관리/Command/Undo/Redo/Part.ties/schemaVersion 2/배포 설정 불변.
+  기존 포트와 저장 흐름의 호환 가능한 보완이며 구조 변경 ADR은 필요하지 않다.
+- 강제 종료/탭 닫기/직접 URL 이동/뒤로가기의 비동기 저장 완료, 정상 레코드 간 다중 탭 충돌,
+  브라우저 데이터 삭제는 여전히 보장 범위 밖이다. 수동 저장은 완료 표시를 확인한 시점의 로컬 저장 확인 수단이다.
