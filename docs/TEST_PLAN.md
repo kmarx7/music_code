@@ -983,3 +983,86 @@ Phase 2-6은 formatNoteLabel/기존 midiFromSpelling/transposeScore와 검증된
   기존 Score v2/Command/Undo·Redo/IndexedDB DB2/ADR-010 경로 및 음악 이론 조옮김 엔진 변경 없음.
 - 실제 오디오 청취, Safari·모바일 실기기 및 앞서 명시한 폰트·극단 음역·다중 행 인수는 별도다.
   Phase 2-6은 구현하지 않았으며 GitHub push/Vercel 작업은 수행하지 않는다.
+
+## 28. Phase 2-6 음역 분석 및 조옮김 추천 (2026-11-09)
+
+- 기준 main/HEAD `cbac282`, clean. 단위·통합 574 및 사용자 Mac Chromium 52/52 통과를 기준선으로 유지한다.
+- 신규 단위·통합 **40개**:
+  - score-range.test.ts **19개**: 단일/복수 음표, 전체/Part별 분석, 빈/쉼표, 타이의 이벤트/발음 수,
+    반복 음과 같은 MIDI 이명동음 철자, 복수 Part의 극값, 원본 동결/극값 Pitch 복사,
+    숫자 MIDI 0/127 분석과 invalid octave Score의 추천 거부, 잘못된 목표 범위 6종,
+    전체 적합 우선/근거리/상행 동률/엔진 Db·Gb 철자, +24 옥타브 추천, 단조/중복 제거,
+    no-fit/부분 위반/타이 발음 수, 미지원 조표/MIDI·octave·alter 거부 및 실패 사유,
+    동일 입력의 결정적 결과·모든 후보의 기존 엔진 재실행/전체 검증/ID·메타데이터·타이/리듬 일치.
+  - range-recommendations-ui.test.ts **11개**: 실제 분석 표시, 목표 MIDI 이름/계산/선택 callback,
+    목표 변경 즉시 이전 결과/콜백 무효화, 부분 적합·개별 초과량, 잘못된 입력 5종,
+    빈 Score, disabled 상태, MIDI0 이름의 표시 전용 사용과 원본 보존.
+  - transpose-preview.test.ts **9개 추가**: 읽기 전용 전체 음역/옥타브 선택→단일 Command/Undo·Redo,
+    취소/No-op과 Redo 보존, 목표 변경 후 이전 confirm 차단, 수동 조성 전환,
+    편집/revision/conflict/deleted/error 시 오래된 추천 선택·확정 모두 차단.
+  - autosave.test.ts **1개 추가**: 실제 IndexedDB adapter+fake-indexeddb 및 기존 훅에서 분석/추천만으로
+    Store 알림·이력·timestamp/저장 상태/revision/원시 row/JSON 불변, Repository IO 0 확인.
+- UI/훅은 기존 React 대역 패턴으로 검사한다. 단순 element tree와 데이터 검사이며 실제 브라우저 인수와 구분한다.
+  기존 엔진·Score 검증 및 ADR-010 테스트/기존 574개를 삭제하거나 약화하지 않았다.
+- 전체 **41파일/614개 통과**. typecheck/lint/check:architecture/build exit 0.
+  아키텍처 62모듈/186의존성, 경계 55파일 위반 0. 혼합 `type Score` import의 검사기 오탐은 import 분리로 해결했으며 규칙/예외는 추가하지 않았다.
+- 신규 range-recommendations.spec.ts **3종**:
+  1. 음역/이벤트·발음 수 표시, 목표 입력→+2 추천→취소의 실제 IDB put 0/원시 레코드 보존,
+     +24 추천→라벨/미리보기→확정→Undo/Redo→저장/새로고침의 음역 및 Score v2 동등성.
+  2. 목표 입력 변경 시 선택 후보/확정 무효화, 추천 중 원본 제목 편집 후 오래된 선택·확정 차단.
+  3. 다른 탭 저장/삭제 각 상황에서 추천 선택 차단, 최신 원시 row/Tombstone 불변.
+- 기존 E2E **52종 무변경**. 합계 **55종/14파일 수집 성공**.
+  전체 `npm run test:e2e`는 production build 후 **listen EPERM 0.0.0.0:3010**, exit 1로 서버 시작 실패.
+  **브라우저 55종 미실행**이며 과거 사용자 Mac 52/52를 이번 버전 성공으로 간주하지 않는다.
+  사용자 지시에 따라 변경을 보존하고 로컬 커밋 보류한다.
+
+Mac 재검증:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e -- tests/e2e/range-recommendations.spec.ts
+npm run test:e2e
+```
+
+남은 인수: 실제 브라우저의 추천 입력/상위 후보 선택·옥타브/부분 적합 설명, 두 탭/이탈,
+Safari·모바일 실기기, 기보/라벨 폰트/타이와 실제 오디오 청취, 큰 악보의 계산 응답성.
+목표 음역은 수치상 MIDI 범위이며 악기 난이도/운지/성대나 연주 능력을 판단하지 않는다.
+현재 canonical 모델은 NoteEvent당 단일 Pitch이며 별도 화음/다중 Part 기보·재생을 추가하지 않았다.
+Phase 2 전체 인수는 위 브라우저·수동 검증 전 완료로 표시하지 않는다. GitHub push/Vercel 작업 없음.
+
+### Phase 2-6 악보 요약 Locator 회귀 수정 (2026-11-09)
+
+- 사용자 Mac Chromium **36/55 PASS, 19 FAIL**, 신규 추천 E2E 3/3 PASS 보고.
+  로컬에 남은 trace.zip/error-context.md 각 19개를 확인했고 모든 trace에서 strict mode violation을 확인했다.
+  getByText(/음표 N개/)가 기존 요약 span과 새 score-range의 '표기 음표 N개'를 함께 선택했다.
+- 재실행으로 원본 증거가 사라지지 않도록 trace/context를 임시 경로에 보존했다:
+  `/var/folders/35/m6dppg413h39y02j8j16qq3h0000gn/T/music-score-locator-evidence-294fcgd8/test-results`.
+- 기존 요약 span에 동작·문구·레이아웃 변화 없이 data-testid="score-summary"만 추가했다.
+  공통 `tests/e2e/score-summary.ts`의 scoreNoteCount(page,count)는 이 요약 안의 기대 숫자만 선택한다.
+- 수정 E2E 8파일/33지점: editor(16), manual-save(5), autosave-navigation(3), piano-preview(3),
+  rest(3), edit-cursor(1), settings(1), transpose-preview(1).
+  실제 실패한 테스트 수 19와 코드 선택 지점 수 33을 구분한다. 후속 단계에 있어 아직 도달하지 못한 지점도 같은 충돌을 예방한다.
+- 8파일에서 새 헬퍼 import/호출을 원래 locator로 역변환하면 HEAD의 원본과 완전히 같음을 검사했다.
+  기대 숫자/가시성 assertion/저장·편집 검증은 그대로이며 삭제/skip/first/last/timeout 증가는 없다.
+  BPM·쉼표 개수·편집 문구는 새 음역 영역과 겹치지 않아 유지했다. score-range 검증도 그대로다.
+- 단위·통합 **614/614 PASS**, typecheck/lint/architecture/build PASS, git diff --check PASS.
+  아키텍처 62모듈/186의존성, 경계 55파일 위반 0. helper는 테스트 전용이며 제품 로직은 변경하지 않는다.
+- 전체 E2E는 다시 **listen EPERM 0.0.0.0:3010**, exit 1로 서버 시작 실패 → 수정 후 **55종 미실행**.
+  수집은 **55종/14파일** 유지. Mac 55/55 확인 전 관련 Phase 2-6 변경과 Locator 수정을 보존하고 커밋 보류한다.
+
+Mac 전체 재검증: `npm run test:e2e` (프로젝트 루트).
+기존 Score/음역 알고리즘/Command/Undo·Redo/IndexedDB/ADR-010 변경 없음. GitHub push/Vercel 작업 없음.
+
+### Phase 2-6 최종 검토 및 사용자 Mac 검증 결과 (2026-11-09)
+
+- 사용자가 Locator 수정 이후 Mac에서 전체 Chromium E2E **55/55 PASS**를 직접 확인했다.
+  기존 52종과 신규 추천 3종을 모두 포함한다. 위 Mac 36/55·19 FAIL 및 Codex listen EPERM 기록은 당시 결과로 보존한다.
+  Codex에서 브라우저 실행에 성공한 것으로 표기하지 않으며, Mac 재검증 전 커밋 보류 조건은 이번 확인으로 해소되었다.
+- 단위·통합 **614/614 PASS**(41파일, 기존 574 + 신규 40), typecheck/lint/architecture/build PASS.
+- 추적 변경 16개/신규 7개, 총 23파일을 최종 검토했다. score-summary 공통 헬퍼와 신규 테스트를 포함하며
+  기존 E2E의 기대 숫자·가시성·편집/저장 assertion을 유지한다. 분석/추천/미리보기는 무dispatch·무저장,
+  확정은 기존 Command 1회이며 기준 세션·revision·충돌·삭제 검사를 보존한다.
+- Score schemaVersion 2, Part.ties, 기존 Command/Undo·Redo/JSON, IndexedDB DB2 및 ADR-010 계약 유지.
+  저장소/자동 저장 구현, 기존 조옮김 엔진, Tone.js/VexFlow 구현과 의존성은 변경하지 않았다.
+- 실제 오디오 청취, Safari·모바일 실기기, 폰트·극단 음역·다중 행 시각 인수 및 큰 악보 응답성은 별도다.
+  수치상 음역 적합성을 실제 악기 연주 가능성으로 간주하지 않는다. GitHub push/Vercel 작업 및 Phase 3 구현 없음.

@@ -29,7 +29,7 @@
 
 | 모듈 | 진입점 | 제공 내용 |
 |---|---|---|
-| Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수, `transposeScore`, `TransposeSpec` |
+| Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수, `transposeScore`, `TransposeSpec`, `analyzeScoreRange`, `recommendTranspositions`, `RangeAnalysis`, `TargetMidiRange`, `RangeRecommendation` |
 | Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature`, `intervalBetweenKeys`, `transposePitch`, `transposeKeySignature`, `TransposeInterval`, `TransposeResult`, `formatNoteLabel`, `NoteLabelMode` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
@@ -575,4 +575,39 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   알려진 충돌/삭제 상태를 라벨 변경으로 해제하거나 저장을 재개하지 않는다.
 - 후보는 자신의 Pitch와 공유 mode로 표시되며 모드 변경은 preview baseline을 무효화하지 않는다.
   확정/취소/Undo/Redo는 기존 Command/세션 경로다. Label mode는 별도 Command/영속 필드가 아니다.
-  Phase 2-6의 음역 분석/추천은 미구현이다.
+  Phase 2-6 음역 분석/추천은 아래 절을 따른다.
+
+## Phase 2-6 — 전체 Part 음역 분석 및 조옮김 추천
+
+- `analyzeScoreRange(score): RangeAnalysis`는 canonical NoteEvent.pitch 전체를 읽는 순수 투영이다.
+  전체/Part별 minMidi/maxMidi, 복사된 lowest/highest Pitch와 기존 철자의 음이름, 반음 폭,
+  noteEventCount/ logicalNoteCount, empty를 제공한다. 쉼표는 제외하며 tie.to는 발음 수에서만 제외한다.
+  같은 MIDI의 서로 다른 철자는 Score 배열 순서에서 먼저 만난 것을 극값 이름으로 유지한다.
+  음표가 없으면 extrema/이름/폭은 null이다. 화음 모델/새 음악 좌표계를 추가하지 않는다.
+- 분석은 입력 검증을 대체하지 않는다. 기존 import/edit 경계에서 검증된 Score를 소비한다.
+  숫자 분석은 MIDI 0도 읽지만, 현재 Score v2의 octave 0~9 제약상 C-1 저장본은 무효다.
+  목표 MIDI 0~127 입력은 허용하되 실제 후보는 기존 엔진의 MIDI/octave/alter/Score 검증을 모두 통과해야 한다.
+- `recommendTranspositions(score,{minMidi,maxMidi})`는 정수/0~127/min≤max를 검증하고
+  기존 transposeScore의 0반음 호출로 원본 유효성·지원 조표를 확인한다. 빈 악보는 후보 없이 반환한다.
+  같은 모드의 지원 조표 15개×nearest/up/down 3방향과 -127~127반음 255개, 총 300개 요청을
+  명시적으로 열거하여 기존 엔진만 호출한다. 옥타브 이동도 포함하며 장↔단조 변환은 만들지 않는다.
+- 성공 후보는 전체 Part 음역을 다시 분석한다. 임시 Score는 외부 Store/저장소에 전달하지 않고 폐기한다.
+  동일 반음·음이름 이동량 쌍은 같은 원본에 동일 음악 결과를 주므로 하나로 합친다.
+  다른 이명동음 철자는 별도 후보로 유지한다. 실패 spec/error는 rejected에 기록한다.
+- 정렬은 전체 적합→abs(delta) 최소→동률 상행→동일 delta의 기존 반음 엔진 자동 철자 우선
+  →지원 조표 고정 순서→음이름 이동량이다. 자동 철자/0·옥타브 보존 정책은 엔진 결과를 그대로 따른다.
+  별도 음높이 변환·이명동음 선정 알고리즘이 없다. 부분 후보는 낮음/높음 초과 반음과
+  논리적 발음별 위반(Part ID/이벤트 ID/철자/MIDI/초과량)을 제공한다.
+- TransposeTool은 항상 현재 전체 음역을 표시하고 기존 미리보기 안에 RangeRecommendations를 둔다.
+  공통 목표 음역은 컴포넌트 로컬 상태다. 기존 midiToPitch/formatNoteLabel은 목표 MIDI 이름 표시에만 사용한다.
+  MIDI 기본 샵 표기는 목표 입력 설명에 한정하며 원본/후보 철자는 재선택하지 않는다.
+- 추천 계산은 명시적 버튼에서 수행한다. 전체 적합 상위 8개, 없으면 부분 적합 상위 5개를 구분해 표시한다.
+  목표 변경은 목록과 선택 추천을 무효화한다. 오래된 목표 요청의 버튼 콜백도 선택할 수 없다.
+  모든 음을 목표에 넣는 유효 후보가 없다는 사실 및 범위 밖 음/초과량을 명시한다.
+- 후보 선택은 원본 session 참조/revision/저장 상태를 다시 검사한 뒤 미리보기 spec만 갱신한다.
+  원본 편집/Undo·Redo/세션·revision 변경, error/conflict/deleted에서 선택과 확정을 차단한다.
+  최종 확정만 기존 TransposeScore Command 1회다. 후보 Score 대입/새 저장 경로/자동 병합은 없다.
+  추천의 반음 spec은 옥타브를 포함하며 조성/방향을 수동 변경하면 추천 override를 해제한다.
+- 분석·계산·선택·취소는 Score/이력/updatedAt/dirty/revision/IndexedDB/JSON/BC를 변경하지 않는다.
+  최종 저장 충돌 보호는 기존 ADR-010 OCC다. schemaVersion2/Part.ties/DB2/기존 엔진·Command·저장·재생 구현 유지.
+  분석은 모든 Part, 기보·재생은 기존 첫 Part 한정이다. 악기 프리셋/운지법/실제 연주 가능성 판단은 제공하지 않는다.

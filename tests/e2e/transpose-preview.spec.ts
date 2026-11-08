@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -71,7 +72,7 @@ test("확정은 조표·음높이를 한 Undo 단위로 바꾸고 저장·새로
   await expect.poll(() => storedScore(page, id)).toEqual(original);
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect.poll(() => storedScore(page, id)).toEqual(changed);
-  await page.reload(); await expect(page.getByText(/음표 4개/)).toBeVisible();
+  await page.reload(); await expect(scoreNoteCount(page, 4)).toBeVisible();
   expect(await storedScore(page, id)).toEqual(changed);
   await expect(page.getByTestId("staff").locator("svg")).toBeVisible();
 });

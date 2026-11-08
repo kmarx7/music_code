@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -22,7 +23,7 @@ async function rawRecord(page: Page, id: string) {
 
 test("수동 저장은 디바운스를 기다리지 않고 최신 Score·Undo/Redo를 저장하고 복원한다", async ({ page }) => {
   const id = "e2e-manual-save"; await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.clock.install(); await page.clock.pauseAt(new Date(Date.now() + 1000));
   const save = page.getByRole("button", { name: "저장", exact: true });
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
@@ -42,13 +43,13 @@ test("수동 저장은 디바운스를 기다리지 않고 최신 Score·Undo/Re
   expect(await storedScore(page, id)).toEqual(edited);
   await page.clock.resume(); await page.reload();
   await expect(page.getByRole("heading", { name: "수동 저장 연습곡", exact: true })).toBeVisible();
-  await expect(page.getByText(/음표 1개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 1)).toBeVisible();
   expect(await storedScore(page, id)).toEqual(edited);
 });
 
 test("저장 중 연속 클릭·추가 편집은 한 대기열에서 최신 제목까지 저장한다", async ({ page }) => {
   const id = "e2e-manual-save-race"; await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.evaluate((scoreId) => {
     const audit: WriteAudit = { hold: true, writes: 0, active: 0, maximum: 0 };
     (window as AuditWindow).manualWriteAudit = audit;
@@ -96,7 +97,7 @@ test("저장 중 연속 클릭·추가 편집은 한 대기열에서 최신 제�
 
 test("수동 저장 트랜잭션 실패는 원시 레코드를 보존하고 재시도·백업을 안내한다", async ({ page }) => {
   const id = "e2e-manual-save-failure"; await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   const baseline = await rawRecord(page, id);
   await page.evaluate((scoreId) => {
     const original = IDBObjectStore.prototype.put;
@@ -132,7 +133,7 @@ test.describe("모바일 수동 저장", () => {
     const saved = await storedScore(page, id);
     expect(saved.parts[0].measures[0].events[0].pitch.midi).toBe(60);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.reload(); await expect(page.getByText(/음표 1개/)).toBeVisible();
+    await page.reload(); await expect(scoreNoteCount(page, 1)).toBeVisible();
     expect(await storedScore(page, id)).toEqual(saved);
   });
 });

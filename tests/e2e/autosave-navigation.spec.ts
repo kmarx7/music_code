@@ -1,10 +1,11 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test } from "@playwright/test";
 import { storedScore } from "./storage";
 
 test("연속 편집·제목 Undo/Redo 직후 이동해도 최신 ID·제목·음표를 저장한다", async ({ page }) => {
   const id = "e2e-immediate-library";
   await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
   await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill("이동 직전 연습곡");
@@ -23,13 +24,13 @@ test("연속 편집·제목 Undo/Redo 직후 이동해도 최신 ID·제목·음
   await page.reload();
   await source.click();
   await expect(page.getByRole("heading", { name: "이동 직전 연습곡", exact: true })).toBeVisible();
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
 });
 
 test("저장 트랜잭션 실패 시 이동을 막고 오류·JSON 백업·재시도를 제공한다", async ({ page }) => {
   const id = "e2e-navigation-save-error";
   await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await expect.poll(async () => (await storedScore(page, id))?.title).toBe("새 악보");
   await page.evaluate((scoreId) => {
     const original = IDBObjectStore.prototype.put;

@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -36,7 +37,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
 
   // dev 서버의 첫 컴파일 지연이 검증 실패로 오인되지 않도록 편집기 라우트를 미리 방문한다.
   await page.goto("/editor/e2e-warmup");
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await clearScores(page);
 
   await page.goto("/library");
@@ -47,7 +48,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
 
   await page.getByRole("button", { name: "MIDI 60" }).click();
   await page.getByRole("button", { name: "MIDI 62" }).click();
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
 
   await page.getByRole("button", { name: "C4", exact: true }).click();
   await expect(page.getByText("선택한 음표 편집")).toBeVisible();
@@ -73,7 +74,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
   ]);
 
   await page.reload();
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
   const restoredNote = page.getByRole("button", { name: "C#4", exact: true });
   await restoredNote.click();
   await expect(restoredNote).toHaveAttribute("aria-pressed", "true");
@@ -83,7 +84,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
   await expect(page.getByRole("link", { name: "열기" })).toHaveCount(1);
   await page.getByRole("link", { name: "열기", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/editor/${scoreId}$`));
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
 
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
@@ -95,23 +96,23 @@ test("모바일 레이아웃에서 가로 스크롤 없이 입력·저장된다"
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/editor/e2e-mobile");
 
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
 
   await page.getByRole("button", { name: "MIDI 60" }).click();
-  await expect(page.getByText(/음표 1개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 1)).toBeVisible();
   await expect(page.getByText("저장됨")).toBeVisible();
 });
 
 test("키보드 입력과 포커스·접근성 상태가 동작한다", async ({ page }) => {
   await page.goto("/editor/e2e-keyboard");
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
 
   await page.keyboard.press("a");
-  await expect(page.getByText(/음표 1개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 1)).toBeVisible();
 
   const c4 = page.getByRole("button", { name: "MIDI 60" });
   await c4.focus();
@@ -128,18 +129,18 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
   await clearScores(page);
 
   await page.goto("/editor/e2e-tie");
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
 
   await page.getByRole("button", { name: "MIDI 60" }).click();
   await page.getByRole("button", { name: "MIDI 60" }).click();
   await page.getByRole("button", { name: "MIDI 60" }).click();
-  await expect(page.getByText(/음표 3개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 3)).toBeVisible();
 
   // 4/4 마지막 박(2880)에서 시작하는 2박 음 → 마디 경계에서 분할 + 타이
   await page.getByRole("button", { name: "2분음표" }).click();
   await page.getByRole("button", { name: "MIDI 62" }).click();
 
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
   const tiedChips = page.locator("button[aria-pressed]", { hasText: "⌒" });
   await expect(tiedChips).toHaveCount(2);
   await expect(page.locator("svg")).toHaveCount(1);
@@ -149,7 +150,7 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
   await expect(page.getByText("저장됨")).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
 });
 
@@ -157,11 +158,11 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   const scoreId = "e2e-backup";
   await page.goto(`/editor/${scoreId}`);
   await expect(page).toHaveURL(new RegExp(`/editor/${scoreId}$`));
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "MIDI 60" }).click();
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62" }).click();
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
 
   const title = page.getByRole("textbox", { name: "악보 제목" });
   await title.fill("백업 연습곡");
@@ -174,7 +175,7 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await title.fill("   ");
   await page.getByRole("button", { name: "제목 변경", exact: true }).click();
   await expect(page.locator('p[role="status"]')).toHaveText("제목을 입력해 주세요.");
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
 
   const downloadEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
@@ -211,6 +212,6 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
   await page.reload();
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
   await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
 });

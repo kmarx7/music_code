@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -48,7 +49,7 @@ test("피아노 미리듣기·빠른 컴퓨터 키 입력·음소거와 정상 �
   await expect.poll(() => pitches(page, id)).toEqual([60, 62, 64, 65, 67, 71, 69]);
   expect(await storedScore(page, id)).toMatchObject({ schemaVersion: 2, parts: [{ ties: [] }] });
   await page.reload();
-  await expect(page.getByText(/음표 7개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 7)).toBeVisible();
 });
 
 test("미리듣기 오디오 실패가 음표 입력·저장·재시도를 차단하지 않는다", async ({ page }) => {
@@ -63,7 +64,7 @@ test("미리듣기 오디오 실패가 음표 입력·저장·재시도를 차�
   await expect(page.getByTestId("piano-preview-message")).not.toContainText("시작하지 못했습니다");
   await expect.poll(() => pitches(page, id)).toEqual([60, 62]);
   await page.reload();
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
 });
 
 test("오디오 실패 중 동일 음 반복 입력도 Undo/Redo·저장·복원을 유지한다", async ({ page }) => {
@@ -79,7 +80,7 @@ test("오디오 실패 중 동일 음 반복 입력도 Undo/Redo·저장·복원
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect.poll(() => storedScore(page, id)).toEqual(before);
   await page.reload();
-  await expect(page.getByText(/음표 3개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 3)).toBeVisible();
   expect(await storedScore(page, id)).toEqual(before);
   await page.evaluate(() => { (window as Window & { pianoAudioAudit?: AudioAudit }).pianoAudioAudit!.failOscillator = false; });
   await key.click(); await heard(page, 60);

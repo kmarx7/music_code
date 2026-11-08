@@ -8,6 +8,7 @@ import { scoreStore } from "@/store/score-store";
 import { NoteLabelsControl } from "@/features/score-editor";
 import { ScoreConflictError } from "@/application/ports";
 import type { NoteLabelMode } from "@/domain/music-theory";
+import { analyzeScoreRange, recommendTranspositions } from "@/domain/score";
 import { createPitch } from "@/domain/music-theory";
 import { MemoryScoreRepository } from "../fixtures/memory-repository";
 import { fourNoteScore } from "../fixtures/scores";
@@ -569,4 +570,17 @@ it.each(["CONFLICT", "DELETED"] as const)("labels cannot clear %s or restart a b
   await vi.advanceTimersByTimeAsync(1000);
   expect(mode).toBe("fixed-do"); expect(control.getSnapshot!()).toEqual(state); expect(scoreStore.getState()).toBe(before);
   expect(save).toHaveBeenCalledTimes(1);
+});
+
+it("range analysis/recommendations preserve saved raw data, revision, redo and autosave without repository IO", async () => {
+  vi.useRealTimers(); const name = "range-recommendations-readonly"; const repository = createIndexedDbScoreRepository({ dbName: name }); const control = await mount(repository, true);
+  scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "changed" }); scoreStore.undo(); expect(await control.flush()).toBe(true);
+  const before = scoreStore.getState(); const raw = await transposeRawRecord(name); const snapshot = control.getSnapshot!();
+  const save = vi.spyOn(repository, "save"); const read = vi.spyOn(repository, "read"); const notify = vi.fn(); const unsubscribe = scoreStore.subscribe(notify);
+  try {
+    expect(analyzeScoreRange(before!.current).minMidi).toBe(60);
+    const result = recommendTranspositions(before!.current, { minMidi: 84, maxMidi: 91 }); expect(result.ok).toBe(true);
+    expect(scoreStore.getState()).toBe(before); expect(before!.future).toHaveLength(1); expect(control.getSnapshot!()).toEqual(snapshot);
+    expect(notify).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled(); expect(await transposeRawRecord(name)).toEqual(raw);
+  } finally { unsubscribe(); }
 });

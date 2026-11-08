@@ -1,6 +1,6 @@
 # TASKS.md — Phase 0 작업 및 MVP 추적
 
-- 최종 갱신: 2026-11-08
+- 최종 갱신: 2026-11-09
 - 작업 단위: `docs/PHASE_0_PLAN.md` P0-01 ~ P0-08
 - 상태 표기: `Done` / `Partial` / `Pending` / `Blocked`
 - 증거는 실제 실행 결과만 기록한다(추정 금지).
@@ -18,16 +18,16 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-5 음이름·고정도법 표시)
+## 2. 검증 명령 결과 (최신: 2026-11-09 Phase 2-6 음역 분석·조옮김 추천)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 39 파일 / **574 테스트 통과**(기존 544 + 표시·렌더·저장·후보 회귀 30) |
-| `npm run check:architecture` | ✅ exit 0 | 59 모듈·170 의존성, 경계 52파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 41 파일 / **614 테스트 통과**(기존 574 + 음역/추천·UI·저장 회귀 40) |
+| `npm run check:architecture` | ✅ exit 0 | 62 모듈·186 의존성, 경계 55파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
-| `npm run test:e2e` | 사용자 Mac Chromium **52/52 PASS** | 사용자 직접 확인. 과거 Codex listen EPERM 기록은 아래 유지 |
+| `npm run test:e2e` | ✅ 사용자 Mac Chromium **55/55 PASS** | 사용자가 직접 실행 확인. Codex의 listen EPERM/서버 exit 1 기록은 아래 보존 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
@@ -43,7 +43,7 @@
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | 기존 함수 기반 Unicode 표시, none/letter/fixed-do, VexFlow 라벨·타이 머리·후보 연동 구현/단위 검증 완료. 사용자 Mac Chromium 52/52 통과; 폰트·실기기 인수는 별도 |
-| MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
+| MVP-011 | 음역·조옮김 제안 | Partial | 전체/Part별 음역·이벤트/발음 수·공통 MIDI 목표·엔진 기반 유한 추천·부분 초과 설명·기존 미리보기/확정 연결 구현. 단위·통합 614/614 및 사용자 Mac Chromium 55/55 PASS. Safari·모바일 실기기/실제 오디오 등 수동 인수는 별도 |
 | MVP-012 | 재생 | Partial | 커서·하이라이트·일시정지/재개·메트로놈 구현, 단위 검증 완료. 새 브라우저 E2E 미검증, cursor 시작/loop/rate는 후속 범위 |
 | MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동/수동 저장·목록·열기·삭제**. 제목/JSON 백업·가져오기/실패 저장본 보호 유지. 기존 Mac E2E 통과, 신규 수동 저장 브라우저 검증 대기 |
 | MVP-014 | 내보내기 | Pending | 미착수 |
@@ -574,11 +574,57 @@
 - MODULE_CONTRACTS/TEST_PLAN 갱신. schemaVersion2/Part.ties/DB2/ADR-010/새 라이브러리 없음/첫 Part 제한 유지.
   GitHub push/Vercel 및 Phase 2-6 구현 없음.
 
+### 4.28 Phase 2-6 음역 분석 및 조옮김 추천 (2026-11-09)
+
+- main/HEAD `cbac282`, clean. 기존 574개 및 사용자 Mac E2E 52/52 통과를 기준선으로 유지한다.
+- analyzeScoreRange는 전체/Part별 MIDI/원래 음이름/반음 폭/표기 이벤트 수와 타이 제외 발음 수를 순수 계산한다.
+  빈 결과는 null, 같은 MIDI의 철자는 Score 순서의 첫 표기를 유지한다. 화음/음악 모델 확장 없음.
+- recommendTranspositions는 기존 엔진으로 같은 모드 15조성×3방향 + -127~127반음 255개를 검사한다.
+  성공을 반음·문자 이동량으로 중복 제거, 전체 적합→최소 이동→상행→엔진 자동 철자→고정 순서로 정렬한다.
+  옥타브 이동 지원, 부분 위반 발음·초과량/실패 spec·사유 기록. 임시 Score는 저장/Store에 넣지 않는다.
+- 기존 TransposeTool 안에 목표 입력/명시적 계산/추천 미리보기 연결. 목표 변경은 결과·선택을 무효화하고
+  원본 session/revision/충돌·삭제 재검사로 오래된 선택·확정을 차단한다. 확정만 기존 Command 1회다.
+- 신규 **40개**, 전체 **41파일/614개 통과**, typecheck/lint/architecture/build 통과.
+  아키텍처 62모듈/186의존성, 경계 55파일 위반 0. 신규 UI/데이터/실제 fake-indexeddb 무쓰기 증거 TEST_PLAN §28.
+- 기존 52종 E2E 무변경 + 신규 3종 = **55종/14파일 수집 성공**.
+  전체 실행은 **listen EPERM 0.0.0.0:3010**, exit 1로 **브라우저 55종 미실행**.
+  **구현·자동 데이터 검증 완료, 브라우저/수동 인수 대기**이며 커밋 보류/변경 파일 유지.
+- Score v2/Part.ties/DB2/ADR-010/Command/Undo·Redo/기존 조옮김/저장·복원·기보·재생 구현 유지.
+  분석은 모든 Part, 기보·재생은 첫 Part 한정. 목표 MIDI0의 이름 C-1은 표시 전용이며 저장 octave 제약은 완화하지 않는다.
+  악기 프리셋/실제 연주 가능성/운지/라이브러리/모바일 전면 개편 없음. GitHub push/Vercel 작업 없음.
+
+### 4.29 Phase 2-6 악보 요약 E2E Locator 충돌 수정 (2026-11-09)
+
+- 사용자 Mac **36/55 PASS, 19 FAIL**(신규 추천 3/3 PASS). 실제 trace/context 19개 모두에서
+  getByText(/음표 N개/)가 요약 span과 score-range를 동시에 찾는 strict mode 오류를 확인했다.
+- 요약 span에 score-summary test ID만 추가하고 테스트 공통 scoreNoteCount 헬퍼로 범위를 한정했다.
+  E2E 8파일의 33지점 수정. 실제 실패 19종과 후속 잠재 충돌 지점을 구분한다.
+  역변환 비교로 8파일의 헬퍼 import/선택자 외 변경 없음, 기대 숫자/가시성/저장 assertion 그대로임을 확인했다.
+  BPM/쉼표/편집 문구·새 음역 검사는 유지한다. 원본 trace는 TEST_PLAN §28의 임시 경로에 보존했다.
+- 단위·통합 614/614, typecheck/lint/architecture/build 및 diff 검사 PASS.
+  전체 E2E는 listen EPERM 0.0.0.0:3010으로 수정 후 55종 미실행. 55종/14파일 수집 유지.
+- 기존 Phase 2-6 13파일 보존. 제품 동작 변경은 없으며 test ID 1개만 추가했다.
+  Mac 전체 55/55 성공 확인 전 스테이징/커밋 보류. GitHub push/Vercel 및 범위 밖 기능 없음.
+
+### 4.30 Phase 2-6 최종 검토 및 사용자 Mac 검증 (2026-11-09)
+
+- 사용자가 Locator 수정 후 전체 Chromium E2E **55/55 PASS**를 Mac에서 직접 확인했다.
+  기존 52개 및 신규 음역·추천 3개를 포함한다. 앞선 Mac 36/55·19 FAIL 및 Codex listen EPERM은 당시 기록으로 유지한다.
+  위 커밋 보류 기록은 Mac 재검증 전 상태이며, 이번 사용자 확인으로 브라우저 자동화 검증 조건을 충족했다.
+- 단위·통합 **614/614 PASS**(기존 574 + 신규 40), typecheck/lint/architecture/build PASS.
+  추적 변경 16개와 신규 7개, 총 **23파일**을 최종 검토했다. 신규 도메인/UI/단위·E2E와 score-summary 테스트 헬퍼를 포함한다.
+- 분석·추천·미리보기는 읽기 전용, 확정만 기존 TransposeScore Command 1회이며 stale/revision/충돌·삭제 차단을 유지한다.
+  기존 음표 개수 assertion은 요약 영역으로 한정했으며 기대값을 약화하지 않았다.
+  Score schemaVersion 2/Part.ties/Command/Undo·Redo/IndexedDB DB2/ADR-010/저장·복원 계약 및 의존성 변경 없음.
+- 이번 작업은 검토·검증 기록 갱신·선별 로컬 커밋에 한정한다. 실제 오디오 청취·Safari·모바일 실기기·큰 악보 응답성은 별도다.
+  GitHub push/Vercel 작업 및 Phase 3 구현 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
 2. Phase 2-3 구현·자동화 검증·최종 검토 완료. Phase 2-4 통합 검증은 별도 작업으로 진행한다.
 3. Phase 2-4 자동화는 사용자 Mac 49/49 통과를 기준선으로 유지한다. 실제 오디오·SVG·Safari/모바일 수동 인수는 계속 필요하다.
 4. Phase 2-5: 자동화 574/574 및 사용자 Mac 52/52 통과·최종 범위 검토 완료. 폰트·극단 음역·다중 행·실기기 수동 인수는 별도 유지한다.
-5. Phase 2-6: 검증된 Pitch/MIDI·표시 함수·transposeScore를 활용한 음역 분석/추천 설계(이번 미구현).
+5. Phase 2-6: 단위·통합 614/614 및 사용자 Mac Chromium 55/55 통과·최종 범위 검토 완료. 대형 악보 응답성·Safari/모바일 실기기 및 수동 인수는 별도 유지한다.
+6. Phase 2 전체 완료 판정은 신규 브라우저 및 기존 기보·실제 오디오·Safari/모바일 수동 검증과 구분해 진행한다.
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

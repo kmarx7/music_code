@@ -1,11 +1,12 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 import { TransposeTool } from "@/features/transposition";
+import { RangeRecommendations, RangeSummary } from "@/features/transposition/RangeRecommendations";
 import { StaffView } from "@/features/score-editor";
 import type { AutosaveHandle, SaveStatus } from "@/features/score-library";
 import { scoreStore } from "@/store/score-store";
 import { KEY_SIGNATURE_OPTIONS, type NoteLabelMode } from "@/domain/music-theory";
-import { createNoteEvent, transposeScore } from "@/domain/score";
+import { createNoteEvent, recommendTranspositions, transposeScore } from "@/domain/score";
 import type { Score } from "@/domain/score";
 import { baseScore, fourNoteScore, tiedScore, withMeasureEvents } from "../fixtures/scores";
 
@@ -185,4 +186,48 @@ it("label mode changes project only the candidate and do not invalidate or commi
   }
   expect(dispatch).not.toHaveBeenCalled(); expect(autosave.current!.flush).not.toHaveBeenCalled(); expect(revision).toBe(1);
   invoke(button("취소"), "onClick"); expect(scoreStore.getState()).toBe(before);
+});
+
+function recommendation(minMidi = 84, maxMidi = 91) {
+  const result = recommendTranspositions(scoreStore.getState()!.current, { minMidi, maxMidi });
+  if (!result.ok || !result.candidates.length) throw new Error("fixture"); return result.candidates[0];
+}
+function chooser() { return find((element) => element.type === RangeRecommendations); }
+it("whole-score range and choosing an octave recommendation are read-only until one atomic confirmation", () => {
+  const before = scoreStore.getState(); const choice = recommendation(); const dispatch = vi.spyOn(scoreStore, "dispatch");
+  expect(find((element) => element.type === RangeSummary).props.analysis).toMatchObject({ minMidi: 60, maxMidi: 67 });
+  open(); invoke(chooser(), "onPreview", choice); render();
+  expect(scoreStore.getState()).toBe(before); expect(dispatch).not.toHaveBeenCalled(); expect(revision).toBe(1);
+  expect(candidate().parts[0].measures[0].events[0]).toMatchObject({ pitch: { midi: 84 } });
+  const confirm = button("확정"); invoke(confirm, "onClick"); invoke(confirm, "onClick");
+  expect(dispatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: "TransposeScore", spec: { kind: "semitones", semitones: 24 } }));
+  const changed = scoreStore.getState()!; expect(changed.past).toEqual([before!.current]);
+  scoreStore.undo(); expect(scoreStore.getState()!.current).toBe(before!.current); scoreStore.redo(); expect(scoreStore.getState()!.current).toBe(changed.current);
+});
+it("cancel and no-op recommendations preserve redo, original Score and saving state", () => {
+  scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "changed" }); scoreStore.undo(); render();
+  const before = scoreStore.getState(); open(); invoke(chooser(), "onPreview", recommendation()); render(); invoke(button("취소"), "onClick"); render();
+  expect(scoreStore.getState()).toBe(before); open(); invoke(chooser(), "onPreview", recommendation(0, 127)); render(); invoke(button("확정"), "onClick");
+  expect(scoreStore.getState()).toBe(before); expect(before!.future).toHaveLength(1); expect(storageStatus).toBe("saved"); expect(revision).toBe(1);
+});
+it("changing target invalidates selected recommendation and even its old confirmation closure", () => {
+  open(); invoke(chooser(), "onPreview", recommendation()); render(); const confirm = button("확정");
+  const before = scoreStore.getState(); const dispatch = vi.spyOn(scoreStore, "dispatch"); invoke(chooser(), "onInvalidate");
+  invoke(confirm, "onClick"); render(); expect(button("확정").props.disabled).toBe(true); expect(dispatch).not.toHaveBeenCalled(); expect(scoreStore.getState()).toBe(before);
+});
+it("manual key selection clears octave recommendation and resumes the existing target-key command", () => {
+  open(); invoke(chooser(), "onPreview", recommendation()); render(); choose("조옮김 목표 조성", "major:2");
+  const dispatch = vi.spyOn(scoreStore, "dispatch"); invoke(button("확정"), "onClick");
+  expect(dispatch.mock.calls[0][0]).toMatchObject({ type: "TransposeScore", spec: { kind: "targetKey", targetKey: { fifths: 2 } } });
+  expect(scoreStore.getState()!.current.parts[0].measures[0].events[0]).toMatchObject({ pitch: { midi: 62 } });
+});
+it.each(["edit", "revision", "conflict", "deleted", "error"])("%s blocks old recommendation selection and confirmation", (action) => {
+  open(); const choice = recommendation(); const oldChooser = chooser(); invoke(oldChooser, "onPreview", choice); render();
+  const oldConfirm = button("확정");
+  if (action === "edit") scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "same" });
+  else if (action === "revision") revision++;
+  else storageStatus = action as SaveStatus;
+  const latest = scoreStore.getState(); const dispatch = vi.spyOn(scoreStore, "dispatch");
+  invoke(oldChooser, "onPreview", choice); invoke(oldConfirm, "onClick"); render();
+  expect(chooser().props.disabled).toBe(true); expect(button("확정").props.disabled).toBe(true); expect(dispatch).not.toHaveBeenCalled(); expect(scoreStore.getState()).toBe(latest);
 });

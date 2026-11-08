@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -12,7 +13,7 @@ async function storedRest(page: Page, id: string) {
 test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Redo·삭제·저장 복원", async ({ page }) => {
   const id = "e2e-rest-edit";
   await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click();
   await expect(page.getByText("선택한 쉼표 편집", { exact: true })).toBeVisible();
@@ -51,7 +52,7 @@ test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Re
 test("음표·쉼표 혼합 악보에서 쉼표 편집 후 붙임줄과 음표 위치를 보존한다", async ({ page }) => {
   const id = "e2e-rest-tie";
   await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   for (let index = 0; index < 3; index++) await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
@@ -63,7 +64,7 @@ test("음표·쉼표 혼합 악보에서 쉼표 편집 후 붙임줄과 음표 �
   await page.getByRole("button", { name: "선택 쉼표 길이 2분음표", exact: true }).click();
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 4800, durationTicks: 1920 });
   await page.reload();
-  await expect(page.getByText(/음표 5개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 5)).toBeVisible();
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
   await expect(page.getByTestId("staff").locator("svg .vf-stavenote")).toHaveCount(6);
   const after = await storedScore(page, id);

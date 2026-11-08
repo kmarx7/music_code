@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -40,7 +41,7 @@ test("중간 빈 위치 입력·커서 전진·충돌 불변·Undo/Redo·저장 
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await page.reload();
-  await expect(page.getByText(/음표 2개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 2)).toBeVisible();
   expect(await storedScore(page, id)).toEqual(saved);
   await expect(page.getByLabel("입력 위치", { exact: true })).toHaveValue("append");
   await page.getByRole("button", { name: "MIDI 67", exact: true }).click();

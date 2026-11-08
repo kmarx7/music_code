@@ -1,3 +1,4 @@
+import { scoreNoteCount } from "./score-summary";
 import { expect, test } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -49,7 +50,7 @@ test("빈 악보 박자·템포·조표 변경과 Undo/Redo·재생 정지·저�
 test("쉼표만 있는 악보도 박자 변경을 잠그고 단조 조표 변경 후 소리를 보존한다", async ({ page }) => {
   const id = "e2e-settings-rest";
   await page.goto(`/editor/${id}`);
-  await expect(page.getByText(/음표 0개/)).toBeVisible();
+  await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click();
   await expect(page.getByLabel("박자", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "선택 쉼표 삭제", exact: true }).click();

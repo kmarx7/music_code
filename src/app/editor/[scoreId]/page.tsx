@@ -262,7 +262,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
           ← 홈
         </Link>
         <h1 style={{ fontSize: 20, margin: 0, overflowWrap: "anywhere", maxWidth: "100%" }}>{score.title}</h1>
-        <span style={{ fontSize: 12, color: "#5f6773" }}>
+        <span data-testid="score-summary" style={{ fontSize: 12, color: "#5f6773" }}>
           {score.tempoBpm} BPM · {part.timeSignature.numerator}/
           {part.timeSignature.denominator} · 음표 {notes.length}개 · 마디{" "}
           {part.measures.length}개 · 쉼표 {events.length - notes.length}개
