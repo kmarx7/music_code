@@ -187,3 +187,23 @@ export function countNotes(score: Score): number {
     0,
   );
 }
+
+/** Valid imported chains may exceed the split generator's per-operation segment limit. */
+export function longTiedScore(segmentCount: number, leadingRest = false): Score {
+  const offset = leadingRest ? 960 : 0;
+  const score = createEmptyScore({
+    id: `long-tie-${segmentCount}`,
+    measureCount: Math.ceil((offset + segmentCount * 960) / 3840),
+    createdAt: FIXTURE_CREATED_AT,
+  });
+  const part = score.parts[0];
+  if (leadingRest) part.measures[0].events.push({ kind: "rest", id: "leading-rest", startTick: 0, durationTicks: 960 });
+  for (let index = 0; index < segmentCount; index++) {
+    const startTick = offset + index * 960;
+    part.measures[Math.floor(startTick / 3840)].events.push(createNoteEvent({
+      id: `long-${index}`, step: "C", octave: 4, startTick, durationTicks: 960,
+    }));
+    if (index > 0) part.ties.push({ from: `long-${index - 1}`, to: `long-${index}` });
+  }
+  return score;
+}

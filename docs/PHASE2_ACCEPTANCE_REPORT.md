@@ -7,6 +7,17 @@
   [계약](MODULE_CONTRACTS.md), [ADR-009/010](DECISIONS.md), [테스트 기록](TEST_PLAN.md), [작업 기록](TASKS.md).
 - 후속: [마스터 플랜](PHASE3_MASTER_PLAN.md), [실행 백로그](PHASE3_BACKLOG.md).
 
+## H-01 후속 진행 (2026-11-09, 최종 검토)
+
+아래 본문과 벤치마크는 제품 기준5d43471의 감사 시점 기록으로 보존한다.
+후속 H-01은 tie.ts의 유효 체인 순회/긴 순환 감지를 방문 ID 기반으로 수정했다.
+66체인63360ticks, 67/128체인·명령·재생 호출·JSON/IndexedDB 복원의 신규28개 및 전체642개가 통과했고
+정적 검사/architecture/build도 통과했다. 생성64한계는 유지한다.
+당시 Codex Chromium55개는 listen EPERM으로 미실행하여 커밋을 보류했다.
+이후 사용자가 수정된 H-01의 Mac Chromium **55/55 PASS**를 확인하여 로컬 커밋 검증 조건을 충족했다.
+[TEST_PLAN §30](TEST_PLAN.md) 및 [백로그 H-01](PHASE3_BACKLOG.md)을 따른다.
+H-02와 수동 인수는 여전히 미해결이며 아래 최종 무조건 인수 보류 판정은 유지한다.
+
 ## 1. 인수 판정
 
 **Phase 2 의 통상 편집 흐름은 자동 검증을 충족하지만, 최종 무조건 인수는 보류한다.**

@@ -8,7 +8,7 @@ import { exportScoreBackup, importScoreBackup, openOrCreateScore } from "@/appli
 import { createScoreStore } from "@/store/score-store";
 import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
 import { createNoteEvent, createRestEvent, validateScore, type Score } from "@/domain/score";
-import { baseScore, fourNoteScore, tiedScore } from "../fixtures/scores";
+import { baseScore, fourNoteScore, longTiedScore, tiedScore } from "../fixtures/scores";
 
 const notation = vi.hoisted(() => ({ voices: [] as Tickable[][], keys: [] as string[], ties: [] as unknown[] }));
 const audio = vi.hoisted(() => ({ attacks: vi.fn(), frequency: vi.fn(), dispose: vi.fn() }));
@@ -164,4 +164,38 @@ it("concurrent transposed writes without notifications preserve the winner, lose
   await expect(repositories[loserIndex].save(memory.current, 1)).rejects.toMatchObject({ code: "DELETED" });
   await expect(openOrCreateScore(repositories[loserIndex], { id: source.id, createdAt: "unused" })).rejects.toMatchObject({ code: "DELETED" });
   expect(await raw(name, source.id)).toEqual(tombstone);
+});
+
+
+it("preserves all 63360 ticks through JSON import, transpose, undo/redo and IndexedDB restore", async () => {
+  const original = longTiedScore(66, true); const originalJson = JSON.stringify(original);
+  const name = "long-tie-roundtrip";
+  const repository = createIndexedDbScoreRepository({ dbName: name });
+  const imported = await importScoreBackup(repository, originalJson, { id: "long-import", importedAt: "2026-11-09T01:00:00.000Z" });
+  const opened = await openOrCreateScore(repository, { id: imported.score.id, createdAt: "unused" });
+  expect(opened).toEqual({ score: imported.score, revision: 1, created: false });
+  const baseline = await raw(name, imported.score.id);
+  expect(baseline.version).toBe(2); expect(opened.score.schemaVersion).toBe(2);
+  const beforeAudio = await schedule(opened.score);
+  expect(beforeAudio.frequency).toEqual([[60, "midi"]]);
+  expect(beforeAudio.attacks).toEqual([["midi:60", 33, 10.6]]);
+  const session = store(opened.score); const changed = session.getState()!.current;
+  expect(changed.parts[0].ties).toEqual(opened.score.parts[0].ties);
+  const afterAudio = await schedule(changed);
+  expect(afterAudio.frequency).toEqual([[62, "midi"]]);
+  expect(afterAudio.attacks).toEqual([["midi:62", 33, 10.6]]);
+  expect(session.getState()!.past).toEqual([opened.score]);
+  session.undo(); expect(session.getState()!.current).toBe(opened.score);
+  expect(await schedule(session.getState()!.current)).toEqual(beforeAudio);
+  session.redo(); expect(session.getState()!.current).toBe(changed);
+  expect(await schedule(session.getState()!.current)).toEqual(afterAudio);
+  expect(await raw(name, imported.score.id)).toEqual(baseline);
+  expect(await repository.save(changed, 1)).toBe(2);
+  const restored = await openOrCreateScore(createIndexedDbScoreRepository({ dbName: name }), { id: changed.id, createdAt: "unused" });
+  expect(restored).toEqual({ score: changed, revision: 2, created: false });
+  expect(await schedule(restored.score)).toEqual(afterAudio);
+  const copy = await importScoreBackup(repository, exportScoreBackup(restored.score).json, { id: "long-copy", importedAt: "2026-11-09T02:00:00.000Z" });
+  expect(copy.score.parts).toEqual(changed.parts);
+  expect(await schedule(copy.score)).toEqual(afterAudio);
+  expect(JSON.stringify(original)).toBe(originalJson);
 });

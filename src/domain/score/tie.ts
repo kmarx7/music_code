@@ -37,6 +37,7 @@ export const NOTATABLE_DURATIONS: readonly NotatableDuration[] = [
   notatable(32, 0),
 ];
 
+/** Limit for a single split/generation operation, not for reading valid stored chains. */
 export const MAX_TIE_SEGMENTS = 64;
 
 export function notatableDurationFor(ticks: number): NotatableDuration | undefined {
@@ -69,6 +70,8 @@ function linkMaps(part: Part): {
   incoming: Map<string, string>;
   outgoing: Map<string, string>;
 } {
+  const issues = findTieIssues(part, { pathPrefix: `parts[${part.id}]` });
+  if (issues.length) throw new Error(issues.map((issue) => `${issue.code}: ${issue.message}`).join(" "));
   const incoming = new Map<string, string>();
   const outgoing = new Map<string, string>();
   for (const tie of part.ties) {
@@ -78,29 +81,25 @@ function linkMaps(part: Part): {
   return { incoming, outgoing };
 }
 
+/** Each stored ID is visited at most once; a cycle is an error, never a partial chain. */
+function walkLinkIds(start: string, links: ReadonlyMap<string, string>): string[] {
+  const visited = new Set<string>();
+  const ids: string[] = [];
+  let cursor: string | undefined = start;
+  while (cursor !== undefined) {
+    if (visited.has(cursor)) throw new Error("TIE_CYCLE: 타이 체인이 순환합니다.");
+    visited.add(cursor);
+    ids.push(cursor);
+    cursor = links.get(cursor);
+  }
+  return ids;
+}
+
 /** eventId가 속한 타이 체인의 순서 있는 ID 목록. 타이가 없으면 `[eventId]`(없는 ID면 `[]`). */
 export function chainIdsOf(part: Part, eventId: string): string[] {
   if (!eventById(part, eventId)) return [];
   const { incoming, outgoing } = linkMaps(part);
-  const chain = [eventId];
-
-  let head = eventId;
-  for (let hop = 0; hop < MAX_TIE_SEGMENTS; hop += 1) {
-    const previous = incoming.get(head);
-    if (!previous) break;
-    chain.unshift(previous);
-    head = previous;
-  }
-
-  let tail = eventId;
-  for (let hop = 0; hop < MAX_TIE_SEGMENTS; hop += 1) {
-    const next = outgoing.get(tail);
-    if (!next) break;
-    chain.push(next);
-    tail = next;
-  }
-
-  return chain;
+  return [...walkLinkIds(eventId, incoming).reverse(), ...walkLinkIds(eventId, outgoing).slice(1)];
 }
 
 export interface MergedNote {
@@ -123,16 +122,10 @@ export function mergeTiedNotes(part: Part): MergedNote[] {
     if (incoming.has(note.id)) continue;
 
     let endTick = note.startTick + note.durationTicks;
-    let cursor: string | undefined = note.id;
-
-    for (let hop = 0; hop < MAX_TIE_SEGMENTS; hop += 1) {
-      if (cursor === undefined) break;
-      const next: string | undefined = outgoing.get(cursor);
-      if (!next) break;
-      const target = noteById(part, next);
-      if (!target) break;
+    for (const id of walkLinkIds(note.id, outgoing)) {
+      const target = noteById(part, id);
+      if (!target) throw new Error(`TIE_UNKNOWN_REF: 연결 대상 note를 찾을 수 없습니다 (${id}).`);
       endTick = target.startTick + target.durationTicks;
-      cursor = next;
     }
 
     merged.push({
@@ -354,11 +347,10 @@ export function findTieIssues(
       incoming.set(tie.to, tie.from);
     }
 
+    const visited = new Set<string>([tie.from]);
     let cursor: string | undefined = tie.to;
-    for (let hop = 0; hop < MAX_TIE_SEGMENTS; hop += 1) {
-      cursor = cursor === undefined ? undefined : outgoing.get(cursor);
-      if (!cursor) break;
-      if (cursor === tie.from) {
+    while (cursor !== undefined) {
+      if (visited.has(cursor)) {
         issues.push({
           path,
           code: "TIE_CYCLE",
@@ -366,6 +358,8 @@ export function findTieIssues(
         });
         break;
       }
+      visited.add(cursor);
+      cursor = outgoing.get(cursor);
     }
   }
 

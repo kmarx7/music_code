@@ -1089,3 +1089,46 @@ Mac 전체 재검증: `npm run test:e2e` (프로젝트 루트).
 - 문서 링크/상태/ADR-010·Score v2/DB2 일치와 diff 검사를 수행한다. 제품 코드·DB·배포는 변경하지 않는다.
 - 문서 스테이징은 `.git/index.lock: Operation not permitted`로 실패했고 공식 권한 요청도
   `sandbox_approval: false` 정책으로 거부되었다. 커밋 미생성/변경 보존, 제품 코드 무변경.
+
+## 30. H-01 긴 타이 지속시간 회귀 (2026-11-09)
+
+- 감사 문서 5개를 먼저 별도 로컬 커밋 `ccf73a7`로 저장했다. 이전 §29의 권한 오류는 당시 기록이다.
+- 기존 구현에서 신규 long-tie 단위 테스트 21개 중 **14 FAIL / 7 PASS**로 결함을 먼저 재현했다.
+  chainIdsOf/mergeTiedNotes의 64링크 순회 한계가 가져오기 허용 범위와 불일치했다.
+- 최종 신규 **28개**(기존614개 유지):
+  - long-tie.test.ts **22개**: 1/2/3/63/64/65/66/67/128세그먼트의 JSON·검증·머리/중간/끝 순회와
+    단일 지속음, 쉼표 포함, 잘못된 참조/쉼표 참조/67순환/분기/시간 간격/Pitch 불일치 거부·입력 불변,
+    128체인 위치별 UpdateNote/Undo/Redo, 끝에서 ResizeNote 전체 교체,
+    생성64한계 유지/65생성거부, 역순 저장된128링크의 동일 결과.
+  - playback.test.ts **5개 추가**: 66/67/128체인의 Tone 단일 어택·전체 지속시간·마지막 음 하이라이트,
+    마지막 세그먼트 중간 Pause/Resume의 남은 길이·Stop/노드 정리,
+    잘못된 참조/순환 시 음성·타이머 예약 없이 거부. 실제 Tone 호출은 기존 대역으로 검사한다.
+  - transpose-consistency.test.ts **1개 추가**: 66체인 JSON application 가져오기→실제 repository+fake-indexeddb
+    열기→조옮김→Undo/Redo→OCC 저장(revision1→2)→재열기→JSON 백업/새 ID 가져오기,
+    모두63360ticks/120BPM33초·어택1회·Pitch/ties·원본 JSON 불변. DB2/schema2 유지.
+- 전체 **42파일/642개 PASS**, typecheck/lint/architecture/build PASS.
+  architecture62모듈/186의존성, 경계55파일 위반0. 제품 변경은 tie.ts 한 파일이다.
+- 전체 `npm run test:e2e`는 production build 후 **listen EPERM 0.0.0.0:3010**, exit1로 서버 시작 실패.
+  **Chromium55개 미실행**. 기존 사용자 Mac55/55는 수정 전 기준이며 이번 H-01 통과로 전용하지 않는다.
+  테스트 삭제/skip/기대값 약화 없음. 사용자 지시에 따라 H-01 커밋 보류, 변경 보존.
+
+Mac 재검증 명령:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+실제 청취/Safari/모바일 실기기는 미검증. H-02의 1000ticks→960ticks 기보 근사는 별도 미해결로 유지한다.
+
+### H-01 최종 검토 및 사용자 Mac 검증
+
+- 사용자가 수정된 H-01의 Mac Chromium E2E **55/55 PASS**를 직접 확인했다.
+  위 Codex listen EPERM과 커밋 보류는 당시 기록으로 보존하며, 이번 확인으로 E2E 검증 조건을 충족했다.
+- 단위·통합 **642/642 PASS**, typecheck/lint/architecture/build 및 diff 검사 PASS 기록 유지.
+  제품 변경은 tie.ts 한 파일이며 신규 long-tie.test.ts를 포함한 관련10파일을 최종 검토했다.
+- 66세그먼트63360ticks 보존, 유효한67/128체인 전체 처리, 오류 체인 거부와 생성64한계 유지.
+  Score v2/Part.ties/DB2/ADR-010/기존Command·저장 계약 유지. H-02는 별도 미해결이다.
+- 실제 청취/Safari/모바일 실기기는 별도 미검증이며 GitHub push/Vercel 작업 없음.
+- 최종 검토에서도 단위·통합642/642를 재실행하여 통과했다. 스테이징은 `.git/index.lock: Operation not permitted`,
+  공식 권한 상승 요청은 `sandbox_approval: false`로 거부되어 커밋 미생성/10파일 보존 상태다.

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { playScore, type PlaybackHandle } from "@/adapters/tone/playback";
 import { playbackEndTick, playbackPositionAt, createRestEvent, measureTicks } from "@/domain/score";
 import { highlightPlayback } from "@/features/playback";
-import { baseScore, fourNoteScore, tiedScore } from "../fixtures/scores";
+import { baseScore, fourNoteScore, longTiedScore, tiedScore } from "../fixtures/scores";
 
 const audio = vi.hoisted(() => ({ voices: [] as { click: boolean; attack: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[] }));
 vi.mock("tone", () => ({
@@ -176,4 +176,30 @@ it("audio initialization failure rejects without creating voices or timers", asy
   expect(audio.voices).toHaveLength(0);
   expect(position).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+
+it.each([66, 67, 128])("schedules all %s tied segments in one attack and resumes the final segment", async (count) => {
+  const score = longTiedScore(count); const before = JSON.stringify(score);
+  const handle = await play(score);
+  expect(audio.voices[0].attack.mock.calls).toEqual([[60, count * 0.5, 0.2]]);
+  await vi.advanceTimersByTimeAsync(200 + (count - 1) * 500 + 250);
+  expect(handle.getPosition().activeNoteIds).toEqual([`long-${count - 1}`]);
+  handle.pause(); expect(audio.voices[0].dispose).toHaveBeenCalledTimes(1);
+  handle.resume();
+  expect(audio.voices[1].attack).toHaveBeenCalledTimes(1);
+  expect(audio.voices[1].attack.mock.calls[0][1]).toBeCloseTo(0.25);
+  handle.stop(); expect(audio.voices[1].dispose).toHaveBeenCalledTimes(1);
+  expect(handle.getPosition()).toMatchObject({ tick: 0, activeNoteIds: [] });
+  expect(JSON.stringify(score)).toBe(before);
+});
+
+it.each(["missing", "cycle"])("rejects %s ties before scheduling any audio voice", async (kind) => {
+  const score = longTiedScore(67);
+  if (kind === "missing") score.parts[0].ties[0].to = "missing";
+  else score.parts[0].ties.push({ from: "long-66", to: "long-0" });
+  const before = JSON.stringify(score);
+  await expect(playScore(score)).rejects.toThrow(kind === "missing" ? "TIE_UNKNOWN_REF" : "TIE_CYCLE");
+  expect(audio.voices).toHaveLength(0); expect(vi.getTimerCount()).toBe(0);
+  expect(JSON.stringify(score)).toBe(before);
 });

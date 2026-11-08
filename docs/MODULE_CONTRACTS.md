@@ -611,3 +611,20 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 - 분석·계산·선택·취소는 Score/이력/updatedAt/dirty/revision/IndexedDB/JSON/BC를 변경하지 않는다.
   최종 저장 충돌 보호는 기존 ADR-010 OCC다. schemaVersion2/Part.ties/DB2/기존 엔진·Command·저장·재생 구현 유지.
   분석은 모든 Part, 기보·재생은 기존 첫 Part 한정이다. 악기 프리셋/운지법/실제 연주 가능성 판단은 제공하지 않는다.
+
+## H-01 — 유효한 긴 타이 체인 읽기·재생 (2026-11-09)
+
+- Score schemaVersion 2/Part.ties/DB2/ADR-010/Command·저장 계약은 유지한다.
+- `MAX_TIE_SEGMENTS = 64`는 `splitNoteIntoMeasures`의 **한 번의 생성/재분할 작업** 한계다.
+  정상 저장본/JSON의 체인 길이 상한으로 사용하지 않는다. 기존 생성 한계·오류는 변경하지 않는다.
+- `chainIdsOf`와 `mergeTiedNotes`는 순회 전에 기존 `findTieIssues`로 연결 관계를 검사한다.
+  유효한 체인은 저장된 ID가 끝날 때까지 방문 집합으로 순회한다. 66·67·128세그먼트도 끝까지 처리한다.
+  같은 ID 재방문은 순환 오류이며, 잘못된 참조·쉼표 참조·분기·불연속·Pitch 불일치를 부분 체인으로 숨기지 않는다.
+- 직접 순회 함수에 잘못된 ties를 주면 `TIE_*` 코드를 포함한 Error를 던진다. 정상 편집 세션은 기존
+  deserializeScore/validateScore 경계를 통과한 Score를 사용한다. JSON 오류는 기존 실패 결과로 반환되고 저장하지 않는다.
+  기존 unknown event ID에 대한 chainIdsOf의 빈 목록 계약은 유지한다.
+- 검증의 순환 검사도 방문 ID로 종료한다. 고정 64링크만 보고 긴 순환을 놓치지 않으며 무한 반복하지 않는다.
+- 병합은 체인 머리의 MIDI/velocity·시작 tick과 마지막 세그먼트 끝으로 단일 지속음을 만든다.
+  연속성이 검증되므로 총 길이는 각 세그먼트 길이의 합과 같다. Tone 예약·gate·pause/resume은 그대로 사용한다.
+- 66×960 = **63360 ticks**, 120BPM에서 **33초**, 한 어택으로 전달됨을 호출 데이터로 검증했다.
+  실제 스피커 청취를 자동 검증한 것은 아니다. H-02의 비표기 음가·VexFlow 근사 문제는 변경하지 않았다.

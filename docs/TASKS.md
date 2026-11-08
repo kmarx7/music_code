@@ -18,16 +18,16 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-09 Phase 2-6 음역 분석·조옮김 추천)
+## 2. 검증 명령 결과 (최신: 2026-11-09 H-01 긴 타이 지속시간 보완)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 41 파일 / **614 테스트 통과**(기존 574 + 음역/추천·UI·저장 회귀 40) |
+| `npm run test` | ✅ exit 0 | 42 파일 / **642 테스트 통과**(기존 614 + H-01 회귀 28) |
 | `npm run check:architecture` | ✅ exit 0 | 62 모듈·186 의존성, 경계 55파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
-| `npm run test:e2e` | ✅ 사용자 Mac Chromium **55/55 PASS** | 사용자가 직접 실행 확인. Codex의 listen EPERM/서버 exit 1 기록은 아래 보존 |
+| `npm run test:e2e` | ✅ 사용자 Mac Chromium **55/55 PASS** | 사용자가 수정된 H-01 직접 검증. Codex listen EPERM 기록은 아래 보존 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
@@ -639,9 +639,36 @@
   공식 권한 상승 요청도 실행 환경의 `sandbox_approval: false` 정책으로 거부되었다.
   스테이징/커밋은 미완료이며 문서 5개를 보존한다. HEAD는 `5d43471` 그대로다. 우회 권한 변경은 하지 않았다.
 
+### 4.32 H-01 긴 타이 지속시간 보완 (2026-11-09)
+
+- 감사 문서 5개를 별도 커밋 **ccf73a7** (`docs: audit phase 2 and plan phase 3 development`)으로 보존했다.
+  이번 Git 쓰기는 정상 수행되었으며 과거 권한 오류 기록은 삭제하지 않았다.
+- JSON/Score는66세그먼트를허용하지만 tie.ts의 고정64링크순회가 끝1개를 놓쳐63360→62400ticks가 되는 경로를 확인했다.
+  먼저 회귀 테스트 실패를 확인하고 제품 코드는 tie.ts만 수정했다.
+- 기존 검증을 재사용해 오류 체인을 거부하고 방문 ID 집합으로 유효 체인을 끝까지 순회한다.
+  chainIdsOf/mergeTiedNotes/긴순환검사 일치. splitNoteIntoMeasures의64세그먼트 생성 제한은 유지한다.
+- 신규28개/전체 **642/642 PASS**, typecheck/lint/architecture/build PASS.
+  66체인63360ticks/120BPM33초·어택1회, 67/128체인, 명령·Undo/Redo·JSON·DB2/OCC 저장 회귀를 검증했다.
+- E2E 전체는 **listen EPERM 0.0.0.0:3010**으로 **55개 미실행**. Mac 재검증 전 H-01 완료 커밋 보류/변경 보존.
+  schemaVersion2/Part.ties/ADR-010/DB2/기존Command·조옮김·Tone/VexFlow 구현·저장 경로는 유지한다.
+- MODULE_CONTRACTS/TEST_PLAN 및 감사·백로그 진행 상태 갱신. H-02는 미해결이며 이번에 수정하지 않는다.
+  실제 오디오/Safari/모바일 미검증. GitHub push/Vercel 및 Phase3 제품 기능 구현 없음.
+
+### 4.33 H-01 최종 검토 및 사용자 Mac 검증 (2026-11-09)
+
+- 사용자가 H-01 변경 후 Mac Chromium **55/55 PASS**를 확인했다. 위 Codex EPERM/보류 기록은 당시 결과다.
+- 단위·통합642/642, typecheck/lint/architecture/build 및 diff 검사 PASS 기록 유지.
+  제품 tie.ts 1개, 신규 long-tie.test.ts를 포함한 테스트4개, 관련 문서5개로 총10파일의 범위를 확인했다.
+  66세그먼트63360ticks·오류 체인 차단·생성64한계 및 Score v2/Part.ties/DB2/ADR-010 계약 유지.
+- 검증된 H-01 변경만 선별하여 로컬 커밋한다. H-02와 Phase3 기능은 구현하지 않는다.
+  실제 청취/Safari/모바일 인수는 별도이며 GitHub push/Vercel 작업 없음.
+- 최종 스테이징은 `.git/index.lock: Operation not permitted`로 실패했고 공식 권한 상승 요청도
+  실행 정책의 `sandbox_approval: false`로 거부되었다. H-01 커밋 미생성, 관련10파일 보존,
+  HEAD `ccf73a7` 유지. 이번 재실행 단위·통합642/642 PASS. 권한 우회는 하지 않았다.
+
 ## 5. 다음 작업
 
-1. [감사 보고서](PHASE2_ACCEPTANCE_REPORT.md)의 R1/R2 및 [백로그](PHASE3_BACKLOG.md)의 H-01/H-02 정책·회귀 보완을 우선한다.
+1. H-01은 사용자 Mac Chromium55/55까지 확인했다. [백로그](PHASE3_BACKLOG.md)의 H-02는 별도 정책·회귀 보완으로 진행한다.
 2. H-03의 브라우저 성능 측정/지원 범위를 합의한다. Node 결과만으로 실기기 응답성을 인수하지 않는다.
 3. 감사 §7의 Chrome/Safari·실제 오디오·모바일·이탈/두 탭 수동 인수를 실행하고 증거를 남긴다.
 4. [마스터 플랜](PHASE3_MASTER_PLAN.md)의 제안 계약(C-08, rate/loop 경계)을 확정한 뒤 작은 기능 단계로 진행한다.
