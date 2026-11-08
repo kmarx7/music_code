@@ -5,3 +5,4 @@ export * from "@/domain/score/tie";
 export * from "@/domain/score/validate";
 export * from "@/domain/score/serialize";
 export * from "@/domain/score/playback";
+export * from "./transpose";

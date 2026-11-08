@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 ADR-010 저장 안전성)
+## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-1 조옮김 도메인)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 32 파일 / **391 테스트 통과**(기존 362 + 저장 안전성 29) |
-| `npm run check:architecture` | ✅ exit 0 | 53 모듈·139 의존성, 경계 46파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 33 파일 / **470 테스트 통과**(기존 391 + 조옮김 도메인 79) |
+| `npm run check:architecture` | ✅ exit 0 | 55 모듈·150 의존성, 경계 48파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -38,7 +38,7 @@
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
 | MVP-005 | 기본 편집 | Partial | 음표·쉼표·타이·제목·기본 템포·조표·빈 악보 박자 편집 구현. 설정의 단위/통합 검증 통과, 브라우저 E2E 대기. 기존 이벤트의 박자 변경은 안전하게 제한 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
-| MVP-007 | 조옮김 | Pending | `midiFromSpelling`/표기 일관성 검증 |
+| MVP-007 | 조옮김 | Partial | Phase 2-1 순수 도메인 엔진·음정/표기/전 Part 원자적 변환 검증 완료. Command/UI/저장 연동은 후속 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
@@ -458,8 +458,26 @@
   위 수정 전 40/41 및 Codex EPERM 기록은 유지하며, 최신 성공은 사용자 실행 결과로 구분한다.
   최종 검토 결과 변경은 E2E/TEST_PLAN/TASKS 3파일이며 기존 검증 의미를 유지·강화했다.
 
+### 4.22 Phase 2-1 조옮김 순수 도메인 엔진 (2026-11-08)
+
+- 기준 `c0e3951`, clean 확인. 사용자 기준선 단위·통합 391개 및 Mac Chromium **41/41 통과**.
+- 승인된 음악 정책으로 intervalBetweenKeys/transposePitch/transposeKeySignature/transposeScore 추가.
+  기존 music-theory/조표 목록/Score 검증을 재사용한다. 기존 피아노 고정 샵 매핑은 호출하지 않는다.
+- 실제 반음과 음이름 이동량을 분리하고 모든 Part에 같은 음정을 적용한다. 장/단조 각각 지원,
+  장단조 변환/미지원 조표/음역·표기 불가 결과는 전체 거부한다. nearest ±6은 상행 우선이다.
+- 자동 선택: 표현 가능성→목표 조성 철자→모든 Part 조표 단순성→기존 샵/플랫 성향→고정 목록 순서.
+  지정한 목표 철자는 바꾸지 않는다. 0/옥타브 이동은 원래 조표 철자 유지. 상세 계약 MODULE_CONTRACTS 마지막 절.
+- 타이/ID/쉼표/리듬/메타데이터 보존. updatedAt도 엔진에서는 변경하지 않는다.
+  UI/Command dispatch/저장 연결은 미구현이며 MVP-007 전체 완료로 표시하지 않는다.
+- 신규 **79개**, 전체 **33파일 / 470개 통과**, 기존 391개 유지. 1개 테스트 내부에서 조표/방향 **1,350 조합** 추가 점검.
+  typecheck/lint/architecture/build는 최신 표 참조. 검증 내역 TEST_PLAN §23.
+- 기존 E2E **41종 무변경·미실행**: 브라우저 연결 없는 순수 도메인 작업이다. 기존 사용자 Mac 41/41 및 EPERM 기록은 유지한다.
+- schemaVersion 2/Part.ties/SetKeySignature/ADR-010/라이브러리/아키텍처 레이어 유지. 별도 구조 변경 ADR 없음.
+  GitHub push/Vercel 접근·배포·설정 변경 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
-2. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수 후 Phase 2 조옮김·음이름·음역 분석.
+2. Phase 2-2: TransposeScore Command·한 번의 Undo/Redo·updatedAt 경계 주입·no-op 처리·저장/OCC 회귀 연결.
+3. 후속 미리보기/취소·최신 세션 확인·기보/재생 UI 연결 후 E2E를 추가한다. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수도 유지한다.
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

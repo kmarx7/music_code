@@ -16,10 +16,10 @@
 | 빌드 | 프로덕션 빌드 | next build | ✅ 실행 |
 | 통합 | store/port 연결 (단일 Score 소유자) | Vitest | ✅ 실행 |
 | 직렬화 | round-trip, 손상/미지원 버전 | Vitest | ✅ 실행 |
-| 브라우저 E2E | 기존 31종 + 수동 저장 4종 | Playwright(Chromium, 프로덕션 빌드) | 사용자 기준선 Mac 31/31 통과 / 수동 저장 추가 후 35종 Codex EPERM으로 미실행 |
+| 브라우저 E2E | 기존 41종 유지 | Playwright(Chromium, 프로덕션 빌드) | c0e3951 사용자 Mac 41/41 통과. Phase 2-1 순수 도메인 단계는 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 31 파일 / 362 통과)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 33 파일 / 470 통과; Phase 2-1은 §23)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -769,3 +769,27 @@ npm run test:e2e
 
 남은 검증: 실제 Safari/모바일 백그라운드 전환. 강제 종료 무손실은 이번 테스트 수정으로
 보장하지 않는다. GitHub/Vercel 작업 없음.
+
+
+## 23. Phase 2-1 조옮김 순수 도메인 엔진 (2026-11-08)
+
+- 기준 `c0e3951`, clean. 기존 단위·통합 391개 및 사용자 Mac Chromium 41/41 통과를 기준선으로 유지한다.
+- 신규 `tests/unit/transpose.test.ts` **79개**:
+  - C→D/C#/Db 목표 철자, 장조/단조, up/down/nearest 및 +6 동률, 0/옥타브/복합 음정.
+  - E#/F, B#/C, Cb/B, 이명동음 조성의 MIDI 무변화·문자 이동, 표기 옥타브 경계.
+  - 변형 단음계 음/반음계/겹임시표, 개별 음의 임의 재표기 금지 및 alter/MIDI/옥타브 초과 거부.
+  - 자동 선택의 표현 가능성 우선, 조표 단순성, 다중 Part 동률에서 기존 샵 성향, 중립 고정 우선순위.
+  - 다중 Part의 다른 조표·혼합 모드 보존, 후속 Part의 지원 불가 조표/MIDI 실패 시 전체 원본 불변.
+  - 동결 원본으로 타이/쉼표/리듬/ID/velocity/provenance/모든 메타데이터 보존과 부분 후보 부재.
+  - 타이 세그먼트의 동일 Pitch 및 mergeTiedNotes의 단일 지속음 유지.
+  - 잘못된 입력/중간 정수 연산/원본 Score/모순된 조표/장단조 변환 거부, 기존 SetKeySignature 회귀.
+- 위 79개 중 1개는 지원 같은 모드 조표 450쌍 × 3방향 = **1,350 조합**을 순회한다.
+  모든 성공 결과의 목표 tonic/alter·조표·방향·전체 Score 유효성을 검사한다. 이를 별도 1,350개 테스트로 세지 않는다.
+- 전체 **33파일 / 470개 통과**(기존 391 + 신규 79), 테스트 삭제/skip/기대값 약화 없음.
+  typecheck/lint/check:architecture/build 결과는 TASKS 최신 검증 표에 기록한다.
+- 엔진은 순수 후보 계산으로 저장/Command/Undo 이력을 변경하지 않는다. Command 및 미리보기/취소,
+  Undo/Redo, 조옮김 후 실제 IndexedDB/OCC·브라우저 기보/재생은 Phase 2-2 이후 통합 검증 대상이다.
+- 기존 `tests/e2e/` 41종은 수정하지 않았고 이번에는 **미실행**이다. UI/브라우저 연결이 없는 순수 도메인 단계이므로
+  브라우저 실행이 불필요하며 이번 작업의 EPERM 실패로 표기하지 않는다. 이전 EPERM/이후 사용자 성공 기록은 유지한다.
+- Score schemaVersion 2/Part.ties/저장 모델/ADR-010/기존 SetKeySignature/피아노 고정 매핑/라이브러리 유지.
+  GitHub push 및 Vercel 접근·배포·설정 변경 없음.

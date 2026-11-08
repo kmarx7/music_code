@@ -29,8 +29,8 @@
 
 | 모듈 | 진입점 | 제공 내용 |
 |---|---|---|
-| Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수 |
-| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature` |
+| Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수, `transposeScore`, `TransposeSpec` |
+| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature`, `intervalBetweenKeys`, `transposePitch`, `transposeKeySignature`, `TransposeInterval`, `TransposeResult` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
 | Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle`, `SaveButton` |
@@ -436,3 +436,40 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   allowDiscard로 이탈 안내를 해제한다. 일반 브라우저 강제 종료/SPA 뒤로가기의 최종 비동기 commit은 보장하지 않는다.
 - JSON 백업은 envelope 없는 canonical Score 그대로다. revision/Tombstone/UI 상태는 포함하지 않는다.
   Web Locks/복구 저널/새 저장소/상태 라이브러리/배포 변경 없음. ADR-010의 사용자 승인을 근거로 포트만 확장했다.
+
+
+## Phase 2-1 — 조옮김 순수 도메인 엔진
+
+- 사용자 승인 음악 정책(2026-11-08)에 따른 호환 가능한 도메인 기능 추가다. UI/Command dispatch/저장 연결은 아직 없다.
+  새 라이브러리/상태 관리/아키텍처 레이어/Score 모델/ADR-010 변경 없음.
+- `@/domain/music-theory`:
+  - `intervalBetweenKeys(source, target, direction = "nearest")` → 반음·음이름 이동량.
+  - `transposePitch(pitch, interval)` → 특정 음정으로 옮긴 검증된 Pitch.
+  - `transposeKeySignature(key, interval)` → 같은 음정·모드를 유지하는 지원 조표.
+  - `TransposeInterval = {deltaSemitones, diatonicSteps}`. diatonicSteps는 0기준 문자 이동량이며 장2도는 {2,1}, 옥타브는 {12,7}이다.
+- `@/domain/score`: `transposeScore(score, spec)` → `TransposeResult<{score, interval}>`.
+  spec은 `{kind:"semitones", semitones}` 또는 `{kind:"targetKey", targetKey, direction?}`다.
+  성공은 `{ok:true,value}`, 실패는 `{ok:false,error:{code,message,partId?,eventId?}}`이며 실패에 부분 Score를 포함하지 않는다.
+- 목표 조성은 첫 Part를 기준으로 해석하고 동일한 반음·문자 음정을 모든 Part에 적용한다.
+  각 Part의 원래 장단조/상대 조성을 유지한다. 어느 Part의 목표 조표도 표현 불가하면 전체 거부한다.
+  지정한 목표 철자는 자동 교체하지 않는다. 장조↔단조 변환은 MODE_CHANGE_NOT_SUPPORTED다.
+- nearest는 ±6 동률을 +6으로 선택한다. up/down은 해당 방향의 옥타브 미만 이동이며 같은 pitch class는 0이다.
+  옥타브/복합 음정은 반음 입력으로 지정한다. C#→Db 등은 MIDI 이동 0이어도 다른 문자 이동량을 가질 수 있다.
+- 표기는 원본의 문자·옥타브를 diatonicSteps만큼 이동하고 `newMidi - naturalMidi`로 alter를 구한다.
+  음표마다 간단한 이명동음을 따로 고르지 않는다. 기존 피아노 midiToPitch는 사용하지 않는다.
+- 자동 반음 조옮김은 지원 목록의 목표 조표 후보마다 전체 Score를 검증한다. 우선순위는:
+  1. 전체 모델 표현 가능성, 2. 동일 음정으로 목표 조성에 맞는 철자,
+  3. 모든 Part의 `abs(fifths)` 합 최소, 4. 원래 비중립 샵/플랫 부호와 달라지는 Part 수 최소,
+  5. 기존 KEY_SIGNATURE_OPTIONS 순서(-7→+7)의 고정 우선순위.
+  예: C장조 +1은 일반적으로 Db장조, 중립 C장조 +6 동률은 Gb장조다.
+  표현 가능성이 우선이므로 C0의 -1은 B-1 대신 Cb0/Cb장조를 선택할 수 있다.
+- 12의 배수 이동은 조표 철자를 유지하고, 0반음은 원본 Score를 그대로 반환한다(원본 검증 후).
+  반음 입력/중간 계산의 안전한 정수 여부를 검사한다. 잘못된 입력/조표, MIDI 초과, 표기 불가,
+  모드 변환, Score 불변식 실패를 구분한다. MIDI 0~127 외에 octave 0~9 및 alter -2~2를 독립 검사한다.
+- 정상/실패 모두 원본을 수정하지 않는다. ID/ties/쉼표/위치/길이/박자/템포/velocity/provenance/
+  createdAt/updatedAt 등 메타데이터를 유지한다. 타이를 병합·재분할하거나 이벤트를 재배치하지 않는다.
+  결과 전체를 validateScore로 검증하며 source 조표도 isSupportedKeySignature로 확인한다.
+  기존 validateScore/SetKeySignature/저장본 읽기 정책을 강화하거나 자동 보정하지 않는다.
+- Phase 2-2는 이 엔진을 TransposeScore Command에서 호출하고 updatedAt을 경계에서 주입한다.
+  0반음의 동일 Score 결과에 대한 불필요한 이력 생성 방지, 한 번의 Undo/Redo, 미리보기 무쓰기,
+  ADR-010 충돌/삭제 차단은 다음 단계 통합 검증 대상이다. 여기서 후보를 store.init/Repository에 쓰지 않는다.
