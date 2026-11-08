@@ -11,6 +11,8 @@ export interface AutosaveHandle {
   flush(): Promise<boolean>;
   /** Only after explicit discard confirmation or a successful new-ID backup. */
   allowDiscard?(): void;
+  /** Synchronous session metadata only; never reads/writes the repository. */
+  getSnapshot?(): { revision: number; status: SaveStatus };
 }
 
 /**
@@ -25,6 +27,7 @@ export function useAutosave(
   initialRevision = 1,
 ): SaveStatus {
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const statusRef = useRef<SaveStatus>("idle");
   const revision = useRef(initialRevision);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string | null>(initiallySaved ? JSON.stringify(scoreStore.getState()?.current) : null);
@@ -45,7 +48,7 @@ export function useAutosave(
       if (!dirty && leavingGuard) window.removeEventListener("beforeunload", beforeUnload);
       leavingGuard = dirty;
     };
-    const report = (value: SaveStatus) => { if (active) { setStatus(value); updateGuard(); } };
+    const report = (value: SaveStatus) => { if (active) { statusRef.current = value; setStatus(value); updateGuard(); } };
     const fail = (error: unknown) => {
       if (error instanceof ScoreConflictError) {
         blocked = true;
@@ -95,7 +98,7 @@ export function useAutosave(
       return explicitFlush;
     }, allowDiscard: () => {
       if (typeof window !== "undefined") window.removeEventListener("beforeunload", beforeUnload);
-    } };
+    }, getSnapshot: () => ({ revision: revision.current, status: statusRef.current }) };
 
     const unsubscribe = scoreStore.subscribe(() => {
       // 디바운스 대기 중에도 이전 편집의 "저장됨"을 표시하지 않는다.

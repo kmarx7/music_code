@@ -474,7 +474,7 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   결과 전체를 validateScore로 검증하며 source 조표도 isSupportedKeySignature로 확인한다.
   기존 validateScore/SetKeySignature/저장본 읽기 정책을 강화하거나 자동 보정하지 않는다.
 - Phase 2-2의 Command/updatedAt/no-op/Undo·Redo/저장 경계 구현은 아래 절을 따른다.
-  미리보기 무쓰기는 후속 단계 대상이다. 엔진에서 후보를 store.init/Repository에 쓰지 않는다.
+  미리보기 무쓰기는 아래 Phase 2-3 계약을 따른다. 엔진에서 후보를 store.init/Repository에 쓰지 않는다.
 
 ## Phase 2-2 — TransposeScore Command / snapshot 이력
 
@@ -496,9 +496,39 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 - 저장 상태/revision은 여전히 useAutosave 소유다. Command 성공은 메모리 편집이며 DB 커밋을 뜻하지 않는다.
   기존 구독→flush→expectedRevision CAS만 사용한다. no-op/실패는 무쓰기·revision 불변이다.
   저장 실패/OCC/삭제는 ADR-010이 처리한다. 저장 구현·스키마·정책 변경 없음.
-- Phase 2-3 인수인계(미구현): 미리보기는 순수 엔진 후보만 사용하고 store.init/dispatch/save 하지 않는다.
+- Phase 2-3 인수인계(Phase 2-2 당시; 구현은 다음 절): 미리보기는 순수 엔진 후보만 사용하고 store.init/dispatch/save 하지 않는다.
   취소는 후보만 폐기한다. 확정은 원본 세션 동일성/유효 후보/알려진 충돌·삭제 상태를 확인한 뒤
   최신 경계 timestamp로 Command를 한 번 dispatch한다. 오래된 후보를 자동 덮어쓰지 않는다.
   실제 미리보기·취소·화면 저장 경합은 Phase 2-3/2-4 별도 검증 대상이다.
 - schemaVersion 2/Part.ties/JSON/DB2/ADR-010/SetKeySignature/렌더러/재생/의존성 불변.
   기존 아키텍처 안의 기능 추가이며 구조 변경 ADR/아키텍처 검사 규칙 변경은 없다.
+
+## Phase 2-3 — 조옮김 미리보기 / 확정 / 취소
+
+- `@/features/transposition` 공개 진입점의 `TransposeTool({autosave,status,onOpen?})`를 편집기에 연결한다.
+  기존 UI 패턴에 맞춘 인라인 패널이며 컴포넌트 로컬 상태만 사용한다. 전역 Store/라이브러리를 추가하지 않는다.
+- 열 때 `scoreStore.getState()`의 불변 EditSessionState 참조와 현재 저장 revision을 포착한다.
+  목표 조성은 첫 Part와 같은 모드의 기존 지원 목록만 제공하고 방향은 nearest/up/down, 기본 nearest다.
+  현재 조성·반음/방향 정보는 기존 목록과 `transposeScore` 결과를 표시한다. 별도 음악 이론 계산은 없다.
+- 후보는 포착한 Score와 TransposeSpec에 대한 순수 엔진 결과를 useMemo로 계산한다.
+  Store 초기화/Command/Undo/Redo/updatedAt/dirty/저장/revision/변경 알림을 발생시키지 않는다.
+  `StaffView`에 후보를 전달한다. 기존 첫 Part 표시 정책을 유지하며 다중 Part이면 제한을 화면에 알린다.
+  실제 변환/확정은 모든 Part를 대상으로 한다. 미리보기에는 편집/별도 재생 기능을 제공하지 않는다.
+- `AutosaveHandle.getSnapshot?()`은 `{revision,status}`를 동기적으로 읽는 호환 가능한 추가 계약이다.
+  기존 useAutosave 소유 revision과 report가 갱신하는 status의 읽기 전용 조회이며 Repository IO/flush를 수행하지 않는다.
+  필드가 없는 구형 대역/초기화 전에는 미리보기 확정을 허용하지 않는다. Score/DB에는 필드를 추가하지 않는다.
+- 렌더 시와 확정 직전에 동일 session 참조와 revision을 확인한다. 같은 ID/updatedAt만으로 판단하지 않는다.
+  편집/Undo/Redo/다른 세션 또는 revision 변경은 stale이다. conflict/deleted/error는 확정을 막는다.
+  확정 직전에는 React props보다 최신인 Store/저장 getter를 다시 읽는다. 검사와 dispatch 사이 await는 없다.
+  알려지지 않은 외부 변경의 최종 저장 검증은 기존 ADR-010 OCC가 담당한다. UI 확인이 DB 잠금은 아니다.
+- 확정은 기존 `{type:"TransposeScore",spec,updatedAt}`를 동기 dispatch 한 번만 수행한다.
+  후보 자체를 Store에 덮어쓰지 않는다. timestamp는 기존 편집 UI와 같이 경계에서 생성한다.
+  성공 때만 닫으며 실패는 사용자 설명과 함께 유지한다. 실제 변경/no-op/실패의 이력·timestamp 정책은 Phase 2-2 그대로다.
+  중복 확정은 로컬 latch로 막으며 실패 후 재시도는 허용한다. MIDI 0만으로 no-op을 판단하지 않는다.
+- 취소/Escape는 후보와 패널 상태만 폐기하고 진입 버튼으로 포커스를 되돌린다.
+  커서/원본/이력/저장 상태/원시 레코드를 수정하거나 역방향 Command를 실행하지 않는다.
+- 미리보기 열기는 PlaybackControls의 선택적 stopSignal로 기존 재생/미완료 초기화 정리 경로를 호출한다.
+  Score와 메트로놈 선택은 보존한다. 재생 하이라이트 DOM 범위는 원본 편집 영역으로 한정하여 후보와 분리한다.
+  Tone.js 어댑터/엔진 및 VexFlow 렌더러는 변경하지 않는다.
+- schemaVersion 2/Part.ties/Command/Undo/Redo/JSON/DB2/ADR-010/저장 구현/의존성 유지.
+  영속 모델·저장 포트의 구조 변경이나 새 ADR은 없다. 실제 기보·오디오·저장 복합 인수는 Phase 2-4다.

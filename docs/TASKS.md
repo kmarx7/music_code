@@ -18,15 +18,16 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-2 조옮김 Command)
+## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-3 조옮김 미리보기)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 34 파일 / **507 테스트 통과**(기존 470 + Command·저장 회귀 37) |
-| `npm run check:architecture` | ✅ exit 0 | 55 모듈·153 의존성, 경계 48파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 36 파일 / **534 테스트 통과**(기존 507 + 미리보기·저장 조회·재생 정리 회귀 27) |
+| `npm run check:architecture` | ✅ exit 0 | 57 모듈·163 의존성, 경계 50파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
+| `npm run test:e2e` | 사용자 Mac Chromium **46/46 통과** | 기존 41 + 신규 5; Codex의 과거 listen EPERM 기록은 아래 유지 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
@@ -38,7 +39,7 @@
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
 | MVP-005 | 기본 편집 | Partial | 음표·쉼표·타이·제목·기본 템포·조표·빈 악보 박자 편집 구현. 설정의 단위/통합 검증 통과, 브라우저 E2E 대기. 기존 이벤트의 박자 변경은 안전하게 제한 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
-| MVP-007 | 조옮김 | Partial | Phase 2-1 엔진 + 2-2 단일 Command/Undo·Redo/no-op/저장 경계 회귀 완료. 미리보기·UI 연결은 후속 |
+| MVP-007 | 조옮김 | Partial | Phase 2-1 엔진·2-2 Command·2-3 후보/확정/취소 UI 구현. 단위·통합 534 및 사용자 Mac Chromium 46/46 통과; Phase 2-4 통합·수동 인수는 후속 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
@@ -493,9 +494,38 @@
 - Phase 2-2 및 실행 가능한 검사 완료. UI dispatch/미리보기/취소는 미구현이며 실제 화면 경합은 Phase 2-4 대상.
   GitHub push/Vercel 작업 없음.
 
+### 4.24 Phase 2-3 조옮김 미리보기 / 확정 / 취소 (2026-11-08)
+
+- 기준 `848b7c8`, clean 및 1c74de4/848b7c8 현재 브랜치 포함 확인. 사용자 기준선 507개/Mac E2E 41/41 유지.
+- 기존 도메인 엔진/TransposeSpec/지원 조성 목록/Command/Store/StaffView를 재사용한 인라인 패널 추가.
+  같은 모드 목표 선택·nearest/up/down·엔진 이동 정보·오류 설명·읽기 전용 후보·확정/취소/Escape 제공.
+- 미리보기는 로컬 후보만 계산한다. Store/이력/timestamp/저장/revision 무변경.
+  불변 session 참조와 저장 revision 포착 후 확정 직전 동기 재검사, stale/conflict/deleted/error 차단.
+  후보를 Store에 대입하지 않고 기존 Command 1회만 dispatch한다. no-op/실패 및 Undo/Redo 계약 유지.
+- useAutosave의 기존 소유 상태를 동기 조회하는 선택적 getSnapshot만 추가. 조회는 DB IO를 하지 않는다.
+  IndexedDB 쓰기/스키마/OCC/Tombstone/BC 정책은 변경하지 않는다.
+- 기존 renderer는 첫 Part만 표시하며 화면에 이 제한을 알린다. 계산/확정은 모든 Part에 적용한다.
+  열 때 기존 PlaybackControls 정리 경로로 원본 재생을 정지하고 메트로놈 선택을 유지한다.
+  원본 하이라이트 DOM 범위와 후보를 분리한다. Tone/VexFlow 어댑터 변경 없음.
+- 신규 단위·통합 **27개**(패널 23 + autosave getter 2 + 재생 정리 2), 전체 **36파일/534개 통과**.
+  기존 507개/Phase 2-1 79개/ADR-010 시나리오 유지. React 훅/element tree 대역 검증과 실제 DOM을 구분한다.
+  typecheck/lint/architecture 통과, production build 결과는 최신 표. 세부 증거 TEST_PLAN §25.
+- 기존 E2E 41종 무변경 + 신규 5종 = **46종/11파일 수집 성공**.
+  전체 실행은 build 후 **listen EPERM 0.0.0.0:3010**, exit 1 → **브라우저 46종 미실행**.
+  과거 사용자 Mac 성공을 이번 버전 검증으로 간주하지 않는다.
+- 당시 **구현 및 실행 가능한 검사 완료, E2E/수동 인수 대기**로 로컬 커밋을 보류했다.
+- **이후 사용자 Mac 검증:** 기존 41개 + 신규 조옮김 미리보기 5개, Chromium **46/46 통과**.
+  단위·통합 534/534 및 typecheck/lint/architecture/build 통과 확인. 위 Codex EPERM은 당시 결과로 보존한다.
+  최종 검토에서 12파일의 범위·원본/이력 보존·단일 Command·stale/충돌/삭제 차단·OCC 유지를 확인했다.
+  이번 최종 검토에서도 단위·통합 534/534 재실행 통과.
+  로컬 커밋을 위한 git add는 `.git/index.lock: Operation not permitted`로 실패했다.
+  실행 환경의 .git 읽기 전용 제한으로 스테이징·커밋을 완료하지 못했고 12파일을 그대로 보존했다.
+  MODULE_CONTRACTS/TEST_PLAN/TASKS 갱신. schemaVersion 2/Part.ties/JSON/DB2/저장 모델/의존성 유지.
+  GitHub push/Vercel 작업 및 Phase 2-4 구현 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
-2. Phase 2-3: 순수 엔진의 미리보기 후보·취소 무쓰기·원본 세션 동일성 확인 후 단일 Command 확정 설계/구현.
+2. Phase 2-3 구현·자동화 검증·최종 검토 완료. Phase 2-4 통합 검증은 별도 작업으로 진행한다.
 3. Phase 2-4: 실제 UI dispatch·저장 경합·기보/재생 일치의 E2E와 Mac 재검증. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수도 유지한다.
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

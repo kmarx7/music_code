@@ -512,3 +512,28 @@ it("an aborted transposition save preserves raw data/revision and the complete e
   expect((await repository.read("score-1"))!.revision).toBe(1);
   expect(await control.flush()).toBe(true); expect(await repository.read("score-1")).toEqual({ score: state!.current, revision: 2 });
 });
+
+it("exposes a synchronous read-only revision/status snapshot without repository IO", async () => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  const read = vi.spyOn(repository, "read"); const save = vi.spyOn(repository, "save");
+  expect(control.getSnapshot!()).toEqual({ revision: 1, status: "idle" });
+  changePitch();
+  expect(control.getSnapshot!()).toEqual({ revision: 1, status: "saving" });
+  expect(read).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled();
+  expect(await control.flush()).toBe(true);
+  expect(control.getSnapshot!()).toEqual({ revision: 2, status: "saved" });
+  read.mockClear(); save.mockClear(); control.getSnapshot!(); control.getSnapshot!();
+  expect(read).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled();
+});
+
+it("snapshot retains revision after failure and exposes terminal conflict before React can render", async () => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  vi.spyOn(repository, "save").mockRejectedValueOnce(new Error("quota"));
+  changePitch(); expect(await control.flush()).toBe(false);
+  expect(control.getSnapshot!()).toEqual({ revision: 1, status: "error" });
+  const other = { ...scoreStore.getState()!.current, title: "external" };
+  await repository.save(other, 1);
+  expect(await control.flush()).toBe(false);
+  expect(control.getSnapshot!()).toEqual({ revision: 1, status: "conflict" });
+  expect((await repository.read(other.id))!.score).toEqual(other);
+});

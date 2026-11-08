@@ -824,3 +824,58 @@ npm run test:e2e
 ```
 
 GitHub push/Vercel 작업 없음. 강제 종료 무손실 보장은 추가하지 않는다.
+
+## 25. Phase 2-3 조옮김 미리보기 / 확정 / 취소 (2026-11-08)
+
+- 기준 `848b7c8`, clean 및 Phase 2-1/2-2 커밋 포함 확인.
+  사용자 기준선 단위·통합 507개, Mac Chromium 41/41 성공과 이번 실행 결과를 구분한다.
+- 신규 transpose-preview.test.ts **23개**: 패널 열기/현재 조성/지원 장·단조 목록/nearest/+6 방향,
+  순수 엔진 후보 및 timestamp 유지, 취소/Escape 후 원본·redo·저장 상태 유지,
+  단일 dispatch/Undo·Redo/중복 클릭, no-op redo 유지, MIDI 0 이명동음 실제 편집,
+  Command 실패·재시도/음역 오류/잘못된 옵션, 편집·Undo·Redo·같은/다른 ID 세션 stale,
+  revision-only 변경, React props 갱신 전 conflict/deleted/error, handle 소멸·준비 전 차단,
+  다중 Part 후보/타이 보존 및 첫 Part 표시 정책 안내.
+- autosave.test.ts 신규 **2개**: 동기 getter 무IO, 실제 저장 전후 revision/status 및 실패·충돌 상태.
+  transpose-playback.test.ts 신규 **2개**: preview-open의 기존 재생 정지/메트로놈 유지,
+  오디오 초기화 대기 중 열었을 때 늦은 재생 결과 정리. Tone 엔진은 대역이며 실제 오디오 검증이 아니다.
+- 위 컴포넌트 테스트는 기존 프로젝트 방식대로 React hooks/element tree 대역과 실제 Store/Command/엔진을 사용한다.
+  실제 React DOM 포커스·SVG·네이티브 선택·두 탭 동작은 E2E 및 수동 인수에서 검증해야 한다.
+- 기존 507개와 Phase 2-1 79개/2-2 Command 30개/ADR-010 테스트를 삭제하거나 약화하지 않는다.
+  최종 전체 단위·통합 및 정적 검사 결과는 TASKS 최신 표에 기록한다.
+- 신규 transpose-preview.spec.ts **5종**:
+  1. C→D 후보 SVG 확인·취소, 원시 레코드/revision/커서 보존, 기존 Undo/Redo 유지.
+  2. 확정 후 D 조표/모든 MIDI 및 F#4 표시, 단일 Undo/Redo, 저장·새로고침 복원.
+  3. 미리보기 중 제목 편집 후 오래된 확정 차단 및 실제 편집만 보존.
+  4. 같은 context 다른 탭 저장 알림 후 확정 차단, 상대 최신 원시 레코드 보존.
+  5. 다른 탭 삭제 알림 후 확정 차단, Escape 취소 및 Tombstone 불변.
+- 기존 E2E **41종 무변경**, 합계 **46종/11파일 수집 성공**.
+  전체 `npm run test:e2e`는 production build 후 **listen EPERM 0.0.0.0:3010**, exit 1로 서버 시작 실패.
+  **46종 브라우저 미실행**이며 수집 성공이나 과거 Mac 41/41을 신규 기능 통과로 표기하지 않는다.
+  당시 필수 브라우저 검증 전 로컬 커밋을 보류하고 변경 파일을 유지했다.
+
+Mac 재검증:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e -- tests/e2e/transpose-preview.spec.ts
+npm run test:e2e
+```
+
+수동/Phase 2-4 인수 대기: 장·단조/이명동음/겹임시표 SVG 시각 확인, 조옮김 후 실제 오디오·타이 지속음,
+Safari/모바일 선택·Escape/포커스, 미리보기 중 원본 재생 재시작 시 후보 하이라이트 분리,
+실제 두 탭 저장·삭제 및 확정 직후 저장 경합, 충돌 복구 선택지. 강제 종료 무손실은 보장하지 않는다.
+Phase 2-4 기능은 구현하지 않는다. GitHub push/Vercel 작업 없음.
+
+### Phase 2-3 최종 사용자 Mac 검증 및 검토
+
+- 사용자가 수정된 현재 구현으로 Chromium Playwright **46/46 통과**를 확인했다.
+  기존 41개 및 신규 조옮김 미리보기 5개 모두 성공했다. 위 Codex EPERM 기록은 당시 결과로 유지한다.
+  사용자 Mac 실행 결과이며 Codex에서 브라우저를 실행한 것으로 표기하지 않는다.
+- 단위·통합 **534/534**, typecheck/lint/architecture/build 통과 확인.
+- 추적 파일 7개와 신규 파일 5개를 포함한 총 12파일의 최종 변경 범위를 검토했다.
+  후보 생성·취소는 Store/편집 이력/저장 무변경, 확정은 기존 Command 한 번,
+  session/revision 불일치와 conflict/deleted/error 차단을 유지한다.
+  BroadcastChannel은 알림이고 최종 저장은 기존 IndexedDB OCC가 보호한다.
+- Score schemaVersion 2/Part.ties/기존 Command·음악 이론 엔진/IndexedDB 쓰기 경로/ADR-010 변경 없음.
+  기능 추가·리팩터링·Phase 2-4 구현 없이 검증된 Phase 2-3 파일만 로컬 커밋한다.
+  실제 오디오/Safari/모바일 및 위 Phase 2-4 수동 인수 항목은 별도로 남긴다.

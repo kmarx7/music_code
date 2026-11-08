@@ -15,6 +15,7 @@ import { EditCursor, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
+import { TransposeTool } from "@/features/transposition";
 import type { PlaybackPosition } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
@@ -108,8 +109,9 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   }, []);
   const [labelMode, setLabelMode] = useState<LabelMode>("letter");
   const [message, setMessage] = useState("");
+  const [playbackStopSignal, setPlaybackStopSignal] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const rootRef = useRef<HTMLElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const showPosition = useCallback((position: PlaybackPosition) => {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
   }, []);
@@ -259,7 +261,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   };
 
   return (
-    <main ref={rootRef} style={page}>
+    <main style={page}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Link href="/" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/"); }} style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
@@ -322,7 +324,11 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       </form>
 
       <ScoreSettings score={score} onCommand={runCommand} />
-      <PlaybackControls score={score} onPosition={showPosition} />
+      <TransposeTool autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
+      <PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} />
+
+      {/* Original playback highlights must never target the read-only preview. */}
+      <div ref={rootRef} data-testid="editor-content">
 
       <div style={{ ...panel, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" style={button} onClick={() => scoreStore.undo()}>
@@ -505,6 +511,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
           ) : null}
         </div>
       ) : null}
+      </div>
     </main>
   );
 }

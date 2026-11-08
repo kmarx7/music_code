@@ -8,9 +8,10 @@ import { playScore, type PlaybackHandle, type PlaybackState } from "@/adapters/t
 const button = { padding: "6px 12px", borderRadius: 8, border: "1px solid #c8cfdb", background: "#fff", cursor: "pointer" };
 
 /** High-frequency transport state is local, outside the editor/Score store. */
-export function PlaybackControls({ score, onPosition }: {
+export function PlaybackControls({ score, onPosition, stopSignal = 0 }: {
   score: Score;
   onPosition: (position: PlaybackPosition) => void;
+  stopSignal?: number;
 }) {
   const [state, setState] = useState<PlaybackState>("stopped");
   const [position, setPosition] = useState<PlaybackPosition | null>(null);
@@ -29,7 +30,7 @@ export function PlaybackControls({ score, onPosition }: {
       setState("stopped"); setPosition(null); setReady(false);
       onPosition({ tick: 0, measure: 1, beat: 1, activeNoteIds: [] });
     };
-  }, [score, onPosition]);
+  }, [score, onPosition, stopSignal]);
 
   function stop() {
     handle.current?.stop(); handle.current = null;
