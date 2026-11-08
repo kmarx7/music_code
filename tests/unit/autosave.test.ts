@@ -5,6 +5,9 @@ import type { ScoreRepository } from "@/application";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { scoreStore } from "@/store/score-store";
+import { NoteLabelsControl } from "@/features/score-editor";
+import { ScoreConflictError } from "@/application/ports";
+import type { NoteLabelMode } from "@/domain/music-theory";
 import { createPitch } from "@/domain/music-theory";
 import { MemoryScoreRepository } from "../fixtures/memory-repository";
 import { fourNoteScore } from "../fixtures/scores";
@@ -536,4 +539,34 @@ it("snapshot retains revision after failure and exposes terminal conflict before
   expect(await control.flush()).toBe(false);
   expect(control.getSnapshot!()).toEqual({ revision: 1, status: "conflict" });
   expect((await repository.read(other.id))!.score).toEqual(other);
+});
+
+it("label mode transitions do not notify the music store, dirty autosave, clear redo, change timestamps or write revision", async () => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "changed" }); scoreStore.undo();
+  expect(await control.flush()).toBe(true);
+  const session = scoreStore.getState(); const stored = await repository.read("score-1"); const status = hooks.status;
+  const save = vi.spyOn(repository, "save"); const read = vi.spyOn(repository, "read");
+  const notify = vi.fn(); const unsubscribe = scoreStore.subscribe(notify);
+  let mode: NoteLabelMode = "none";
+  try {
+    for (const value of ["letter", "fixed-do", "none"] as const) {
+      const select = NoteLabelsControl({ mode, onChange: (value) => { mode = value; } }).props.children[1];
+      select.props.onChange({ target: { value } });
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mode).toBe("none"); expect(scoreStore.getState()).toBe(session); expect(session!.future).toHaveLength(1);
+    expect(hooks.status).toBe(status); expect(notify).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled();
+    expect(await repository.read("score-1")).toEqual(stored);
+  } finally { unsubscribe(); }
+});
+it.each(["CONFLICT", "DELETED"] as const)("labels cannot clear %s or restart a blocked save", async (code) => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  const save = vi.spyOn(repository, "save").mockRejectedValueOnce(new ScoreConflictError(code));
+  changePitch(); expect(await control.flush()).toBe(false); const before = scoreStore.getState(); const state = control.getSnapshot!();
+  let mode: NoteLabelMode = "none";
+  NoteLabelsControl({ mode, onChange: (value) => { mode = value; } }).props.children[1].props.onChange({ target: { value: "fixed-do" } });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(mode).toBe("fixed-do"); expect(control.getSnapshot!()).toEqual(state); expect(scoreStore.getState()).toBe(before);
+  expect(save).toHaveBeenCalledTimes(1);
 });

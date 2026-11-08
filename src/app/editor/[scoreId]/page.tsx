@@ -4,22 +4,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
-import { koreanFixedDo, letterName } from "@/domain/music-theory";
+import { formatNoteLabel, koreanFixedDo, letterName, type NoteLabelMode } from "@/domain/music-theory";
 import { ScoreConflictError, ScoreReadError, importScoreBackup, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt } from "@/application";
 import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { EditCursor, ScoreSettings, StaffView } from "@/features/score-editor";
+import { EditCursor, NoteLabelsControl, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import { TransposeTool } from "@/features/transposition";
 import type { PlaybackPosition } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
-
-type LabelMode = "off" | "letter" | "korean";
 
 const DURATIONS = [
   { label: "온음표", ticks: 3840 },
@@ -107,7 +105,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const moveCursor = useCallback((tick: number | null) => {
     cursorRef.current = tick; setCursorTick(tick);
   }, []);
-  const [labelMode, setLabelMode] = useState<LabelMode>("letter");
+  const [labelMode, setLabelMode] = useState<NoteLabelMode>("none");
   const [message, setMessage] = useState("");
   const [playbackStopSignal, setPlaybackStopSignal] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -254,11 +252,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
     }
   }
 
-  const labelOf = (pitch: Pitch): string => {
-    if (labelMode === "letter") return letterName(pitch);
-    if (labelMode === "korean") return koreanFixedDo(pitch);
-    return "";
-  };
+  // Keep the existing note-list identification when extra staff labels are hidden.
+  const labelOf = (pitch: Pitch): string => formatNoteLabel(pitch, labelMode) ?? letterName(pitch);
 
   return (
     <main style={page}>
@@ -324,7 +319,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       </form>
 
       <ScoreSettings score={score} onCommand={runCommand} />
-      <TransposeTool autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
+      <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
       <PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} />
 
       {/* Original playback highlights must never target the read-only preview. */}
@@ -367,21 +362,12 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         <span style={{ fontSize: 12, color: "#5f6773" }}>{cursorTick === null
           ? "선택한 길이로 악보 끝에 삽입" : "음표: 편집 커서에 삽입 · 쉼표: 악보 끝에 삽입"}</span>
         <span style={{ width: 1, background: "#d9dee8", margin: "0 4px" }} />
-        {(["off", "letter", "korean"] as LabelMode[]).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            style={labelMode === mode ? buttonActive : button}
-            onClick={() => setLabelMode(mode)}
-          >
-            {mode === "off" ? "라벨 끔" : mode === "letter" ? "C D E" : "도 레 미"}
-          </button>
-        ))}
+        <NoteLabelsControl mode={labelMode} onChange={setLabelMode} />
       </div>
 
       <div style={panel}>
         <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
-        <StaffView score={score} cursorTick={cursorTick} />
+        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} />
       </div>
 
       <div style={panel}>

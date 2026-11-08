@@ -18,16 +18,16 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-4 조옮김 통합 검증)
+## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-5 음이름·고정도법 표시)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 37 파일 / **544 테스트 통과**(기존 534 + 통합/재생 회귀 10) |
-| `npm run check:architecture` | ✅ exit 0 | 57 모듈·163 의존성, 경계 50파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 39 파일 / **574 테스트 통과**(기존 544 + 표시·렌더·저장·후보 회귀 30) |
+| `npm run check:architecture` | ✅ exit 0 | 59 모듈·170 의존성, 경계 52파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
-| `npm run test:e2e` | 미실행 (서버 exit 1) | listen EPERM 0.0.0.0:3010; 49종 수집. 과거 사용자 Mac 46/46 기록은 유지 |
+| `npm run test:e2e` | 사용자 Mac Chromium **52/52 PASS** | 사용자 직접 확인. 과거 Codex listen EPERM 기록은 아래 유지 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
@@ -42,7 +42,7 @@
 | MVP-007 | 조옮김 | Partial | Phase 2-1 엔진·2-2 Command·2-3 후보/확정/취소 UI 구현. 단위·통합 534 및 사용자 Mac Chromium 46/46 통과; Phase 2-4 통합·수동 인수는 후속 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
-| MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
+| MVP-010 | 음이름·고정도 | Partial | 기존 함수 기반 Unicode 표시, none/letter/fixed-do, VexFlow 라벨·타이 머리·후보 연동 구현/단위 검증 완료. 사용자 Mac Chromium 52/52 통과; 폰트·실기기 인수는 별도 |
 | MVP-011 | 음역·조옮김 제안 | Pending | Pitch/MIDI 범위 검증 |
 | MVP-012 | 재생 | Partial | 커서·하이라이트·일시정지/재개·메트로놈 구현, 단위 검증 완료. 새 브라우저 E2E 미검증, cursor 시작/loop/rate는 후속 범위 |
 | MVP-013 | 로컬 악보함 | Partial | **IndexedDB 저장·자동/수동 저장·목록·열기·삭제**. 제목/JSON 백업·가져오기/실패 저장본 보호 유지. 기존 Mac E2E 통과, 신규 수동 저장 브라우저 검증 대기 |
@@ -551,10 +551,34 @@
   해당 E2E 파일 실행은 **listen EPERM 0.0.0.0:3010**으로 미실행. 수정 후 Mac 전체 49개 통과 전 커밋 보류.
 - 기존 Phase 2-4 변경 보존. GitHub push/Vercel 및 Phase 2-5 작업 없음.
 
+### 4.27 Phase 2-5 음이름·고정도법 표시 (2026-11-08)
+
+- main/HEAD `1437418`, clean. 사용자 단위·통합 544 및 Mac Chromium **49/49 통과** 확인을 기준선으로 유지한다.
+- 기존 letterName/koreanFixedDo를 재사용하는 순수 formatNoteLabel/NoteLabelMode 추가.
+  Pitch의 완전한 철자를 그대로 Unicode ♯/♭/𝄪/𝄫로 표시하며 조표 중복 적용/MIDI 재표기 없음.
+- 기존 표시 UI 자리에 none 기본 선택(표시 안 함/음이름/계이름)과 Annotation 기반 악보 라벨 연결.
+  기존 목록 식별은 보존, 첫 Part/타이 머리만/쉼표 제외. StaffView와 후보에 동일 mode를 전달한다.
+- label 모드의 마디 폭/행 간격/viewBox를 확보하고 실제 조표 note-start inset을 반영한다.
+  비제로 글자 폭/큰 조표 여백 경계 테스트로 새 라벨의 마디 우측 초과를 재현 후 수정했다.
+  pointer 비간섭·ID 연결/현재 하이라이트 보존. 실제 기기 폰트·다중 행 시각 인수는 남긴다.
+- 모드 변경은 로컬 UI만 변경한다. Score/Command/Undo·Redo/updatedAt/dirty/revision/저장/JSON/BC 불변.
+  conflict/deleted 저장 중지 및 후보 baseline 계약 유지. 음악 엔진/Tone/IndexedDB/useAutosave 구현 무변경.
+- 신규 **30개**, 전체 **39파일/574개 통과**. typecheck/lint/architecture/build 통과(59모듈/170의존성, 경계 52파일 위반 0).
+  기존 544개 및 49종 E2E assertion 유지. 상세 대역/검증 경계는 TEST_PLAN §27.
+- 신규 E2E 3종 포함 **52종/13파일 수집 성공**. 전체 실행은 **listen EPERM 0.0.0.0:3010**, exit 1로 **52종 미실행**.
+  당시 **구현 및 자동 데이터 검증 완료, 브라우저/실기기 인수 대기**로 Mac 검증 전 커밋을 보류했다.
+- **이후 사용자 Mac 직접 확인:** Chromium E2E **52/52 PASS**, 단위·통합 **574/574 PASS**,
+  typecheck/lint/architecture/build PASS. 위 Codex EPERM은 당시 실행 결과로 보존한다.
+  최종 검토에서 추적 11개/신규 5개, 총 16파일이 Phase 2-5 범위임을 확인했다.
+  Score/schemaVersion2/Command/Undo·Redo/DB2/ADR-010/저장 경로 보존. 실제 오디오 청취·Safari/모바일 실기기는 별도다.
+- MODULE_CONTRACTS/TEST_PLAN 갱신. schemaVersion2/Part.ties/DB2/ADR-010/새 라이브러리 없음/첫 Part 제한 유지.
+  GitHub push/Vercel 및 Phase 2-6 구현 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
 2. Phase 2-3 구현·자동화 검증·최종 검토 완료. Phase 2-4 통합 검증은 별도 작업으로 진행한다.
-3. Phase 2-4: TEST_PLAN §26의 신규 3종/전체 49종 Mac E2E 및 실제 오디오·SVG·Safari/모바일 수동 인수.
-   통과 확인 후 최종 diff 검토 및 선별 로컬 커밋, 이후 Phase 2-5 표시 기능 착수(이번 미구현).
+3. Phase 2-4 자동화는 사용자 Mac 49/49 통과를 기준선으로 유지한다. 실제 오디오·SVG·Safari/모바일 수동 인수는 계속 필요하다.
+4. Phase 2-5: 자동화 574/574 및 사용자 Mac 52/52 통과·최종 범위 검토 완료. 폰트·극단 음역·다중 행·실기기 수동 인수는 별도 유지한다.
+5. Phase 2-6: 검증된 Pitch/MIDI·표시 함수·transposeScore를 활용한 음역 분석/추천 설계(이번 미구현).
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

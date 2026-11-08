@@ -30,12 +30,12 @@
 | 모듈 | 진입점 | 제공 내용 |
 |---|---|---|
 | Domain · Score | `@/domain/score` | `Score`/`Part`/`TieLink` 등 타입, `createEmptyScore`, `createNoteEvent`, `createRestEvent`, `validateScore`, `serializeScore`, `deserializeScore`, `measureTicks`, `measureStartTick`, `NOTATABLE_DURATIONS`, `splitNoteIntoMeasures`, `chainIdsOf`, `mergeTiedNotes`, 상수, `transposeScore`, `TransposeSpec` |
-| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature`, `intervalBetweenKeys`, `transposePitch`, `transposeKeySignature`, `TransposeInterval`, `TransposeResult` |
+| Domain · Music Theory | `@/domain/music-theory` | `midiFromSpelling`, `createPitch`, `letterName`, `koreanFixedDo`, `isDiatonicStep`, `KEY_SIGNATURE_OPTIONS`, `isSupportedKeySignature`, `intervalBetweenKeys`, `transposePitch`, `transposeKeySignature`, `TransposeInterval`, `TransposeResult`, `formatNoteLabel`, `NoteLabelMode` |
 | Domain · Commands | `@/domain/commands` | `EditCommand`, `applyEditCommand`, 에러 코드 |
 | Application | `@/application` | `EditSessionState`, `createEditSession`, `applyCommand`, `undo`, `redo`, `canUndo`, `canRedo`, `ScoreRepository` |
 | Feature · Score Library | `@/features/score-library` | `useAutosave`, `SaveStatus`, `AutosaveHandle`, `SaveButton` |
 | Feature · Playback | `@/features/playback` | `PlaybackControls`, `highlightPlayback` (런타임 UI/DOM 투영) |
-| Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings`, `EditCursor` |
+| Feature · Score Editor | `@/features/score-editor` | `StaffView`, `ScoreSettings`, `EditCursor`, `NoteLabelsControl` |
 
 내부 파일 직접 import는 같은 feature/모듈 내부에서만 허용한다.
 
@@ -549,3 +549,30 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   알림 구독 없이도 OCC가 보호하며 BroadcastChannel을 동시성 보장의 대체물로 사용하지 않는다.
 - 신규 브라우저 검증과 실제 오디오 청취/Safari/모바일 결과는 TEST_PLAN §26에 구분한다.
   schemaVersion 2/Part.ties/ADR-010/저장 쓰기 경로/의존성/렌더러/재생 구현은 변경하지 않는다.
+
+## Phase 2-5 — 음이름·고정도법 악보 라벨
+
+- `NoteLabelMode = "none" | "letter" | "fixed-do"`, `formatNoteLabel(pitch,mode): string|null`을
+  music-theory 공개 진입점에 추가한다. 기존 letterName/koreanFixedDo를 호출하고 표시 기호만
+  #/b/##/bb → ♯/♭/𝄪/𝄫로 바꾼다. 기존 ASCII 함수/피아노 키·선택 정보 계약은 유지한다.
+  letter는 표기 octave 포함, fixed-do는 생략하며 조성과 무관하게 C=도다. none은 null이다.
+- Pitch.step/alter/octave는 이미 완전한 기보 철자다. 조표를 다시 적용하거나 MIDI로 재표기하지 않는다.
+  E#/F, B#/C, Cb/B와 겹임시표를 구별한다. Score/Pitch/schemaVersion/Command를 변경하지 않는다.
+- Editor의 기존 로컬 표시 상태를 none 기본값으로 확장하고 기존 라벨 버튼 자리에
+  `NoteLabelsControl`(표시 안 함/음이름/계이름)을 둔다. mode는 StaffView와 TransposeTool에 전달된다.
+  악보 라벨을 숨겨도 기존 음표 목록의 식별용 음이름 버튼은 유지한다. 새로고침 시 none이다.
+- StaffView/renderScoreInto의 선택적 labelMode 기본값은 none이며 기존 호출자와 호환된다.
+  첫 Part만 표시한다. VexFlow Annotation을 음표 아래에 부착하고 tie.to 연장은 생략하며 쉼표도 제외한다.
+  타이/음표/마디 ID나 리듬은 바꾸지 않는다. 별도 SVG/기보 엔진이나 라벨 음악 모델을 만들지 않는다.
+- 라벨 모드는 VexFlow Annotation/Formatter의 최소 폭과 실제 clef/key/meter 이후 음표 시작 위치로
+  마디 폭을 계산한다. 행 간격을 확보하고 전체 SVG viewBox를 라벨/음표 외곽까지 확장한다.
+  none은 기존 기보 배치 경로를 유지한다. 실제 기기 폰트/극단 음역·다중 행 간격 인수는 TEST_PLAN §27에 남긴다.
+- 라벨 SVG 그룹은 data-testid="note-label", data-label-event-id/aria-label로 식별하며
+  pointer-events:none/user-select:none이다. 기존 data-event-id는 음표/쉼표 그룹에만 유지한다.
+  표시 재렌더 때 현재 data-playing ID를 재적용한다. 원본/후보 DOM 하이라이트 범위 분리는 유지한다.
+- 표시 변경은 setState와 read-only 렌더만 수행한다. dispatch/store.init/flush/repository 호출이 없다.
+  Score/이력/updatedAt/dirty/revision/IndexedDB/JSON/BC는 변경하지 않는다. useAutosave/ADR-010/Tone 구현도 그대로다.
+  알려진 충돌/삭제 상태를 라벨 변경으로 해제하거나 저장을 재개하지 않는다.
+- 후보는 자신의 Pitch와 공유 mode로 표시되며 모드 변경은 preview baseline을 무효화하지 않는다.
+  확정/취소/Undo/Redo는 기존 Command/세션 경로다. Label mode는 별도 Command/영속 필드가 아니다.
+  Phase 2-6의 음역 분석/추천은 미구현이다.

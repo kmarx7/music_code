@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { EditSessionState } from "@/application/edit-session";
-import { KEY_SIGNATURE_OPTIONS, isSupportedKeySignature, type TransposeDirection } from "@/domain/music-theory";
+import { KEY_SIGNATURE_OPTIONS, isSupportedKeySignature, type TransposeDirection, type NoteLabelMode } from "@/domain/music-theory";
 import { transposeScore, type TransposeSpec } from "@/domain/score";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
@@ -23,8 +23,8 @@ function explain(error: { code: string }): string {
 }
 
 /** Transient candidate only. Confirmation alone uses the existing synchronous command pipeline. */
-export function TransposeTool({ autosave, status, onOpen }: {
-  autosave: RefObject<AutosaveHandle | null>; status: SaveStatus; onOpen?: () => void;
+export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: {
+  autosave: RefObject<AutosaveHandle | null>; status: SaveStatus; onOpen?: () => void; labelMode?: NoteLabelMode;
 }) {
   const session = useScoreState();
   const [base, setBase] = useState<{ session: EditSessionState; revision: number } | null>(null);
@@ -94,7 +94,7 @@ export function TransposeTool({ autosave, status, onOpen }: {
         <p data-testid="transpose-movement">{sourceOption?.label} → {selection?.label} · {candidate.value.interval.deltaSemitones > 0 ? "+" : ""}{candidate.value.interval.deltaSemitones}반음
           {candidate.value.interval.deltaSemitones > 0 ? " 상행" : candidate.value.interval.deltaSemitones < 0 ? " 하행" : " 이동"} · {stale || unavailable ? "확정 불가" : "조옮김 가능"}</p>
         {candidate.value.score === base.session.current ? <p>현재 악보와 같은 결과입니다. 확정해도 편집 이력은 추가되지 않습니다.</p> : null}
-        <div data-testid="transpose-candidate"><StaffView score={candidate.value.score} /></div>
+        <div data-testid="transpose-candidate"><StaffView score={candidate.value.score} labelMode={labelMode} /></div>
         {candidate.value.score.parts.length > 1 ? <p>모든 파트가 조옮겨집니다. 미리보기는 첫 파트를 표시합니다.</p> : null}
       </> : candidate ? <p role="alert" data-error-code={candidate.error.code}>{explain(candidate.error)}</p>
         : <p role="alert">지원하는 목표 조성을 선택해 주세요.</p>}

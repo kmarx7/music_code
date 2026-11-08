@@ -4,7 +4,7 @@ import { TransposeTool } from "@/features/transposition";
 import { StaffView } from "@/features/score-editor";
 import type { AutosaveHandle, SaveStatus } from "@/features/score-library";
 import { scoreStore } from "@/store/score-store";
-import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
+import { KEY_SIGNATURE_OPTIONS, type NoteLabelMode } from "@/domain/music-theory";
 import { createNoteEvent, transposeScore } from "@/domain/score";
 import type { Score } from "@/domain/score";
 import { baseScore, fourNoteScore, tiedScore, withMeasureEvents } from "../fixtures/scores";
@@ -37,8 +37,8 @@ function find(predicate: (element: Element) => boolean): Element {
 }
 function button(name: string) { return find((element) => element.type === "button" && element.props.children === name); }
 function invoke(element: Element, name: string, event?: unknown) { (element.props[name] as (event?: unknown) => void)(event); }
-function render() {
-  hooks.state = 0; hooks.ref = 0; tree = TransposeTool({ autosave, status, onOpen }) as Element;
+function render(labelMode: NoteLabelMode = "none") {
+  hooks.state = 0; hooks.ref = 0; tree = TransposeTool({ autosave, status, onOpen, labelMode }) as Element;
 }
 function open(target = "major:2") {
   invoke(button("조옮김"), "onClick"); render();
@@ -173,4 +173,16 @@ it("all parts are transformed while the existing first-part renderer receives a 
   expect(preview.parts.map((part) => part.ties)).toEqual(source.parts.map((part) => part.ties));
   expect(text(tree)).toContain("모든 파트가 조옮겨집니다"); expect(text(tree)).toContain("첫 파트를 표시");
   expect(scoreStore.getState()!.current).toBe(source);
+});
+
+it("label mode changes project only the candidate and do not invalidate or commit the preview", () => {
+  open(); const before = scoreStore.getState(); const dispatch = vi.spyOn(scoreStore, "dispatch");
+  const expected = candidate();
+  for (const mode of ["letter", "fixed-do", "none"] as const) {
+    render(mode); const staff = find((element) => element.type === StaffView);
+    expect(staff.props.labelMode).toBe(mode); expect(staff.props.score).toEqual(expected);
+    expect(button("확정").props.disabled).toBe(false); expect(scoreStore.getState()).toBe(before);
+  }
+  expect(dispatch).not.toHaveBeenCalled(); expect(autosave.current!.flush).not.toHaveBeenCalled(); expect(revision).toBe(1);
+  invoke(button("취소"), "onClick"); expect(scoreStore.getState()).toBe(before);
 });

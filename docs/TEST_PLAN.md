@@ -925,3 +925,61 @@ Safari/모바일 실기기, 재생 중 조옮김 확정의 실제 note-off, 브�
 완전한 다중 Part 동시 기보·재생으로 보고하지 않는다. 강제 종료 무손실 보장은 없다.
 Phase 2-5 인수인계: label은 확정된 Score의 Pitch.step/alter/octave에서 파생하고 MIDI만으로 철자를 재생성하지 않는다.
 E#/B#/Cb·장/단조·Undo/Redo/저장 복원을 표시 회귀에 재사용할 수 있다. 계이름/음이름 기능은 이번에 구현하지 않았다.
+
+## 27. Phase 2-5 음이름·고정도법 표시 (2026-11-08)
+
+- 기준 main/HEAD `1437418`, clean 확인. 기존 단위·통합 544 및 사용자 Mac Chromium **49/49 통과**를
+  기준선으로 보존한다. §26/당시 Codex EPERM 및 수정 전 Mac 48/49 기록을 삭제하지 않는다.
+- 신규 단위·통합 **30개**:
+  - note-labels.test.ts **16개**: C/C#/Db/E#/B#/Cb, 모든 고정도 음이름, alter ±2, octave 0/9,
+    동일 MIDI의 상이한 철자, none/null, 입력 불변, 조표 중복 적용 없음, 세 선택 값/잘못된 값 무시.
+  - note-label-rendering.test.ts **10개**: 기본 none/모드 변경, 타이 머리만·쉼표 제외,
+    Annotation 소유 이벤트/읽기 전용 SVG 속성, D/Db/C#의 철자와 Undo/Redo,
+    조밀한 32분음표 마디 확장, 외곽 viewBox, 재렌더 하이라이트 유지,
+    4개/32개 라벨 + 큰 7샵 조표 공간에서 마디 경계 준수.
+  - autosave.test.ts **3개** 추가: 모드 변경 시 Store 알림/dirty/Redo/timestamp/DB revision/IO 불변,
+    conflict/deleted 상태 유지와 무재시도. transpose-preview.test.ts **1개** 추가: mode만 후보에 전달,
+    원본/session/revision/확정 가능 상태 유지·무dispatch/취소 불변.
+- Node는 Canvas 폰트 측정이 없어 VexFlow Annotation.getWidth와 큰 조표 시작 여백에 결정적 대역을 사용한다.
+  실제 Annotation/StaveNote/Formatter의 연결·간격 계산을 검사하되 SVG 그리기는 대역이다.
+  이 경계 테스트로 새 구현의 조표 여백 미차감에 따른 우측 초과를 먼저 재현한 뒤,
+  labelled 모드의 실제 note-start inset과 format 폭만 최소 수정했다. 수정 후 경계 테스트 통과.
+  React hooks/controlled element 및 fake-indexeddb 대역도 실제 DOM·오디오·기기 폰트와 구분한다.
+- 전체 **39파일 / 574개 통과**(기존 544 + 신규 30). typecheck/lint/check:architecture/build exit 0.
+  아키텍처 59모듈/170의존성, 경계 52파일 위반 0. 기존 음악 이론/Command/ADR-010 검증 유지.
+- 신규 note-labels.spec.ts **3종**:
+  1. none→letter→fixed-do→none, SVG 라벨/경계·겹침 확인, 음표 선택/편집 커서/Redo 유지,
+     실제 IDB put 호출 0 및 원시 레코드/Score/updatedAt/revision 동등성.
+  2. D/Db/C# 후보의 원본/후보 분리, 취소 원시 불변, 미리보기 도중 표시 변경 후 확정 가능,
+     확정/Undo/Redo 시 고정도 및 실제 Pitch 일치.
+  3. 타이 머리만·쉼표 제외·수정 후 라벨 갱신, 재생 중 표시 전환과 메트로놈/하이라이트 유지,
+     JSON 백업 동일성, 새로고침 Score 복원/none 기본값 및 라벨 재표시.
+- 기존 **49종 E2E 무변경**, **52종/13파일 수집 성공**.
+  전체 npm run test:e2e는 production build 후 **listen EPERM 0.0.0.0:3010**, exit 1로 시작 실패.
+  **브라우저 52종 미실행**, 사용자 Mac의 과거 49/49를 이번 신규 UI의 성공으로 간주하지 않는다.
+  당시 사용자 지시에 따라 변경을 보존하고 로컬 커밋을 보류했다.
+
+Mac 검증 명령:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e -- tests/e2e/note-labels.spec.ts
+npm run test:e2e
+```
+
+남은 수동 인수: Unicode/Hangul/𝄪/𝄫 폰트, 매우 높거나 낮은 음역·다중 행·타이·기둥과 라벨 간격,
+모바일 실제 화면에서 스크롤/선택/터치, Safari, 실제 오디오 청취 및 표시 전환 중 음성 연속성.
+자동 데이터 테스트만으로 스피커·실제 SVG 시각 검증을 주장하지 않는다. 강제 종료 무손실 보장은 없다.
+Phase 2-6은 formatNoteLabel/기존 midiFromSpelling/transposeScore와 검증된 Pitch를 재사용할 수 있으며
+음역 계산·추천 UI/상태는 이번에 추가하지 않았다. GitHub push 및 Vercel 작업 없음.
+
+### Phase 2-5 최종 검토 및 사용자 Mac 검증 결과
+
+- 사용자가 Mac에서 Chromium E2E **52/52 PASS**를 직접 확인했다. 기존 49개와 라벨 신규 3개를 포함한다.
+  위 Codex listen EPERM 기록은 당시 결과로 보존하며 Codex 브라우저 실행 성공으로 표기하지 않는다.
+- 단위·통합 **574/574 PASS**, typecheck/lint/architecture/build PASS를 확인했다.
+- 추적 11파일 + 신규 5파일의 총 16파일을 검토했다. 음악 철자/고정도법/로컬 모드 상태,
+  VexFlow Annotation·원본/후보 전달, 타이·쉼표/하이라이트, 무dispatch·무저장 계약을 유지한다.
+  기존 Score v2/Command/Undo·Redo/IndexedDB DB2/ADR-010 경로 및 음악 이론 조옮김 엔진 변경 없음.
+- 실제 오디오 청취, Safari·모바일 실기기 및 앞서 명시한 폰트·극단 음역·다중 행 인수는 별도다.
+  Phase 2-6은 구현하지 않았으며 GitHub push/Vercel 작업은 수행하지 않는다.

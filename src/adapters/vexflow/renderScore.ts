@@ -2,6 +2,8 @@ import type { Part, Score, ScoreEvent } from "@/domain/score/types";
 import { NOTATABLE_DURATIONS } from "@/domain/score/tie";
 import { measureStartTick, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 
+import { formatNoteLabel, type NoteLabelMode } from "@/domain/music-theory";
+
 const DURATION_ALIAS: Record<number, string> = {
   1: "w",
   2: "h",
@@ -68,7 +70,7 @@ function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
 export async function renderScoreInto(
   element: HTMLDivElement,
   score: Score,
-  options?: { cursorTick?: number | null },
+  options?: { cursorTick?: number | null; labelMode?: NoteLabelMode },
 ): Promise<void> {
   const vexflow = await import("vexflow");
   const {
@@ -81,15 +83,27 @@ export async function renderScoreInto(
     Accidental,
     GhostNote,
     Fraction,
+    Annotation,
   } = vexflow;
 
   const part = score.parts[0];
+  const playingIds = new Set(Array.from(element.querySelectorAll?.('[data-event-id][data-playing="true"]') ?? [])
+    .map((note) => note.getAttribute("data-event-id")));
   element.innerHTML = "";
   if (!part) return;
 
+  const labelMode = options?.labelMode ?? "none";
+  const labelled = labelMode !== "none";
+  const continuation = new Set(part.ties.map((tie) => tie.to));
+  const annotations = new Map<string, InstanceType<typeof Annotation>>();
+  const rowHeight = labelled ? 180 : ROW_HEIGHT;
+  let rowX = 10;
+  let rowY = STAVE_TOP;
+  let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
+
   const rows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
   const width = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
-  const height = rows * ROW_HEIGHT + STAVE_TOP;
+  const height = rows * rowHeight + STAVE_TOP;
 
   const renderer = new Renderer(element, Renderer.Backends.SVG);
   renderer.resize(width, height);
@@ -107,9 +121,10 @@ export async function renderScoreInto(
   part.measures.forEach((measure, index) => {
     const row = Math.floor(index / MEASURES_PER_ROW);
     const column = index % MEASURES_PER_ROW;
+    if (column === 0) { rowX = 10; rowY = row * rowHeight + STAVE_TOP; }
     const stave = new Stave(
-      column * MEASURE_WIDTH + 10,
-      row * ROW_HEIGHT + STAVE_TOP,
+      labelled ? rowX : column * MEASURE_WIDTH + 10,
+      rowY,
       MEASURE_WIDTH,
     );
 
@@ -124,7 +139,8 @@ export async function renderScoreInto(
       );
     }
 
-    stave.setContext(context).draw();
+    stave.setContext(context);
+    if (!labelled || measure.events.length === 0) stave.draw();
     const start = measureStartTick(measure.index, part.timeSignature);
     const atCursor = cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick) &&
       cursorTick >= start && (cursorTick < start + length ||
@@ -137,9 +153,9 @@ export async function renderScoreInto(
       const left = right < 0 ? points.at(-1)! : points[Math.max(0, right - 1)];
       const next = right < 0 ? left : points[right];
       const ratio = next.tick === left.tick ? 0 : (cursorTick! - left.tick) / (next.tick - left.tick);
-      cursorPoint = { x: left.x + ratio * (next.x - left.x), y: row * ROW_HEIGHT + STAVE_TOP + 10 };
+      cursorPoint = { x: left.x + ratio * (next.x - left.x), y: rowY + 10 };
     }
-    if (measure.events.length === 0) { locateCursor(); return; }
+    if (measure.events.length === 0) { locateCursor(); rowX += MEASURE_WIDTH; return; }
 
     const events = [...measure.events].sort((a, b) => a.startTick - b.startTick);
     const notes = events.map((event) => {
@@ -150,11 +166,20 @@ export async function renderScoreInto(
           clef: part.clef,
         });
       }
-      return new StaveNote({
+      const note = new StaveNote({
         keys: [vexKeyOf(event)],
         duration: vexDurationOf(event.durationTicks, false),
         clef: part.clef,
       });
+      const label = continuation.has(event.id) ? null : formatNoteLabel(event.pitch, labelMode);
+      if (label) {
+        const annotation = new Annotation(label).setFont("system-ui, sans-serif", 11)
+          .setVerticalJustification(Annotation.VerticalJustify.BOTTOM);
+        annotation.setYShift(12);
+        note.addModifier(annotation, 0);
+        annotations.set(event.id, annotation);
+      }
+      return note;
     });
 
     // 쉼표 이동/삭제로 생긴 빈 구간도 절대 tick 위치대로 간격을 유지한다.
@@ -182,12 +207,29 @@ export async function renderScoreInto(
       .setStrict(false);
 
     Accidental.applyAccidentals([voice], keySpec);
-    new Formatter().joinVoices([voice]).format([voice], MEASURE_WIDTH - 40);
+    const formatter = new Formatter().joinVoices([voice]);
+    // Annotation-aware VexFlow spacing, expanding dense measures rather than overlapping labels.
+    const inset = labelled ? stave.getNoteStartX() - stave.getX() : 0;
+    const measureWidth = labelled ? Math.max(MEASURE_WIDTH, Math.ceil(formatter.preCalculateMinTotalWidth([voice])) + inset + 40) : MEASURE_WIDTH;
+    if (labelled) stave.setWidth(measureWidth);
+    formatter.format([voice], labelled ? measureWidth - inset - 30 : measureWidth - 40);
+    rowX += measureWidth;
+    canvasWidth = Math.max(canvasWidth, rowX + 10);
+    if (labelled) stave.draw();
     voice.draw(context, stave);
     if (atCursor) locateCursor(tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
 
     events.forEach((event, position) => {
-      notes[position].getSVGElement()?.setAttribute("data-event-id", event.id);
+      const noteElement = notes[position].getSVGElement();
+      noteElement?.setAttribute("data-event-id", event.id);
+      if (playingIds.has(event.id)) noteElement?.setAttribute("data-playing", "true");
+      const label = annotations.get(event.id)?.getSVGElement();
+      if (label) {
+        label.setAttribute("data-testid", "note-label");
+        label.setAttribute("data-label-event-id", event.id);
+        label.setAttribute("aria-label", annotations.get(event.id)!.getText());
+        label.setAttribute("style", "pointer-events: none; user-select: none");
+      }
       rendered.set(event.id, { note: notes[position], row });
     });
   });
@@ -221,4 +263,15 @@ export async function renderScoreInto(
       svg.appendChild(line);
     }
   }
+  if (labelled) {
+    const svg = element.querySelector?.("svg");
+    const bounds = svg?.getBBox?.();
+    const x = Math.min(0, (bounds?.x ?? 8) - 8);
+    const y = Math.min(0, (bounds?.y ?? 8) - 8);
+    const right = Math.max(canvasWidth, bounds ? bounds.x + bounds.width + 8 : canvasWidth);
+    const bottom = Math.max(height, bounds ? bounds.y + bounds.height + 8 : height);
+    renderer.resize(right - x, bottom - y);
+    svg?.setAttribute("viewBox", `${x} ${y} ${right - x} ${bottom - y}`);
+  }
+
 }
