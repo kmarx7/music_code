@@ -1066,3 +1066,26 @@ Mac 전체 재검증: `npm run test:e2e` (프로젝트 루트).
   저장소/자동 저장 구현, 기존 조옮김 엔진, Tone.js/VexFlow 구현과 의존성은 변경하지 않았다.
 - 실제 오디오 청취, Safari·모바일 실기기, 폰트·극단 음역·다중 행 시각 인수 및 큰 악보 응답성은 별도다.
   수치상 음역 적합성을 실제 악기 연주 가능성으로 간주하지 않는다. GitHub push/Vercel 작업 및 Phase 3 구현 없음.
+
+## 29. Phase 2 인수 감사 및 Phase 3 검증 계획 (2026-11-09)
+
+- 기준 main `5d43471`, clean. 이번 재실행은 단위·통합 **41파일/614개 PASS**와
+  architecture **62모듈/186의존성/경계55파일 위반0**이다. 기존 사용자 Mac Chromium **55/55 PASS** 유지.
+  이번 감사에서 E2E/typecheck/lint/build를 새로 실행하지 않았다. 문서/임시 순수 함수 진단만 추가했다.
+- 임시 진단(등록된 회귀 테스트 개수에 포함하지 않음):
+  - 66세그먼트/65링크 타이의 validate/import 성공 이후 merge 길이가 기대63360 아닌62400ticks,
+    chainIdsOf(head)가65개라는 불일치를 재현했다.
+  - 1000ticks import 성공 이후 실제 renderer 음가 함수 q/실제 VexFlow ticks4096(온음표16384)를
+    canonical 온음표3840으로 환산하면960ticks다. DOM 그리기·폰트·청취 검증은 아니다.
+  - 기존614개가 위 두 경계를 검사했다고 주장하지 않는다. 제품 수정/회귀 추가는 H-01/H-02 후속 작업이다.
+- 8/64/256마디·복수Part·타이255개 합성 데이터의 추천/위치/병합을 Node에서 측정했다.
+  재현 스크립트, 실제3회 값, 실행 환경과 한계는 [감사 보고서](PHASE2_ACCEPTANCE_REPORT.md) §6/부록 참조.
+- 최종 판정은 **통상 흐름 자동화 통과, 경계 결함과 수동 인수로 무조건 인수 보류**다.
+  [수동 체크리스트](PHASE2_ACCEPTANCE_REPORT.md) §7은 모두 NOT RUN.
+  Safari/모바일 실기기/실제 오디오·전반 SVG 시각 인수를 PASS로 간주하지 않는다.
+- [마스터 플랜](PHASE3_MASTER_PLAN.md)/[백로그](PHASE3_BACKLOG.md)는 미구현 계획이다.
+  rate/loop는 무Command·무저장, clipboard는 원자 Command/Undo/OCC 회귀를 요구한다.
+  기존614/55 assertion 유지, 신규 실제 결과만 보고, 제품 구현 전 경계 정책 승인/회귀 시험을 선행한다.
+- 문서 링크/상태/ADR-010·Score v2/DB2 일치와 diff 검사를 수행한다. 제품 코드·DB·배포는 변경하지 않는다.
+- 문서 스테이징은 `.git/index.lock: Operation not permitted`로 실패했고 공식 권한 요청도
+  `sandbox_approval: false` 정책으로 거부되었다. 커밋 미생성/변경 보존, 제품 코드 무변경.
