@@ -532,3 +532,20 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   Tone.js 어댑터/엔진 및 VexFlow 렌더러는 변경하지 않는다.
 - schemaVersion 2/Part.ties/Command/Undo/Redo/JSON/DB2/ADR-010/저장 구현/의존성 유지.
   영속 모델·저장 포트의 구조 변경이나 새 ADR은 없다. 실제 기보·오디오·저장 복합 인수는 Phase 2-4다.
+
+## Phase 2-4 — 조옮김 기보·재생·저장 정합성 검증
+
+- 제품 계약/구현 변경 없이 기존 TransposeScore→snapshot 이력→VexFlow/Tone/IndexedDB/JSON 경계를 통합 검증한다.
+  `tests/integration/transpose-consistency.test.ts`는 실제 VexFlow StaveNote/Accidental/Voice의 철자·오선 위치·임시표를 검사한다.
+  DOM 그리기/레이아웃만 대역이며, Tone은 Frequency의 MIDI 단위 입력 및 어택 인자/지속시간을 캡처한다.
+  실제 SVG 픽셀이나 스피커 출력이 검증됐다는 의미는 아니다.
+- 첫 Part의 표기와 재생이 같은 canonical Pitch를 소비함을 확인한다. MIDI가 같은 E#/F, B#/C 등의
+  표기 차이는 보존하며 타이 체인은 한 어택으로 전체 길이를 지속한다. 일반음 90% gate는 유지한다.
+- 복수 Part는 기존 계약을 유지한다: 엔진·Command·저장/JSON은 모든 Part를 보존·변환하지만
+  StaffView/playScore/재생 커서는 첫 Part만 표시·재생한다. 전체 Part의 동시 기보/재생은 미지원이다.
+  이 제한을 테스트에 명시하며 이번 작업에서 다중 성부 재생 엔진이나 새 모델을 도입하지 않는다.
+- 실제 IndexedDB adapter + fake-indexeddb에서 DB2, 동시 expectedRevision CAS 한 승자,
+  원시 레코드/패자 메모리·Undo/Redo 보존, Tombstone 후 저장/직접 열기 차단을 재검증한다.
+  알림 구독 없이도 OCC가 보호하며 BroadcastChannel을 동시성 보장의 대체물로 사용하지 않는다.
+- 신규 브라우저 검증과 실제 오디오 청취/Safari/모바일 결과는 TEST_PLAN §26에 구분한다.
+  schemaVersion 2/Part.ties/ADR-010/저장 쓰기 경로/의존성/렌더러/재생 구현은 변경하지 않는다.

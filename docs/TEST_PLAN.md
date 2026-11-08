@@ -879,3 +879,49 @@ Phase 2-4 기능은 구현하지 않는다. GitHub push/Vercel 작업 없음.
 - Score schemaVersion 2/Part.ties/기존 Command·음악 이론 엔진/IndexedDB 쓰기 경로/ADR-010 변경 없음.
   기능 추가·리팩터링·Phase 2-4 구현 없이 검증된 Phase 2-3 파일만 로컬 커밋한다.
   실제 오디오/Safari/모바일 및 위 Phase 2-4 수동 인수 항목은 별도로 남긴다.
+
+## 26. Phase 2-4 조옮김 기보·재생·저장 통합 검증 (2026-11-08)
+
+- 시작 상태: main, HEAD `45c15f8`, clean. 기존 534개 및 사용자 Mac Chromium 46/46 성공을 기준선으로 보존한다.
+- 신규 `tests/integration/transpose-consistency.test.ts` **9개**:
+  - C장조→D/Db/C# 및 A단조→B단조: 실제 VexFlow key/음표 철자/임시표 객체와 Tone Frequency(midi,"midi") 입력의 일치.
+  - 일반음의 90% gate/절대 tick 간격, 반음계 샵·겹샵·제자리표/반복 임시표 처리.
+  - B#4/C5의 동일 MIDI·상이한 오선 위치(3/3.5), Cb4의 표기 옥타브와 MIDI 59.
+  - 쉼표·마디 경계 타이/60 BPM에서 단일 어택·2초 지속, Undo/Redo 후 재생 MIDI 및 기보 동등성.
+  - 실제 IndexedDB adapter의 저장/repository 재열기·revision2·JSON 내보내기/새 ID 가져오기 후
+    전체 Part/ties 및 동일 기보/스케줄 데이터. JSON에 revision 필드 없음/schemaVersion2 유지.
+  - 복수 Part의 변환·저장 동등성, 기존 첫 Part만 기보·재생하는 제한 명시(동시 다중 Part 재생 검증이 아니다).
+  - 알림 구독 없는 두 저장소의 동시 조옮김 CAS: 한 승자, DB2/원시 레코드 보존,
+    패자의 메모리·Undo/Redo 유지, 재시도 거부, Tombstone 후 저장/직접 URL용 openOrCreateScore 차단·원시 Tombstone 불변.
+- `tests/unit/transpose-playback.test.ts` **1개 추가**: 원본 재생 중 조옮김 Command 확정 후 기존 핸들 정리,
+  다음 Play/Undo/Redo에서 각각 현재 Score 전달. 기존 2개 검증은 유지한다.
+- 대역 경계: 실제 VexFlow tickable/accidental 계산을 사용하되 Renderer/Stave/Formatter/그리기는 대역이다.
+  Tone Frequency 입력과 triggerAttackRelease 데이터를 캡처하며 오디오 초기화/합성/실제 주파수 출력을 실행하지 않는다.
+  React hooks/element tree는 기존 프로젝트 대역, DB는 fake-indexeddb다. 실제 DOM·오디오 실측과 구분한다.
+- 전체 **37파일 / 544개 통과**(기존 534 + 신규 10). typecheck/lint/check:architecture/build exit 0.
+  아키텍처 57모듈/163의존성, 경계 50파일 위반 0. 제품 코드 및 기존 46종 E2E 변경 없음.
+- 신규 `tests/e2e/transpose-integration.spec.ts` **3종**:
+  1. 한 시나리오에서 D/Db/C# 각각: SVG notehead 실제 y/조표 glyph/타이,
+     후보·원본 분리, 확정/단일 Undo/Redo·DB Pitch/ties, 저장·새로고침·악보함 재열기·재생 상태 확인.
+  2. 재생→미리보기 진입 정지→취소 원시 불변, 미리보기 중 원본 재생의 하이라이트 분리,
+     재생 중 확정 정지·위치 초기화 및 다시 재생한 D4 하이라이트.
+  3. BroadcastChannel 미지원 두 탭의 조옮김/입력 동시 수동 저장, 한 revision 커밋,
+     패자 메모리·Undo/Redo 유지·자동 저장/덮어쓰기 차단. 기존 삭제 알림 E2E는 그대로 유지한다.
+- `npm run test:e2e -- --list`: **49종/12파일 수집 성공**. 전체 `npm run test:e2e`는
+  production build 후 **listen EPERM 0.0.0.0:3010**, exit 1. **브라우저 49종 미실행**이다.
+  과거 사용자 Mac 46/46 성공을 신규 3종의 성공으로 간주하지 않는다. Phase 2-4 최종 검증 및 커밋은 보류한다.
+
+Mac 재실행:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e -- tests/e2e/transpose-integration.spec.ts
+npm run test:e2e
+```
+
+남은 수동 인수: 실제 SVG 시각·폰트/임시표/겹임시표/옥타브 경계, 스피커 오디오 청취 및 타이 지속음,
+Safari/모바일 실기기, 재생 중 조옮김 확정의 실제 note-off, 브라우저 두 탭 저장·삭제 동작.
+코드 조사와 실행한 데이터 테스트에서 새 제품 결함은 재현되지 않았다. 첫 Part 표시/재생 제한은 기존 계약이며
+완전한 다중 Part 동시 기보·재생으로 보고하지 않는다. 강제 종료 무손실 보장은 없다.
+Phase 2-5 인수인계: label은 확정된 Score의 Pitch.step/alter/octave에서 파생하고 MIDI만으로 철자를 재생성하지 않는다.
+E#/B#/Cb·장/단조·Undo/Redo/저장 복원을 표시 회귀에 재사용할 수 있다. 계이름/음이름 기능은 이번에 구현하지 않았다.

@@ -18,16 +18,16 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-3 조옮김 미리보기)
+## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-4 조옮김 통합 검증)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 36 파일 / **534 테스트 통과**(기존 507 + 미리보기·저장 조회·재생 정리 회귀 27) |
+| `npm run test` | ✅ exit 0 | 37 파일 / **544 테스트 통과**(기존 534 + 통합/재생 회귀 10) |
 | `npm run check:architecture` | ✅ exit 0 | 57 모듈·163 의존성, 경계 50파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
-| `npm run test:e2e` | 사용자 Mac Chromium **46/46 통과** | 기존 41 + 신규 5; Codex의 과거 listen EPERM 기록은 아래 유지 |
+| `npm run test:e2e` | 미실행 (서버 exit 1) | listen EPERM 0.0.0.0:3010; 49종 수집. 과거 사용자 Mac 46/46 기록은 유지 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
 
@@ -523,9 +523,38 @@
   MODULE_CONTRACTS/TEST_PLAN/TASKS 갱신. schemaVersion 2/Part.ties/JSON/DB2/저장 모델/의존성 유지.
   GitHub push/Vercel 작업 및 Phase 2-4 구현 없음.
 
+### 4.25 Phase 2-4 기보·재생·저장 통합 검증 (2026-11-08)
+
+- main/HEAD `45c15f8`, clean에서 시작. 기존 단위·통합 534 및 사용자 Mac E2E 46/46 기준선 보존.
+- TransposeScore→EditSession/Undo/Redo→VexFlow/Tone→IndexedDB/JSON 경로 조사.
+  새 결함이 재현되지 않아 **제품 코드 무변경**, 테스트와 검증 문서만 추가/갱신했다.
+- 신규 통합 9개 + 재생 제어 회귀 1개. 실제 VexFlow 음표/임시표·오선 위치와 Tone MIDI/어택 인자,
+  타이 단일 지속음·쉼표·템포·Undo/Redo·DB 재열기·JSON 가져오기/백업 데이터 동등성 확인.
+  알림 없이 동시 CAS 한 승자/패자 이력·원시 레코드/영속 Tombstone 보존 및 DB2 검증.
+- 복수 Part는 변환·저장 보존되나 기존 renderer/playScore는 첫 Part만 표시·재생한다.
+  이 제한을 명시적으로 검사했다. 다중 Part 동시 기보·재생을 구현하거나 검증했다고 보고하지 않는다.
+- 전체 **37파일/544개 통과**, typecheck/lint/architecture/build 통과. 아키텍처 경계 위반 0.
+  Tone/DOM 그리기/React 훅/IndexedDB 대역과 실제 브라우저·오디오 검증을 구분한다(TEST_PLAN §26).
+- 기존 46종 E2E 무변경 + 신규 3종 = **49종/12파일 수집 성공**.
+  전체 실행은 build 후 **listen EPERM 0.0.0.0:3010**, exit 1 → **브라우저 49종 미실행**.
+  실제 SVG 기보·원본/후보 하이라이트·재생 중 확정·브라우저 저장 경합은 Mac 재검증 대기다.
+- **부분 검증: 자동 데이터/정적 검사 완료, 브라우저/수동 인수 미완료**. 사용자 지시에 따라 커밋 보류/변경 보존.
+  schemaVersion2/Part.ties/DB2/ADR-010/라이브러리/기존 Command·음악 엔진·UI/배포 설정 무변경.
+  GitHub push/Vercel 및 Phase 2-5/2-6 구현 없음.
+
+### 4.26 Phase 2-4 E2E 열기 링크 선택자 수정 (2026-11-08)
+
+- 사용자 Mac Chromium **48/49 통과**, transpose-integration.spec.ts의 동일 href 제목/열기 링크 중복으로 1개 실패.
+- 해당 클릭만 link 역할 + 정확한 이름 `열기` + 정확한 href의 교집합으로 한정했다. 기존 assertion/제품 코드/저장 계약 유지.
+  다른 href 선택자는 이름 교집합 또는 목록 has 필터 용도임을 확인했으며 추가 수정하지 않았다.
+- typecheck/lint 및 git diff --check 통과. 초기 lint의 test-results ENOENT는 E2E 종료 후 재실행하여 통과했다.
+  해당 E2E 파일 실행은 **listen EPERM 0.0.0.0:3010**으로 미실행. 수정 후 Mac 전체 49개 통과 전 커밋 보류.
+- 기존 Phase 2-4 변경 보존. GitHub push/Vercel 및 Phase 2-5 작업 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
 2. Phase 2-3 구현·자동화 검증·최종 검토 완료. Phase 2-4 통합 검증은 별도 작업으로 진행한다.
-3. Phase 2-4: 실제 UI dispatch·저장 경합·기보/재생 일치의 E2E와 Mac 재검증. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수도 유지한다.
+3. Phase 2-4: TEST_PLAN §26의 신규 3종/전체 49종 Mac E2E 및 실제 오디오·SVG·Safari/모바일 수동 인수.
+   통과 확인 후 최종 diff 검토 및 선별 로컬 커밋, 이후 Phase 2-5 표시 기능 착수(이번 미구현).
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.
