@@ -43,6 +43,7 @@
 
 ```ts
 type EditCommand =
+  | { type: "TransposeScore"; spec: TransposeSpec; updatedAt: string }
   | { type: "RenameScore"; title: string; updatedAt: string }
   | { type: "SetTempo"; tempoBpm: number; updatedAt: string }
   | { type: "SetKeySignature"; partId; keySignature: KeySignature; updatedAt: string }
@@ -65,12 +66,12 @@ type EditCommand =
 
 | 항목 | 계약 |
 |---|---|
-| 순수성 | `applyEditCommand(score, cmd)`는 **입력 Score를 변경하지 않고** 새 Score를 반환한다. `Date.now()`/랜덤/IO를 호출하지 않는다 |
+| 순수성 | `applyEditCommand(score, cmd)`는 **입력 Score를 변경하지 않고** 실제 편집 시 새 Score를 반환한다. 조옮김 no-op은 원본 Score를 반환한다. `Date.now()`/랜덤/IO를 호출하지 않는다 |
 | 성공 | `{ ok: true, score }` — 새 Score는 전체 검증을 통과해야 한다 |
 | 실패 | `{ ok: false, error: { code, message } }` — 원본 Score는 그대로 |
 | 검증 시점 | 명령 적용 후 `validateScore`를 재실행하여 불변식을 보증 |
-| 에러 코드 | `INVALID_TITLE`, `INVALID_KEY_SIGNATURE`, `TIME_SIGNATURE_REQUIRES_EMPTY_SCORE`, `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` |
-| updatedAt | Command는 현재 시각을 생성하지 않는다. `RenameScore`와 설정 명령은 경계에서 주입받은 `updatedAt`을 적용한다(재현성) |
+| 에러 코드 | `INVALID_TITLE`, `INVALID_KEY_SIGNATURE`, `TIME_SIGNATURE_REQUIRES_EMPTY_SCORE`, `PART_NOT_FOUND`, `MEASURE_NOT_FOUND`, `NOTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `DUPLICATE_ID`, `INVALID_DURATION`, `MEASURE_CAPACITY_EXCEEDED`, `NOT_NOTATABLE`, `TIE_EDIT_UNSUPPORTED`, `INVALID_SCORE` 및 `TransposeErrorCode` |
+| updatedAt | Command는 현재 시각을 생성하지 않는다. `RenameScore`·설정·`TransposeScore`는 경계에서 주입받은 `updatedAt`을 적용한다(재현성) |
 | 이름 매핑 | ARCHITECTURE의 예시 `DeleteNote`는 note/rest 모두 삭제 가능한 `DeleteEvent`로 구현했다 |
 
 ## 4. 편집 세션/히스토리 계약
@@ -79,7 +80,9 @@ type EditCommand =
 interface EditSessionState { current: Score; past: readonly Score[]; future: readonly Score[] }
 ```
 
-- 성공한 편집만 히스토리에 push 하고 `future`를 비운다(redo branch 무효화).
+- 실제 변경을 반환한 성공만 히스토리에 push 하고 `future`를 비운다(redo branch 무효화).
+- 성공이 원본 Score 객체를 반환하면 동일 session을 유지한다. store는 session이 달라진 dispatch만 알린다.
+  기존 Command의 의미적 no-op을 일괄 정규화하지 않으며 현재 TransposeScore가 이 규약을 사용한다.
 - 실패한 명령은 **session 객체를 그대로 반환**한다(히스토리·Score 불변).
 - `undo`/`redo`는 히스토리가 없으면 동일 session을 반환한다.
 - 과거 스냅샷은 불변 Score 참조로 보관한다(원본 변경 금지).
@@ -440,7 +443,7 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 
 ## Phase 2-1 — 조옮김 순수 도메인 엔진
 
-- 사용자 승인 음악 정책(2026-11-08)에 따른 호환 가능한 도메인 기능 추가다. UI/Command dispatch/저장 연결은 아직 없다.
+- 사용자 승인 음악 정책(2026-11-08)에 따른 호환 가능한 도메인 기능 추가다. 이 엔진 자체는 UI/Command dispatch/저장을 수행하지 않는다.
   새 라이브러리/상태 관리/아키텍처 레이어/Score 모델/ADR-010 변경 없음.
 - `@/domain/music-theory`:
   - `intervalBetweenKeys(source, target, direction = "nearest")` → 반음·음이름 이동량.
@@ -470,6 +473,32 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   createdAt/updatedAt 등 메타데이터를 유지한다. 타이를 병합·재분할하거나 이벤트를 재배치하지 않는다.
   결과 전체를 validateScore로 검증하며 source 조표도 isSupportedKeySignature로 확인한다.
   기존 validateScore/SetKeySignature/저장본 읽기 정책을 강화하거나 자동 보정하지 않는다.
-- Phase 2-2는 이 엔진을 TransposeScore Command에서 호출하고 updatedAt을 경계에서 주입한다.
-  0반음의 동일 Score 결과에 대한 불필요한 이력 생성 방지, 한 번의 Undo/Redo, 미리보기 무쓰기,
-  ADR-010 충돌/삭제 차단은 다음 단계 통합 검증 대상이다. 여기서 후보를 store.init/Repository에 쓰지 않는다.
+- Phase 2-2의 Command/updatedAt/no-op/Undo·Redo/저장 경계 구현은 아래 절을 따른다.
+  미리보기 무쓰기는 후속 단계 대상이다. 엔진에서 후보를 store.init/Repository에 쓰지 않는다.
+
+## Phase 2-2 — TransposeScore Command / snapshot 이력
+
+- 공개 EditCommand에 `{type:"TransposeScore", spec:TransposeSpec, updatedAt:string}` 추가.
+  spec/엔진은 Phase 2-1 그대로 재사용하며 CommandErrorCode에 TransposeErrorCode를 포함한다.
+  CommandResult의 성공/실패 모양과 기존 명령 의미는 유지한다.
+- 새 case는 transposeScore를 한 번 호출한다. 모든 Part 검증 뒤 하나의 Score만 공개한다.
+  실제 변경은 각 Part의 KeySignature 4필드와 모든 NoteEvent의 Pitch 4필드 값으로 비교한다.
+  deltaSemitones 0, 참조/JSON property order, Score ID/timestamp/메타데이터만으로 판정하지 않는다.
+  레이아웃/ID/리듬 보존은 기존 엔진 계약을 따른다.
+- no-op은 `{ok:true,score:원본}`으로 반환한다. 빈/쉼표 악보의 옥타브 이동도 no-op이다.
+  C#→Db 등의 MIDI 0 이동도 조표/철자가 다르면 실제 편집이다(음표 없는 조표 변화 포함).
+- 실질 변화에만 주입받은 updatedAt을 적용하고 기존 finalize로 검증한다. 시각을 직접 읽지 않는다.
+  기존 AddNote 등 다른 명령의 timestamp 정책은 바꾸지 않는다.
+- applyCommand는 실패/같은 Score에 기존 session/past/future를 그대로 반환한다.
+  실제 편집은 snapshot 1개를 past에 추가하고 future를 초기화한다. store.dispatch는 session 변경만 notify한다.
+  no-op/실패는 autosave 상태와 debounce를 건드리지 않는다. undo/redo 로직 자체는 변경하지 않는다.
+  undo는 원래 updatedAt, redo는 조옮김 때 주입한 updatedAt을 포함한 정확한 snapshot을 복원한다.
+- 저장 상태/revision은 여전히 useAutosave 소유다. Command 성공은 메모리 편집이며 DB 커밋을 뜻하지 않는다.
+  기존 구독→flush→expectedRevision CAS만 사용한다. no-op/실패는 무쓰기·revision 불변이다.
+  저장 실패/OCC/삭제는 ADR-010이 처리한다. 저장 구현·스키마·정책 변경 없음.
+- Phase 2-3 인수인계(미구현): 미리보기는 순수 엔진 후보만 사용하고 store.init/dispatch/save 하지 않는다.
+  취소는 후보만 폐기한다. 확정은 원본 세션 동일성/유효 후보/알려진 충돌·삭제 상태를 확인한 뒤
+  최신 경계 timestamp로 Command를 한 번 dispatch한다. 오래된 후보를 자동 덮어쓰지 않는다.
+  실제 미리보기·취소·화면 저장 경합은 Phase 2-3/2-4 별도 검증 대상이다.
+- schemaVersion 2/Part.ties/JSON/DB2/ADR-010/SetKeySignature/렌더러/재생/의존성 불변.
+  기존 아키텍처 안의 기능 추가이며 구조 변경 ADR/아키텍처 검사 규칙 변경은 없다.

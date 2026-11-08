@@ -47,7 +47,7 @@ export function createScoreStore(): ScoreStore {
     dispatch: (command) => {
       if (!state) return null;
       const outcome = applyCommand(state, command);
-      if (outcome.result.ok) {
+      if (outcome.session !== state) {
         state = outcome.session;
         notify();
       }

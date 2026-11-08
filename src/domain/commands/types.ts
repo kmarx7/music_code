@@ -1,10 +1,13 @@
 import type { KeySignature, NoteEvent, RestEvent, TimeSignature } from "@/domain/score/types";
+import type { TransposeSpec } from "@/domain/score/transpose";
+import type { TransposeErrorCode } from "@/domain/music-theory/transpose";
 
 export type NotePatch = Partial<
   Pick<NoteEvent, "pitch" | "startTick" | "durationTicks" | "velocity">
 >;
 
 export type EditCommand =
+  | { type: "TransposeScore"; spec: TransposeSpec; updatedAt: string }
   | { type: "RenameScore"; title: string; updatedAt: string }
   | { type: "SetTempo"; tempoBpm: number; updatedAt: string }
   | { type: "SetKeySignature"; partId: string; keySignature: KeySignature; updatedAt: string }
@@ -32,6 +35,7 @@ export type EditCommand =
   | { type: "ResizeNote"; partId: string; noteId: string; durationTicks: number };
 
 export type CommandErrorCode =
+  | TransposeErrorCode
   | "INVALID_TITLE"
   | "INVALID_KEY_SIGNATURE"
   | "TIME_SIGNATURE_REQUIRES_EMPTY_SCORE"

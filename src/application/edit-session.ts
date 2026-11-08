@@ -18,7 +18,7 @@ export interface ApplyOutcome {
 }
 
 /**
- * 성공한 편집만 히스토리에 기록한다. 실패 시 session을 그대로 반환한다.
+ * 실제 변경을 반환한 성공만 기록한다. 실패/동일 Score 결과는 session을 그대로 반환한다.
  * 과거 스냅샷은 불변 Score 참조를 보관한다(원본 Score는 변경되지 않는다).
  */
 export function applyCommand(
@@ -26,7 +26,7 @@ export function applyCommand(
   command: EditCommand,
 ): ApplyOutcome {
   const result = applyEditCommand(session.current, command);
-  if (!result.ok) {
+  if (!result.ok || result.score === session.current) {
     return { session, result };
   }
   return {

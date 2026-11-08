@@ -18,14 +18,14 @@
 | P0-07 | 아키텍처 검사기 + 자기검증 | **Done** | depcruise 6규칙 + check-boundaries 3규칙. 의도적 위반 6종 탐지 확인 후 fixture 제거(TEST_PLAN §4) |
 | P0-08 | 통합 검증·인수 기록 | **Partial** | 직렬화 round-trip·손상/미지원 버전 거부 구현·테스트 완료. E2E(Playwright) 미도입·미실행 |
 
-## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-1 조옮김 도메인)
+## 2. 검증 명령 결과 (최신: 2026-11-08 Phase 2-2 조옮김 Command)
 
 | 명령 | 결과 | 비고 |
 |---|---|---|
 | `npm run typecheck` | ✅ exit 0 | strict |
 | `npm run lint` | ✅ exit 0 | eslint 9 + eslint-config-next |
-| `npm run test` | ✅ exit 0 | 33 파일 / **470 테스트 통과**(기존 391 + 조옮김 도메인 79) |
-| `npm run check:architecture` | ✅ exit 0 | 55 모듈·150 의존성, 경계 48파일 위반 0 |
+| `npm run test` | ✅ exit 0 | 34 파일 / **507 테스트 통과**(기존 470 + Command·저장 회귀 37) |
+| `npm run check:architecture` | ✅ exit 0 | 55 모듈·153 의존성, 경계 48파일 위반 0 |
 | `npm run build` | ✅ exit 0 | Next 16.4.4, 정적 페이지 3개 |
 
 ## 3. MVP 기능 추적 (Phase 0 기반만 준비, 기능 완료 아님)
@@ -38,7 +38,7 @@
 | MVP-004 | 악보 렌더링 | Partial | VexFlow 5 어댑터: 음자리표·조표·박자·마디·음표/쉼표, 연속 줄 음자리표, **점음표·붙임줄**(1-D) |
 | MVP-005 | 기본 편집 | Partial | 음표·쉼표·타이·제목·기본 템포·조표·빈 악보 박자 편집 구현. 설정의 단위/통합 검증 통과, 브라우저 E2E 대기. 기존 이벤트의 박자 변경은 안전하게 제한 |
 | MVP-006 | 선택·클립보드 | Pending | ID 기반 선택·상대 tick 계약(문서) |
-| MVP-007 | 조옮김 | Partial | Phase 2-1 순수 도메인 엔진·음정/표기/전 Part 원자적 변환 검증 완료. Command/UI/저장 연동은 후속 |
+| MVP-007 | 조옮김 | Partial | Phase 2-1 엔진 + 2-2 단일 Command/Undo·Redo/no-op/저장 경계 회귀 완료. 미리보기·UI 연결은 후속 |
 | MVP-008 | 연습 속도 | Pending | Score와 분리 원칙(ADR-004) |
 | MVP-009 | A–B 루프 | Pending | `[startTick, endTick)` 문서 계약 |
 | MVP-010 | 음이름·고정도 | Partial | `letterName`, `koreanFixedDo` (순수 함수) |
@@ -475,9 +475,27 @@
 - schemaVersion 2/Part.ties/SetKeySignature/ADR-010/라이브러리/아키텍처 레이어 유지. 별도 구조 변경 ADR 없음.
   GitHub push/Vercel 접근·배포·설정 변경 없음.
 
+### 4.23 Phase 2-2 TransposeScore Command / Undo·Redo (2026-11-08)
+
+- pwd/Git 상태/최근 이력/show로 기준 `1c74de4`, clean, 현재 브랜치 포함 확인.
+- 기존 snapshot 이력/호출자 timestamp/store 구독/훅 소유 revision을 조사했다.
+  성공 전부를 기록하던 경계에 동일 Score 결과의 session/알림 유지 규약을 최소 추가했다.
+- 기존 TransposeSpec/엔진을 호출하는 단일 Command 및 오류 코드 추가.
+  실제 조표/Pitch 값 비교 후 변경에만 updatedAt 주입. no-op/실패는 Score/past/future/time/저장 상태 유지.
+  MIDI 0인 이명동음 변경은 실제 편집이다. 기존 SetKeySignature·다른 명령 정책 유지.
+- 10 Part·500음표의 호출 1회/알림 1회/Undo 1회 및 혼합 이력 검증.
+  신규 Command **30개** + autosave **7개**, 전체 **34파일 / 507개 통과**(기존 470 유지).
+  Phase 2-1 엔진/79개 테스트 무변경. typecheck/lint/architecture/build 통과, 경계 위반 0.
+- 기존 IndexedDB adapter + fake-indexeddb로 CAS/Tombstone/abort 원시 불변·revision 확인.
+  저장 구현/스키마/ADR-010 변경 없음. 상세 계약 MODULE_CONTRACTS, 증거 TEST_PLAN §24.
+- 전체 E2E 시도는 **listen EPERM 0.0.0.0:3010**, exit 1로 **41종 미실행**.
+  E2E 무변경. 기존 사용자 Mac 성공을 이번 버전 통과로 간주하지 않는다.
+- Phase 2-2 및 실행 가능한 검사 완료. UI dispatch/미리보기/취소는 미구현이며 실제 화면 경합은 Phase 2-4 대상.
+  GitHub push/Vercel 작업 없음.
+
 ## 5. 다음 작업
 
 1. TEST_PLAN §21의 구버전 탭 전환·두 탭 충돌·삭제·실제 이탈/백그라운드·Safari/모바일 수동 인수.
-2. Phase 2-2: TransposeScore Command·한 번의 Undo/Redo·updatedAt 경계 주입·no-op 처리·저장/OCC 회귀 연결.
-3. 후속 미리보기/취소·최신 세션 확인·기보/재생 UI 연결 후 E2E를 추가한다. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수도 유지한다.
+2. Phase 2-3: 순수 엔진의 미리보기 후보·취소 무쓰기·원본 세션 동일성 확인 후 단일 Command 확정 설계/구현.
+3. Phase 2-4: 실제 UI dispatch·저장 경합·기보/재생 일치의 E2E와 Mac 재검증. 실제 오디오·SVG 및 Phase 1 잔여 수동 인수도 유지한다.
    강제 종료 저널은 별도 승인 범위이며 이번에 구현하지 않는다.

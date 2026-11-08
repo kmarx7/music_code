@@ -398,3 +398,117 @@ it("a conflicted tied score keeps its current content, tie links and undo/redo h
   expect(await control.flush()).toBe(false);
   expect(await repository.load(initial.id)).toMatchObject({ title: "other", tempoBpm: initial.tempoBpm });
 });
+
+// Phase 2-2: call the existing dispatch/autosave boundary, without adding a UI or storage path.
+const transposeTime = "2026-11-08T06:00:00.000Z";
+const transposeCommand = { type: "TransposeScore", spec: { kind: "semitones", semitones: 2 }, updatedAt: transposeTime } as const;
+const noopTranspose = { ...transposeCommand, spec: { kind: "semitones", semitones: 0 }, updatedAt: "2026-11-08T07:00:00.000Z" } as const;
+const invalidTranspose = { ...transposeCommand, spec: { kind: "semitones", semitones: NaN } } as const;
+async function transposeRawRecord(dbName: string) {
+  const request = indexedDB.open(dbName);
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  try {
+    const read = db.transaction("scores", "readonly").objectStore("scores").get("score-1");
+    return await new Promise<unknown>((resolve, reject) => { read.onsuccess = () => resolve(read.result); read.onerror = () => reject(read.error); });
+  } finally { db.close(); }
+}
+
+it("TransposeScore dispatch uses existing autosave, snapshot undo/redo and committed revisions", async () => {
+  vi.useRealTimers(); const repository = createIndexedDbScoreRepository({ dbName: "transpose-command-save" });
+  const baseline = scoreStore.getState()!.current; const control = await mount(repository, true);
+  expect((await repository.read("score-1"))!.revision).toBe(1);
+  const save = vi.spyOn(repository, "save");
+  expect(scoreStore.dispatch(transposeCommand)?.ok).toBe(true); expect(hooks.status).toBe("saving");
+  const changed = scoreStore.getState()!.current;
+  expect(changed.updatedAt).toBe(transposeTime); expect(save).not.toHaveBeenCalled();
+  expect(await control.flush()).toBe(true); expect(hooks.status).toBe("saved");
+  expect(await repository.read("score-1")).toEqual({ score: changed, revision: 2 });
+  scoreStore.undo(); expect(scoreStore.getState()!.current).toBe(baseline);
+  expect(await control.flush()).toBe(true); expect(await repository.read("score-1")).toEqual({ score: baseline, revision: 3 });
+  scoreStore.redo(); expect(scoreStore.getState()!.current).toBe(changed);
+  expect(await control.flush()).toBe(true);
+  expect(await createIndexedDbScoreRepository({ dbName: "transpose-command-save" }).read("score-1")).toEqual({ score: changed, revision: 4 });
+});
+
+it("transpose no-op/failure preserve saved state, redo, raw record and revision without a write", async () => {
+  vi.useRealTimers(); const dbName = "transpose-command-noop";
+  const repository = createIndexedDbScoreRepository({ dbName }); const control = await mount(repository, true);
+  scoreStore.dispatch(transposeCommand); expect(await control.flush()).toBe(true);
+  scoreStore.undo(); expect(await control.flush()).toBe(true);
+  const state = scoreStore.getState(); const raw = await transposeRawRecord(dbName); const stored = await repository.read("score-1");
+  const save = vi.spyOn(repository, "save"); const notify = vi.fn(); const unsubscribe = scoreStore.subscribe(notify);
+  try {
+    expect(scoreStore.dispatch(noopTranspose)?.ok).toBe(true); expect(scoreStore.dispatch(invalidTranspose)?.ok).toBe(false);
+    expect(scoreStore.getState()).toBe(state); expect(hooks.status).toBe("saved"); expect(notify).not.toHaveBeenCalled();
+    expect(await control.flush()).toBe(true);
+    expect(save).not.toHaveBeenCalled(); expect(await repository.read("score-1")).toEqual(stored);
+    expect(await transposeRawRecord(dbName)).toEqual(raw);
+    expect(scoreStore.getState()!.future).toHaveLength(1);
+  } finally { unsubscribe(); }
+});
+
+it("transpose no-op/failure leave the existing dirty debounce deadline unchanged", async () => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  const save = vi.spyOn(repository, "save");
+  scoreStore.dispatch(transposeCommand); await vi.advanceTimersByTimeAsync(200);
+  const state = scoreStore.getState();
+  scoreStore.dispatch(noopTranspose); scoreStore.dispatch(invalidTranspose);
+  expect(scoreStore.getState()).toBe(state); expect(hooks.status).toBe("saving");
+  await vi.advanceTimersByTimeAsync(199); expect(save).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1); expect(save).toHaveBeenCalledTimes(1); expect(hooks.status).toBe("saved");
+  expect(await control.flush()).toBe(true); expect((await repository.read("score-1"))!.revision).toBe(2);
+});
+
+it("transpose no-op/failure do not clear an existing save error or trigger a retry", async () => {
+  const repository = new MemoryScoreRepository(); const control = await mount(repository, true);
+  const save = vi.spyOn(repository, "save").mockRejectedValueOnce(new Error("quota"));
+  scoreStore.dispatch(transposeCommand); expect(await control.flush()).toBe(false); expect(hooks.status).toBe("error");
+  const state = scoreStore.getState(); scoreStore.dispatch(noopTranspose); scoreStore.dispatch(invalidTranspose);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(hooks.status).toBe("error"); expect(save).toHaveBeenCalledTimes(1); expect(scoreStore.getState()).toBe(state);
+  expect((await repository.read("score-1"))!.revision).toBe(1);
+  expect(await control.flush()).toBe(true); expect(hooks.status).toBe("saved");
+  expect(await repository.read("score-1")).toEqual({ score: state!.current, revision: 2 });
+});
+
+it("a transposition cannot overwrite another writer and retains its own memory/undo snapshots on OCC conflict", async () => {
+  vi.useRealTimers(); const dbName = "transpose-command-conflict";
+  const repository = createIndexedDbScoreRepository({ dbName }); const control = await mount(repository, true);
+  const baseline = scoreStore.getState()!.current;
+  const other = createIndexedDbScoreRepository({ dbName });
+  await other.save({ ...baseline, title: "other writer" }, 1); const raw = await transposeRawRecord(dbName);
+  scoreStore.dispatch(transposeCommand); const memory = scoreStore.getState();
+  expect(await control.flush()).toBe(false); expect(hooks.status).toBe("conflict"); expect(scoreStore.getState()).toBe(memory);
+  scoreStore.dispatch(noopTranspose); scoreStore.dispatch(invalidTranspose); expect(scoreStore.getState()).toBe(memory);
+  scoreStore.undo(); expect(scoreStore.getState()!.current).toBe(baseline); scoreStore.redo(); expect(scoreStore.getState()!.current).toBe(memory!.current);
+  expect(await control.flush()).toBe(false); expect(hooks.status).toBe("conflict");
+  expect(await transposeRawRecord(dbName)).toEqual(raw); expect((await other.read("score-1"))!.revision).toBe(2);
+});
+
+it("a transposition cannot recreate a tombstoned score, including after noop/failure/cleanup", async () => {
+  vi.useRealTimers(); const dbName = "transpose-command-deleted";
+  const repository = createIndexedDbScoreRepository({ dbName }); const control = await mount(repository, true);
+  await createIndexedDbScoreRepository({ dbName }).delete("score-1", 1); const raw = await transposeRawRecord(dbName);
+  scoreStore.dispatch(transposeCommand); const state = scoreStore.getState();
+  expect(await control.flush()).toBe(false); expect(hooks.status).toBe("deleted"); expect(scoreStore.getState()).toBe(state);
+  scoreStore.dispatch(noopTranspose); scoreStore.dispatch(invalidTranspose);
+  expect(await control.flush()).toBe(false); cleanup?.(); cleanup = undefined; await Promise.resolve();
+  expect(await transposeRawRecord(dbName)).toEqual(raw);
+  await expect(repository.read("score-1")).rejects.toMatchObject({ code: "DELETED" });
+});
+
+it("an aborted transposition save preserves raw data/revision and the complete edit history", async () => {
+  vi.useRealTimers(); const dbName = "transpose-command-abort";
+  const repository = createIndexedDbScoreRepository({ dbName }); const control = await mount(repository, true);
+  const raw = await transposeRawRecord(dbName); scoreStore.dispatch(transposeCommand); const state = scoreStore.getState();
+  const original = IDBObjectStore.prototype.put;
+  const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(function (this: IDBObjectStore, ...args) {
+    const request = original.apply(this, args); request.addEventListener("success", () => request.transaction!.abort()); return request;
+  });
+  expect(await control.flush()).toBe(false); spy.mockRestore();
+  expect(hooks.status).toBe("error"); expect(scoreStore.getState()).toBe(state); expect(await transposeRawRecord(dbName)).toEqual(raw);
+  expect((await repository.read("score-1"))!.revision).toBe(1);
+  expect(await control.flush()).toBe(true); expect(await repository.read("score-1")).toEqual({ score: state!.current, revision: 2 });
+});

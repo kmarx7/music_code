@@ -5,6 +5,7 @@ import type {
   ScoreEvent,
 } from "@/domain/score/types";
 import { validateScore } from "@/domain/score/validate";
+import { transposeScore } from "@/domain/score/transpose";
 import { isSupportedKeySignature } from "@/domain/music-theory";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
 import {
@@ -437,11 +438,33 @@ function resizeNote(
   return finalize(replacePart(score, partId, () => nextPart));
 }
 
+/** Compare only the musical fields owned by transposition, not timestamps or object/key order. */
+function sameTransposeContent(before: Score, after: Score): boolean {
+  return before.parts.every((part, p) => {
+    const next = after.parts[p];
+    return (["tonic", "alter", "mode", "fifths"] as const).every((field) => part.keySignature[field] === next.keySignature[field]) &&
+      part.measures.every((measure, m) => measure.events.every((event, e) => {
+        if (event.kind === "rest") return true;
+        const transformed = next.measures[m].events[e];
+        return transformed.kind === "note" && (["midi", "step", "alter", "octave"] as const)
+          .every((field) => event.pitch[field] === transformed.pitch[field]);
+      }));
+  });
+}
+
 export function applyEditCommand(
   score: Score,
   command: EditCommand,
 ): CommandResult {
   switch (command.type) {
+    case "TransposeScore": {
+      const transformed = transposeScore(score, command.spec);
+      if (!transformed.ok) return { ok: false, error: transformed.error };
+      // A zero sounding interval may still change key/spelling; empty octave shifts may change neither.
+      if (sameTransposeContent(score, transformed.value.score)) return { ok: true, score };
+      return finalize({ ...transformed.value.score, updatedAt: command.updatedAt });
+    }
+
     case "SetTempo":
       return finalize({ ...score, tempoBpm: command.tempoBpm, updatedAt: command.updatedAt });
 

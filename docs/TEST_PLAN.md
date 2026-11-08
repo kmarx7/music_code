@@ -19,7 +19,7 @@
 | 브라우저 E2E | 기존 41종 유지 | Playwright(Chromium, 프로덕션 빌드) | c0e3951 사용자 Mac 41/41 통과. Phase 2-1 순수 도메인 단계는 미실행 |
 | 오디오/내보내기 | 채보·PDF/MIDI/MusicXML | - | ⏳ Phase 4/5 |
 
-## 2. 단위·통합 테스트 목록 (최신 실행 결과: 33 파일 / 470 통과; Phase 2-1은 §23)
+## 2. 단위·통합 테스트 목록 (최신 실행 결과: 34 파일 / 507 통과; Phase 2-1은 §23, 2-2는 §24)
 
 ### `tests/unit/music-theory.test.ts` (5)
 - 자연음 MIDI 매핑(C4=60, D4=62, E4=64, G4=67, C3=48)
@@ -793,3 +793,34 @@ npm run test:e2e
   브라우저 실행이 불필요하며 이번 작업의 EPERM 실패로 표기하지 않는다. 이전 EPERM/이후 사용자 성공 기록은 유지한다.
 - Score schemaVersion 2/Part.ties/저장 모델/ADR-010/기존 SetKeySignature/피아노 고정 매핑/라이브러리 유지.
   GitHub push 및 Vercel 접근·배포·설정 변경 없음.
+
+## 24. Phase 2-2 TransposeScore Command / Undo·Redo (2026-11-08)
+
+- 기준 `1c74de4`, clean 및 현재 브랜치 포함 확인. Phase 2-1 엔진/79개 테스트는 무변경.
+- 신규 transpose-command.test.ts **30개**: 엔진 결과/호출 1회, C→D/C#/Db·방향 전달,
+  타이/쉼표/리듬/velocity/provenance/메타데이터 snapshot Undo/Redo, JSON v2 round-trip,
+  **10 Part·500음표의 단일 이력·알림**, 같은 목표/0반음/빈·쉼표 옥타브 no-op,
+  property order/주입 timestamp와 실제 내용 구분, MIDI 0 이명동음의 실제 편집,
+  AddNote/SetKeySignature 혼합 이력, 정상 편집 후 redo 초기화, no-op/실패 후 redo 보존,
+  MIDI 상·하한/표기/미지원 조표/장단조/잘못된 입력·Score/후속 Part 실패 원자성.
+- 기존 autosave 테스트에 신규 **7개**: dispatch→기존 flush→DB revision·Undo/Redo 복원,
+  no-op/실패의 saved 상태·redo·원시 레코드·revision·무알림/무쓰기,
+  dirty 상태의 400ms 기한 유지, 저장 오류 중 무재시도,
+  실제 IndexedDB adapter + fake-indexeddb의 다른 writer CAS/Tombstone/put 후 abort 원본 보호.
+  React 훅 effect/상태는 기존 대역이다. 실제 브라우저 UI 검증이라고 주장하지 않는다.
+- 신규 선택 실행 및 Phase 2-1 79개 통과. 전체 **34파일 / 507개 통과**(기존 470 + 신규 37).
+  테스트 삭제/skip/기대값 약화/중복 계산 없음. typecheck/lint/architecture/build exit 0.
+  아키텍처 55 modules / 153 dependencies, 경계 48파일 위반 0.
+- 전체 `npm run test:e2e`: 서버 시작 시 **listen EPERM 0.0.0.0:3010**, exit 1 → **41종 미실행**.
+  E2E 소스 무변경. 사용자 기존 Mac 41/41과 이번 버전 미실행을 구분한다.
+- UI/미리보기/렌더러/재생/IndexedDB 구현·스키마/ADR-010/Score 모델·라이브러리 변경 없음.
+  Phase 2-3 미리보기·취소·확정, Phase 2-4 화면 저장 경합은 미구현/미검증이다.
+
+Mac 재검증:
+
+```bash
+cd ~/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+GitHub push/Vercel 작업 없음. 강제 종료 무손실 보장은 추가하지 않는다.
