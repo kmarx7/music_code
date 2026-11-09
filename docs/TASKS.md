@@ -666,9 +666,83 @@
   실행 정책의 `sandbox_approval: false`로 거부되었다. H-01 커밋 미생성, 관련10파일 보존,
   HEAD `ccf73a7` 유지. 이번 재실행 단위·통합642/642 PASS. 권한 우회는 하지 않았다.
 
+### 4.34 H-02 음가 정책 조사 (2026-11-09)
+
+- 기준 main/HEAD `2d7c776`, clean. H-01 제품 커밋이 존재함을 확인했다. 과거 커밋 권한 오류 기록은 당시 이력이다.
+- [H02_DURATION_POLICY](H02_DURATION_POLICY.md)에 JSON 검증→기보/재생 경로, 설치 VexFlow5 API,
+  정확 분해/명시 표시/새 입력 제한/혼합 대안, 원본 보존·파일 호환성·H-01 경계·테스트/승인 사항을 정리했다.
+- 임시 Node 진단: note/rest의1/120/150/210/300/960/1000/1920/3840ticks,
+  JSON/조옮김/Undo·Redo 및 Tone 대역 인자 보존, 마디 경계 분할과 그리디300 거부를 확인했다.
+  fake-indexeddb DB2/revision1의1000ticks 복원 후 원시row/json 불변. 실제 사용자 DB에는 접근하지 않았다.
+- 원인은 vexDurationOf의 fallback이다. 1000→960, 1→120으로 기보하며 원본 duration은 유지한다.
+  Tone gate0.9/타이gate1/최소1ms는 별도 기존 정책이다. 실제 SVG 그리기·청취를 검사한 것으로 보고하지 않는다.
+- 권고는 D 혼합 정책: broad read 유지, 정확한 렌더 projection 분해, 불가 시 기보 오류/원래tick 안내.
+  기존 Score·저장본 자동수정/거부·migration 없음. 구체 정책은 구현 전 승인 대상이다.
+- 제품 코드/기존 테스트/저장 계약/ADR/라이브러리는 변경하지 않았다. 기존642/55 기준 기록은 유지하되
+  이번 조사에서 전체 회귀/typecheck/lint/architecture/build/E2E를 재실행했다고 주장하지 않는다.
+  등록된 새 테스트가 아니라 분석용 임시 진단이다. H-02와 Phase3 제품 구현/GitHub push/Vercel 작업 없음.
+- 문서2파일의 로컬 스테이징은 `.git/index.lock: Operation not permitted`로 실패했고,
+  공식 권한 상승 요청도 `sandbox_approval: false` 정책으로 거부되었다. 커밋 미생성/변경 보존,
+  HEAD `2d7c776` 유지. 권한 우회는 하지 않았다.
+
+### 4.35 H-02 정확한 렌더 전용 음가 구현 (2026-11-09)
+
+- 사용자 승인 혼합 정책 구현: notation.ts의 제한 DP/읽기 전용 계획, renderScore의 근사 제거,
+  실제 점/가상 타이/전체 마디 strict tick, 원본 ID 선택·하이라이트·단일 라벨 유지.
+  300=180+120, 1000은 명시적 기보 오류로 전체 첫 Part SVG를 제거하고 원본 재생·저장·백업은 유지한다.
+- 렌더 요청 취소/최신 요청 확인 및 오류 후 복구를 추가했다. 불가 후보는 조옮김 확정을 차단한다.
+  Score v2/Part.ties/DB2/ADR-010/Command·Tone·저장·조옮김 엔진 변경 없음.
+- 기존642+신규62=**704/704 PASS**, typecheck/lint/architecture/build PASS.
+  H-01의66세그먼트63360ticks 유지. 실제 repository+fake-indexeddb 원시 row/revision/JSON,
+  Undo·Redo/updatedAt/저장 상태 불변 및 Tone 인자를 검증했다.
+- 신규 E2E2개 작성, 기존55 유지. 전체 실행은 **listen EPERM 0.0.0.0:3010**으로 서버 시작 실패,
+  **57개 미실행**. Mac `npm run test:e2e` 재검증 전 제품 커밋 보류.
+  실제 브라우저 기보 육안/오디오 청취/Safari/모바일 실기기 미검증.
+- 정책2파일의 사전 stage는 성공했으나 commit은 `.git/index.lock: Operation not permitted`,
+  공식 승인은 `sandbox_approval: false`로 거부되었다. 원래 policy index와 후속 변경을 보존했다.
+  HEAD2d7c776 유지, GitHub push/Vercel/H-02 외 제품 기능 구현 없음.
+  상세 정책/예산/측정 경계는 H02_DURATION_POLICY §11, 검증은 TEST_PLAN의 H-02 절을 참조한다.
+
+### 4.36 H-02 점 glyph E2E 선택자 조사 (2026-11-09)
+
+- 사용자 Mac **56/57 PASS**를 기록한다. 기존 Codex EPERM 기록은 당시 결과로 유지한다.
+- 실제 Mac trace와 error-context, 설치 VexFlow5 소스를 대조했다. 점음표·점쉼표 모두
+  `.vf-notehead > text`의 U+E1E7 점이 있고 `.vf-dot` 그룹은 없다. Locator를 정확 문자로 수정하고
+  총2개 기대값과 note/rest 각각 가시성 검증을 유지·추가했다.
+- SVG 루트 pointer-events=none 상속도 확인했다. 기존 H-02 클릭 위임을 위해 이벤트 그룹에만
+  visiblePainted를 설정했다. 포인터 회귀1개를 추가해 전체 **705/705 PASS**.
+  기존 하이라이트/원본 ID·길이·타이/저장 보호 검증을 유지한다. typecheck/lint/architecture/build PASS.
+- 수정 후 Codex 전체 E2E는 listen EPERM 0.0.0.0:3010으로 **57개 미실행**. Mac 재검증 필요.
+- 기존 정책2파일만 staged인 상태를 확인했다. 구현/후속 문서 변경은 unstaged/untracked로 보존하며
+  Mac 수정 후 전체 E2E 통과 확인 전 제품 커밋은 만들지 않는다. GitHub/Vercel 작업 없음.
+
+### 4.37 H-02 SVG pointerRect 조사 및 클릭 테스트 보강 (2026-11-09)
+
+- 실제 후속 Mac trace에서 차단 rect는 exact-note 두 번째 fragment의 자식임을 확인했다.
+  StaveNote.draw가 getBoundingBox→SVGContext.pointerRect로 만드는 정상 투명 선택 영역이다.
+  rect는 notehead 뒤의 형제이며 auto를 명시한다. 그룹 visiblePainted 반영도 확인했다.
+- 제품 코드는 추가 변경하지 않았다. fragment 그룹에 일반 click/tap하도록 E2E를 수정했다.
+  클릭 중심의 hit 그룹 일치, 첫·둘째 조각/인접 D4/쉼표/라벨 후 선택, Undo·Redo/원시 row/복원,
+  모바일 에뮬레이션 tap을 기존57개 안에 보강했다. force/timeout 증가/rect 비활성화 없음.
+- rect 클릭 위임 단위1개 추가. 관련41개/전체706개 PASS, typecheck/lint/architecture/build PASS.
+  전체 E2E는 listen EPERM 0.0.0.0:3010으로 **57개 미실행**, 수정 후 실제 클릭·터치 통과 미확인.
+  기존 정책 문서2개의 staged 상태와 H-02 전체 미커밋 변경을 보존한다.
+  수정 후 전체 E2E 검증 전 제품 커밋 보류. GitHub/Vercel 작업 없음.
+
+### 4.38 H-02 최종 사용자 Mac 인수 및 로컬 커밋 검토 (2026-11-09)
+
+- 사용자가 수정된 전체 Mac Chromium **57/57 PASS**를 직접 확인했다. 앞선 EPERM/56·57 실패 기록은 보존한다.
+- 단위·통합 **706/706 PASS**, typecheck/lint/architecture/build 및 diff 검사 PASS.
+  H-01의63360ticks, H-02의300/960/1000ticks, 정확 glyph/타이/fragment·인접·쉼표 선택과
+  라벨·하이라이트·저장·Undo/Redo 보호 검증 유지. 실제 청취/Safari/모바일 실기기는 별도 인수다.
+- Score v2/Part.ties/DB2/ADR-010/Command·Tone·조옮김·저장/JSON 계약 유지.
+  staged 이후 추가된 정책 문서/TASKS 기록까지 첫 문서 커밋 대상으로 검토했다.
+  나머지 H-02 구현/신규 테스트·헬퍼/검증 문서는 두 번째 제품 커밋 대상으로 분리한다.
+  실제 커밋 성공 여부는 Git 결과로 확인한다. GitHub/Vercel/Phase3 기능 구현 없음.
+
 ## 5. 다음 작업
 
-1. H-01은 사용자 Mac Chromium55/55까지 확인했다. [백로그](PHASE3_BACKLOG.md)의 H-02는 별도 정책·회귀 보완으로 진행한다.
+1. H-01은 사용자 Mac Chromium55/55까지 확인했다. [백로그](PHASE3_BACKLOG.md)의 H-02는 Mac E2E57/57까지 검증했으며 로컬 커밋과 별도 수동 인수 상태를 확인한다.
 2. H-03의 브라우저 성능 측정/지원 범위를 합의한다. Node 결과만으로 실기기 응답성을 인수하지 않는다.
 3. 감사 §7의 Chrome/Safari·실제 오디오·모바일·이탈/두 탭 수동 인수를 실행하고 증거를 남긴다.
 4. [마스터 플랜](PHASE3_MASTER_PLAN.md)의 제안 계약(C-08, rate/loop 경계)을 확정한 뒤 작은 기능 단계로 진행한다.
