@@ -367,7 +367,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
 
       <div style={panel}>
         <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
-        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} />
+        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId} />
       </div>
 
       <div style={panel}>

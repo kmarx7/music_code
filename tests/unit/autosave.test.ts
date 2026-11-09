@@ -8,7 +8,7 @@ import { scoreStore } from "@/store/score-store";
 import { NoteLabelsControl } from "@/features/score-editor";
 import { ScoreConflictError } from "@/application/ports";
 import type { NoteLabelMode } from "@/domain/music-theory";
-import { analyzeScoreRange, recommendTranspositions } from "@/domain/score";
+import { analyzeScoreRange, recommendTranspositions, planPartNotation } from "@/domain/score";
 import { createPitch } from "@/domain/music-theory";
 import { MemoryScoreRepository } from "../fixtures/memory-repository";
 import { fourNoteScore } from "../fixtures/scores";
@@ -582,5 +582,27 @@ it("range analysis/recommendations preserve saved raw data, revision, redo and a
     const result = recommendTranspositions(before!.current, { minMidi: 84, maxMidi: 91 }); expect(result.ok).toBe(true);
     expect(scoreStore.getState()).toBe(before); expect(before!.future).toHaveLength(1); expect(control.getSnapshot!()).toEqual(snapshot);
     expect(notify).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled(); expect(await transposeRawRecord(name)).toEqual(raw);
+  } finally { unsubscribe(); }
+});
+
+it.each([300, 1000])("notation planning of %i ticks preserves raw IndexedDB, revision, undo/redo and autosave", async (duration) => {
+  vi.useRealTimers();
+  const source = fourNoteScore(); source.parts[0].measures[0].events = [{ ...source.parts[0].measures[0].events[0], durationTicks: duration }];
+  scoreStore.init(source);
+  const name = `notation-readonly-${duration}`;
+  const repository = createIndexedDbScoreRepository({ dbName: name }); const control = await mount(repository, true);
+  scoreStore.dispatch({ type: "SetTempo", tempoBpm: 90, updatedAt: "changed" }); scoreStore.undo();
+  expect(await control.flush()).toBe(true);
+  const state = scoreStore.getState()!; const json = JSON.stringify(state.current);
+  const raw = await transposeRawRecord(name); const snapshot = control.getSnapshot!();
+  const save = vi.spyOn(repository, "save"); const read = vi.spyOn(repository, "read");
+  const notify = vi.fn(); const unsubscribe = scoreStore.subscribe(notify);
+  try {
+    const projection = planPartNotation(state.current.parts[0]);
+    expect(projection.ok).toBe(duration === 300);
+    expect(scoreStore.getState()).toBe(state); expect(state.future).toHaveLength(1);
+    expect(JSON.stringify(state.current)).toBe(json); expect(control.getSnapshot!()).toEqual(snapshot);
+    expect(save).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled(); expect(notify).not.toHaveBeenCalled();
+    expect(await transposeRawRecord(name)).toEqual(raw);
   } finally { unsubscribe(); }
 });

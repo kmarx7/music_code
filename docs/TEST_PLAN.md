@@ -1132,3 +1132,94 @@ npm run test:e2e
 - 실제 청취/Safari/모바일 실기기는 별도 미검증이며 GitHub push/Vercel 작업 없음.
 - 최종 검토에서도 단위·통합642/642를 재실행하여 통과했다. 스테이징은 `.git/index.lock: Operation not permitted`,
   공식 권한 상승 요청은 `sandbox_approval: false`로 거부되어 커밋 미생성/10파일 보존 상태다.
+
+## H-02 — 렌더 전용 정확 음가와 원본 보호 (2026-11-09)
+
+- 기존642개 유지, 신규62개를 더해 **45파일/704개 PASS**.
+  - notation-duration.test.ts 39개: 기존18음가, 300=180+120, 비그리디 최소 분해,
+    불가/잘못된 입력, 결정성, 이벤트/전체 렌더 예산, 위치/마디 검증, 원본 불변·긴 타이.
+  - exact-notation-rendering.test.ts 14개: 실제 VexFlow tick·Dot·strict Voice·Formatter,
+    선행/내부/후행 및 1tick GhostNote, note/rest 분해, canonical/가상/행 경계 타이,
+    원본 ID·라벨·하이라이트, 실패/취소/경합 시 이전·부분 SVG 제거와 정상 복구.
+    DOM drawing은 대역이므로 실제 SVG 육안 인수와 구분한다.
+  - staff-notation-error.test.ts 3개: 명시적 안내/복구, 폐기 effect 오류 차단, 원본 선택/후보 읽기 전용.
+  - autosave.test.ts 2개: 300/1000의 계획 성공·실패에서 실제 repository+fake-indexeddb 원시 row,
+    revision/저장 상태/updatedAt/Undo·Redo·JSON/Store 알림 및 저장 IO 불변.
+  - transpose-preview.test.ts 2개: 정확한 후보만 기존 Command로 확정, 불가 후보의 dispatch·이력·저장 차단.
+  - transpose-consistency.test.ts 2개: 300/1000 JSON 가져오기→기보 판정→원래 길이의 Tone 호출(gate0.9),
+    조옮김/Undo·Redo/OCC 저장·재열기·백업의 길이·메타데이터 보존.
+- typecheck/lint(경고0)/architecture/build PASS. H-01의 66세그먼트63360ticks 회귀 포함, tie.ts 변경 없음.
+- 기존 rest-rendering의 기대값은 유지한다. 실제 Dot 사용 시 필요한 CSS font 파서만 Node 대역으로 처리한다.
+- exact-notation.spec.ts 신규2개: 실제 SVG 점/타이/fragment 위치·선택·라벨/원시 row/복원,
+  1000ticks 오류/기존 재생·백업/길이 수정·Undo·Redo/SVG 복구.
+- `npm run test:e2e`는 production build 후 **listen EPERM 0.0.0.0:3010**으로 종료했다.
+  기존55+신규2=**57개 미실행**, 통과로 집계하지 않는다. 제품 커밋 보류.
+- 실제 브라우저 glyph/간격/극단 음역/라벨·타이 겹침, 오디오 청취/Safari/모바일 실기기는 미검증.
+  Score v2/Part.ties/DB2/ADR-010/Command·저장·JSON 계약 유지.
+
+Mac 재검증:
+
+```bash
+cd /Users/kapital/Documents/01_Kmarx_PROJECT/02_AI_PROJECT/00_music_code
+npm run test:e2e
+```
+
+
+### H-02 Mac 점 glyph 실패 조사 및 후속 수정 (2026-11-09)
+
+- 사용자 Mac 결과는 **56/57 PASS**, 실패는 exact-notation의 `.vf-dot` 개수 검사다.
+  해당 `test-results/exact-notation-*/trace.zip` DOM snapshot과 error-context를 실제 확인했다.
+  두 300tick 이벤트는 각각180+120으로 분해됐으며, `exact-note`와 `exact-rest`의 첫 fragment 아래
+  `.vf-notehead > text`에 실제 SMuFL augmentationDot **U+E1E7**가 각각 하나씩 존재한다.
+  `.vf-dot` wrapper는 없다. 설치 VexFlow5의 Dot.draw→Element.renderText→SVGContext.fillText 경로와 일치한다.
+- E2E는 원본 staff의 `[data-event-id] .vf-notehead text`를 정확한 U+E1E7 문자로 필터한다.
+  기존 총2개 기대값을 유지하고 음표/쉼표 각각의 점 가시성 검사도 추가했다. 삭제/skip/timeout 증가는 없다.
+- trace의 SVG 루트에는 `pointer-events="none"`이 있고 VexFlow SVGContext 기본값도 동일하다.
+  기존 H-02 fragment 클릭 위임을 위해 원본 이벤트 그룹만 `pointer-events="visiblePainted"`로 지정했다.
+  새 단위 테스트의 실패→수정 후 통과를 확인했다. 재생 하이라이트/라벨의 기존 검사는 유지하고
+  새 DOM 속성을 기대값에 추가했다. Dot 생성·음가 계산·저장 경로는 수정하지 않았다.
+- 전체 **45파일/705개 PASS**(기존704+포인터 회귀1), typecheck/lint/architecture PASS.
+  실제 브라우저 클릭·glyph 인수는 수정 후 전체 E2E 결과와 구분한다.
+  ego-browser 진단은 로컬 macOS 서비스 연결 오류로 시작하지 못했다.
+- 기존 Mac trace를 지우지 않도록 E2E 출력 경로를 `/tmp/music-score-h02-dot-20261109-1459`로 분리했다.
+- 수정 후 Codex 전체 E2E 재시도 역시 **listen EPERM 0.0.0.0:3010**으로 서버 시작 실패했다.
+  따라서 **57개 미실행**이며, 사용자 Mac56/57은 수정 전 결과다. 수정 후 통과로 전용하지 않는다.
+  Mac `npm run test:e2e` 전체 재검증이 필요하며 제품 커밋은 보류한다.
+- 수정 후 별도 `npm run build`도 PASS. 작업 트리 및 staged diff 공백 검사 PASS.
+
+
+### H-02 투명 pointerRect 클릭 실패 조사 (2026-11-09)
+
+- 후속 사용자 Mac56/57은 점 검사 통과 후 `.vf-notehead.click()`에서 실패했다.
+  보존된 trace의 rect(x199.408/y95/56.273×35)는 exact-note 두 번째 fragment 내부에 있다.
+  VexFlow StaveNote.draw→SVGContext.pointerRect가 notehead 뒤에 생성한 정상 선택 영역이다.
+  pointer-events=auto는 자식 rect에 명시돼 있으며 그룹 visiblePainted도 실제 DOM에 반영돼 있다.
+- 제품 코드는 추가 변경하지 않는다. 일반 사용자 입력이 도달하는 fragment 그룹을 일반 click/tap하고,
+  각 클릭 중심이 해당 그룹 자식에 hit되는지 검사한다. 형제 notehead를 직접 클릭하도록 강제하지 않는다.
+- 기존 E2E2개/전체57개 유지. 첫 scenario에 D4 인접 음표를 추가하고 첫·둘째 조각을 번갈아 선택,
+  인접 음표 오선택 방지, 쉼표 두 조각, 라벨 후 선택, Undo/Redo 후 기보 및 원시 row/저장/복원을 검사한다.
+  원래 점 총2개/각각 가시성/가상 타이/300=180+120 assertions는 유지한다.
+  모바일 에뮬레이션(hasTouch)에서도 일반 tap으로 같은 경로를 추가 검사한다.
+- staff-notation-error 단위 테스트1개 추가: 원본/인접/쉼표 rect의 closest ID 전달, 미지 ID 거부,
+  미리보기 읽기 전용 및 입력 Score 불변. 단위 검증을 브라우저 클릭 통과로 대신하지 않는다.
+- 관련3파일/41개 PASS, typecheck/lint/architecture PASS. 전체 및 E2E 결과는 아래에 별도 기록한다.
+- 이번 조사 최종 검증: 전체 **45파일/706개 PASS**. typecheck/lint/architecture/build PASS.
+  기존705개와 rect 위임1개를 유지한다. H-01 및 300/960/1000tick H-02 회귀 포함.
+- 전체 E2E는 `/tmp/music-score-h02-pointer-20261109-review`로 출력 경로를 분리해 기존 Mac trace를 보존했다.
+  **listen EPERM 0.0.0.0:3010**으로 서버 시작 실패, **57개 미실행**.
+  첫·둘째 조각/인접 음표/쉼표/터치의 수정 후 브라우저 결과는 미검증이다.
+  단위 통과로 이를 대체하지 않는다. Mac `npm run test:e2e` 후 인수·제품 커밋을 진행한다.
+
+
+### H-02 최종 사용자 Mac 인수 (2026-11-09)
+
+- 사용자가 최종 수정 후 **Mac Chromium 전체57/57 PASS**를 직접 확인했다.
+  기존55개와 H-02 신규2개를 유지한다. 앞선 Codex EPERM/두 차례 Mac56/57 실패 기록은 당시 이력이다.
+- 단위·통합 **45파일/706개 PASS**, typecheck/lint/architecture/build·diff 검사 PASS 기록 유지.
+  H-01 긴 타이63360ticks, 300/960 정확 기보·1000 오류/오래된 SVG 제거, 실제 SVG 점·타이,
+  두 fragment/인접 음표/쉼표 선택·라벨/모바일 에뮬레이션, JSON·저장/Undo·Redo 불변 검증 포함.
+- Score v2/Part.ties/DB2/ADR-010/Command·재생 gate·조옮김/저장 계약 유지.
+  실제 오디오 청취/Safari/모바일 실기기와 추가 육안 인수는 별도다.
+- 정책 문서2개와 H-02 제품/테스트/검증 문서를 분리해 로컬 커밋 대상으로 검토한다.
+  GitHub push 및 Vercel 작업은 수행하지 않는다.
+- 최종 로컬 커밋 검토 중 `npm run test`를 재실행하여 **45파일/706개 PASS**를 다시 확인했다.

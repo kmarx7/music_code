@@ -77,7 +77,7 @@ it("re-rendering labels retains active SVG event highlighting without adding eve
   const attrs = vi.fn(); vi.mocked(StaveNote.prototype.getSVGElement).mockReturnValue({ setAttribute: attrs } as unknown as SVGElement);
   const element = { innerHTML: "", querySelectorAll: () => [{ getAttribute: () => "n1" }] };
   await renderScoreInto(element as unknown as HTMLDivElement, fourNoteScore(), { labelMode: "letter" });
-  expect(attrs.mock.calls.slice(0, 2)).toEqual([["data-event-id", "n1"], ["data-playing", "true"]]);
+  expect(attrs.mock.calls.slice(0, 3)).toEqual([["data-event-id", "n1"], ["pointer-events", "visiblePainted"], ["data-playing", "true"]]);
   expect(captured.attrs.every(([key]) => key !== "data-event-id")).toBe(true);
 });
 

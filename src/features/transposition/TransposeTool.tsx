@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { EditSessionState } from "@/application/edit-session";
 import { KEY_SIGNATURE_OPTIONS, isSupportedKeySignature, type TransposeDirection, type NoteLabelMode } from "@/domain/music-theory";
-import { analyzeScoreRange, transposeScore, type RangeRecommendation, type TransposeSpec } from "@/domain/score";
+import { analyzeScoreRange, planPartNotation, transposeScore, type RangeRecommendation, type TransposeSpec } from "@/domain/score";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { StaffView } from "@/features/score-editor";
@@ -44,6 +44,7 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
   const spec = useMemo<TransposeSpec | null>(() => recommended?.spec ?? (selection
     ? { kind: "targetKey", targetKey: selection.key, direction } : null), [recommended, selection, direction]);
   const candidate = useMemo(() => base && spec ? transposeScore(base.session.current, spec) : null, [base, spec]);
+  const notation = useMemo(() => candidate?.ok ? planPartNotation(candidate.value.score.parts[0]) : null, [candidate]);
   const snapshot = autosave.current?.getSnapshot?.();
   const stale = !!base && (session !== base.session || !snapshot || snapshot.revision !== base.revision);
   const unavailable = blocked(status) || (snapshot ? blocked(snapshot.status) : true);
@@ -85,6 +86,7 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
     }
     if (blocked(status) || blocked(state.status)) { setError("저장 충돌·삭제 또는 오류 상태입니다. 먼저 저장 상태를 확인해 주세요."); return; }
     if (!candidate?.ok || !spec) { setError("유효한 미리보기를 먼저 선택해 주세요."); return; }
+    if (!notation?.ok) { setError("기보할 수 없는 후보는 확정할 수 없습니다. 취소하거나 원본 음가를 확인해 주세요."); return; }
     submitted.current = true;
     const result = scoreStore.dispatch({ type: "TransposeScore", spec, updatedAt: new Date().toISOString() });
     if (result?.ok) close();
@@ -125,7 +127,7 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
         : <p role="alert">지원하는 목표 조성을 선택해 주세요.</p>}
       <p>미리보기는 저장되지 않으며 소리를 재생하지 않습니다.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <button type="button" style={button} disabled={!candidate?.ok || stale || unavailable} onClick={confirm}>확정</button>{" "}
+      <button type="button" style={button} disabled={!candidate?.ok || !notation?.ok || stale || unavailable} onClick={confirm}>확정</button>{" "}
       <button type="button" style={button} onClick={close}>취소</button>
     </section>}
   </div>;

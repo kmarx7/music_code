@@ -8,3 +8,4 @@ export * from "@/domain/score/playback";
 export * from "./transpose";
 export * from "./range";
 export * from "./range-recommendations";
+export * from "./notation";

@@ -1,5 +1,7 @@
 import type { Part, Score, ScoreEvent } from "@/domain/score/types";
-import { NOTATABLE_DURATIONS } from "@/domain/score/tie";
+import { planPartNotation } from "@/domain/score";
+import type { NotationIssue } from "@/domain/score";
+import type { NotatableDuration } from "@/domain/score/tie";
 import { measureStartTick, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 
 import { formatNoteLabel, type NoteLabelMode } from "@/domain/music-theory";
@@ -40,19 +42,15 @@ function keySpecOf(part: Part): string {
   return KEY_SPEC_BY_FIFTHS[part.keySignature.fifths] ?? "C";
 }
 
-/**
- * tick 길이를 VexFlow duration 문자열로 바꾼다(점은 `d` 접미사, 쉼표는 `r`).
- * `Note.parseDuration` 정규식이 `(\d*\/?\d+|[a-z])(d*)([nrhms]|$)` 이므로 `hd`, `qdd`, `qr` 모두 유효하다.
- */
-function vexDurationOf(ticks: number, isRest: boolean): string {
-  const spec =
-    NOTATABLE_DURATIONS.find((duration) => duration.ticks === ticks) ??
-    NOTATABLE_DURATIONS.find((duration) => duration.ticks <= ticks) ??
-    NOTATABLE_DURATIONS[NOTATABLE_DURATIONS.length - 1];
-
-  const alias = DURATION_ALIAS[spec.base] ?? "q";
-  return `${alias}${"d".repeat(spec.dots)}${isRest ? "r" : ""}`;
+/** This accepts only a proven exact notation specification, never an arbitrary duration. */
+function vexDurationOf(spec: Readonly<NotatableDuration>, isRest: boolean): string {
+  return `${DURATION_ALIAS[spec.base]}${"d".repeat(spec.dots)}${isRest ? "r" : ""}`;
 }
+
+export class NotationRenderError extends Error {
+  constructor(public readonly issue: NotationIssue) { super(issue.message); this.name = "NotationRenderError"; }
+}
+const renderRequests = new WeakMap<HTMLDivElement, number>();
 
 function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
   const accidental =
@@ -70,208 +68,240 @@ function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
 export async function renderScoreInto(
   element: HTMLDivElement,
   score: Score,
-  options?: { cursorTick?: number | null; labelMode?: NoteLabelMode },
+  options?: { cursorTick?: number | null; labelMode?: NoteLabelMode; signal?: AbortSignal },
 ): Promise<void> {
-  const vexflow = await import("vexflow");
-  const {
-    Renderer,
-    Stave,
-    StaveNote,
-    StaveTie,
-    Voice,
-    Formatter,
-    Accidental,
-    GhostNote,
-    Fraction,
-    Annotation,
-  } = vexflow;
-
-  const part = score.parts[0];
+  if (options?.signal?.aborted) return;
+  const request = (renderRequests.get(element) ?? 0) + 1;
+  renderRequests.set(element, request);
   const playingIds = new Set(Array.from(element.querySelectorAll?.('[data-event-id][data-playing="true"]') ?? [])
     .map((note) => note.getAttribute("data-event-id")));
   element.innerHTML = "";
+  const part = score.parts[0];
   if (!part) return;
+  const plan = planPartNotation(part);
+  if (!plan.ok) throw new NotationRenderError(plan.issue);
+  const vexflow = await import("vexflow");
+  if (options?.signal?.aborted || renderRequests.get(element) !== request) return;
+  try {
+    const {
+      Renderer,
+      Stave,
+      StaveNote,
+      StaveTie,
+      Voice,
+      Formatter,
+      Accidental,
+      GhostNote,
+      Dot,
+      Annotation,
+    } = vexflow;
 
-  const labelMode = options?.labelMode ?? "none";
-  const labelled = labelMode !== "none";
-  const continuation = new Set(part.ties.map((tie) => tie.to));
-  const annotations = new Map<string, InstanceType<typeof Annotation>>();
-  const rowHeight = labelled ? 180 : ROW_HEIGHT;
-  let rowX = 10;
-  let rowY = STAVE_TOP;
-  let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
 
-  const rows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
-  const width = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
-  const height = rows * rowHeight + STAVE_TOP;
+    const labelMode = options?.labelMode ?? "none";
+    const labelled = labelMode !== "none";
+    let expandedLayout = labelled;
+    const continuation = new Set(part.ties.map((tie) => tie.to));
+    const annotations = new Map<InstanceType<typeof StaveNote>, InstanceType<typeof Annotation>>();
+    const rowHeight = labelled ? 180 : ROW_HEIGHT;
+    let rowX = 10;
+    let rowY = STAVE_TOP;
+    let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
 
-  const renderer = new Renderer(element, Renderer.Backends.SVG);
-  renderer.resize(width, height);
-  const context = renderer.getContext();
-  const keySpec = keySpecOf(part);
-  let cursorPoint: { x: number; y: number } | undefined;
-  const cursorTick = options?.cursorTick;
-  const length = measureTicks(part.timeSignature);
+    const rows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
+    const width = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
+    const height = rows * rowHeight + STAVE_TOP;
 
-  const rendered = new Map<
-    string,
-    { note: InstanceType<typeof StaveNote>; row: number }
-  >();
+    const renderer = new Renderer(element, Renderer.Backends.SVG);
+    renderer.resize(width, height);
+    const context = renderer.getContext();
+    const keySpec = keySpecOf(part);
+    let cursorPoint: { x: number; y: number } | undefined;
+    const cursorTick = options?.cursorTick;
+    const length = measureTicks(part.timeSignature);
 
-  part.measures.forEach((measure, index) => {
-    const row = Math.floor(index / MEASURES_PER_ROW);
-    const column = index % MEASURES_PER_ROW;
-    if (column === 0) { rowX = 10; rowY = row * rowHeight + STAVE_TOP; }
-    const stave = new Stave(
-      labelled ? rowX : column * MEASURE_WIDTH + 10,
-      rowY,
-      MEASURE_WIDTH,
-    );
+    const rendered = new Map<
+      string,
+      { first: InstanceType<typeof StaveNote>; last: InstanceType<typeof StaveNote>; row: number }
+    >();
+    const visualTies: { from: InstanceType<typeof StaveNote>; to: InstanceType<typeof StaveNote> }[] = [];
 
-    if (column === 0) {
-      stave.addClef(part.clef);
-      stave.addKeySignature(keySpec);
-    }
-
-    if (index === 0) {
-      stave.addTimeSignature(
-        `${part.timeSignature.numerator}/${part.timeSignature.denominator}`,
+    part.measures.forEach((measure, index) => {
+      const fragments = plan.measures[index];
+      const spaced = labelled || fragments.some((fragment) => fragment.count > 1);
+      expandedLayout ||= spaced;
+      const row = Math.floor(index / MEASURES_PER_ROW);
+      const column = index % MEASURES_PER_ROW;
+      if (column === 0) { rowX = 10; rowY = row * rowHeight + STAVE_TOP; }
+      const stave = new Stave(
+        rowX,
+        rowY,
+        MEASURE_WIDTH,
       );
-    }
 
-    stave.setContext(context);
-    if (!labelled || measure.events.length === 0) stave.draw();
-    const start = measureStartTick(measure.index, part.timeSignature);
-    const atCursor = cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick) &&
-      cursorTick >= start && (cursorTick < start + length ||
-        (index === part.measures.length - 1 && cursorTick === start + length));
-    function locateCursor(anchors: { tick: number; x: number }[] = []) {
-      if (!atCursor) return;
-      const points = [{ tick: start, x: stave.getNoteStartX() }, ...anchors,
-        { tick: start + length, x: stave.getNoteEndX() }];
-      const right = points.findIndex((point) => point.tick > cursorTick!);
-      const left = right < 0 ? points.at(-1)! : points[Math.max(0, right - 1)];
-      const next = right < 0 ? left : points[right];
-      const ratio = next.tick === left.tick ? 0 : (cursorTick! - left.tick) / (next.tick - left.tick);
-      cursorPoint = { x: left.x + ratio * (next.x - left.x), y: rowY + 10 };
-    }
-    if (measure.events.length === 0) { locateCursor(); rowX += MEASURE_WIDTH; return; }
-
-    const events = [...measure.events].sort((a, b) => a.startTick - b.startTick);
-    const notes = events.map((event) => {
-      if (event.kind === "rest") {
-        return new StaveNote({
-          keys: [part.clef === "bass" ? "d/3" : "b/4"],
-          duration: vexDurationOf(event.durationTicks, true),
-          clef: part.clef,
-        });
+      if (column === 0) {
+        stave.addClef(part.clef);
+        stave.addKeySignature(keySpec);
       }
-      const note = new StaveNote({
-        keys: [vexKeyOf(event)],
-        duration: vexDurationOf(event.durationTicks, false),
-        clef: part.clef,
+
+      if (index === 0) {
+        stave.addTimeSignature(
+          `${part.timeSignature.numerator}/${part.timeSignature.denominator}`,
+        );
+      }
+
+      stave.setContext(context);
+      if (!spaced || measure.events.length === 0) stave.draw();
+      const start = measureStartTick(measure.index, part.timeSignature);
+      const atCursor = cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick) &&
+        cursorTick >= start && (cursorTick < start + length ||
+          (index === part.measures.length - 1 && cursorTick === start + length));
+      function locateCursor(anchors: { tick: number; x: number }[] = []) {
+        if (!atCursor) return;
+        const points = [{ tick: start, x: stave.getNoteStartX() }, ...anchors,
+          { tick: start + length, x: stave.getNoteEndX() }];
+        const right = points.findIndex((point) => point.tick > cursorTick!);
+        const left = right < 0 ? points.at(-1)! : points[Math.max(0, right - 1)];
+        const next = right < 0 ? left : points[right];
+        const ratio = next.tick === left.tick ? 0 : (cursorTick! - left.tick) / (next.tick - left.tick);
+        cursorPoint = { x: left.x + ratio * (next.x - left.x), y: rowY + 10 };
+      }
+      if (measure.events.length === 0) { locateCursor(); rowX += MEASURE_WIDTH; return; }
+
+      const events = fragments.map((fragment) => fragment.event);
+      const notes = fragments.map((fragment) => {
+        const event = fragment.event;
+        let note: InstanceType<typeof StaveNote>;
+        if (event.kind === "rest") {
+          note = new StaveNote({ keys: [part.clef === "bass" ? "d/3" : "b/4"],
+            duration: vexDurationOf(fragment.duration, true), clef: part.clef });
+        } else {
+          note = new StaveNote({ keys: [vexKeyOf(event)],
+            duration: vexDurationOf(fragment.duration, false), clef: part.clef });
+        }
+        for (let dot = 0; dot < fragment.duration.dots; dot++) Dot.buildAndAttach([note], { all: true });
+        const label = event.kind !== "note" || fragment.index !== 0 || continuation.has(event.id)
+          ? null : formatNoteLabel(event.pitch, labelMode);
+        if (label) {
+          const annotation = new Annotation(label).setFont("system-ui, sans-serif", 11)
+            .setVerticalJustification(Annotation.VerticalJustify.BOTTOM);
+          annotation.setYShift(12);
+          note.addModifier(annotation, 0);
+          annotations.set(note, annotation);
+        }
+        return note;
       });
-      const label = continuation.has(event.id) ? null : formatNoteLabel(event.pitch, labelMode);
-      if (label) {
-        const annotation = new Annotation(label).setFont("system-ui, sans-serif", 11)
-          .setVerticalJustification(Annotation.VerticalJustify.BOTTOM);
-        annotation.setYShift(12);
-        note.addModifier(annotation, 0);
-        annotations.set(event.id, annotation);
-      }
-      return note;
-    });
 
-    // 쉼표 이동/삭제로 생긴 빈 구간도 절대 tick 위치대로 간격을 유지한다.
-    // GhostNote는 렌더 전용이며 canonical Score에는 추가하지 않는다.
-    const tickables: InstanceType<typeof StaveNote | typeof GhostNote>[] = [];
-    const ticks: number[] = [];
-    let cursor = measureStartTick(measure.index, part.timeSignature);
-    events.forEach((event, position) => {
-      if (event.startTick > cursor) {
+      // 쉼표 이동/삭제로 생긴 빈 구간도 절대 tick 위치대로 간격을 유지한다.
+      // GhostNote는 렌더 전용이며 canonical Score에는 추가하지 않는다.
+      const tickables: InstanceType<typeof StaveNote | typeof GhostNote>[] = [];
+      const ticks: number[] = [];
+      let cursor = measureStartTick(measure.index, part.timeSignature);
+      function addGap(tick: number, durationTicks: number) {
         const gap = new GhostNote({ duration: "q" });
-        gap.setDuration(new Fraction(event.startTick - cursor, TICKS_PER_QUARTER * 4));
-        tickables.push(gap);
-        ticks.push(cursor);
+        // Rational tick multiplication, rather than overriding a visible note's glyph duration.
+        gap.applyTickMultiplier(durationTicks, TICKS_PER_QUARTER);
+        tickables.push(gap); ticks.push(tick);
       }
-      tickables.push(notes[position]);
-      ticks.push(event.startTick);
-      cursor = event.startTick + event.durationTicks;
+      fragments.forEach((fragment, position) => {
+        if (fragment.startTick > cursor) addGap(cursor, fragment.startTick - cursor);
+        tickables.push(notes[position]); ticks.push(fragment.startTick);
+        cursor = fragment.startTick + fragment.duration.ticks;
+        if (fragment.index > 0 && fragment.event.kind === "note") {
+          visualTies.push({ from: notes[position - 1], to: notes[position] });
+        }
+      });
+      if (cursor < start + length) addGap(cursor, start + length - cursor);
+
+      const voice = new Voice({
+        numBeats: part.timeSignature.numerator,
+        beatValue: part.timeSignature.denominator,
+      })
+        .addTickables(tickables)
+        .setStrict(true);
+
+      Accidental.applyAccidentals([voice], keySpec);
+      const formatter = new Formatter().joinVoices([voice]);
+      // Annotation-aware VexFlow spacing, expanding dense measures rather than overlapping labels.
+      const inset = spaced ? stave.getNoteStartX() - stave.getX() : 0;
+      const measureWidth = spaced ? Math.max(MEASURE_WIDTH, Math.ceil(formatter.preCalculateMinTotalWidth([voice])) + inset + 40) : MEASURE_WIDTH;
+      if (spaced) stave.setWidth(measureWidth);
+      formatter.format([voice], spaced ? measureWidth - inset - 30 : measureWidth - 40);
+      rowX += measureWidth;
+      canvasWidth = Math.max(canvasWidth, rowX + 10);
+      if (spaced) stave.draw();
+      voice.draw(context, stave);
+      if (atCursor) locateCursor(tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
+
+      events.forEach((event, position) => {
+        const noteElement = notes[position].getSVGElement();
+        noteElement?.setAttribute("data-event-id", event.id);
+        // VexFlow disables pointer events on the SVG root. Enable only event glyphs
+        // so StaffView can delegate real fragment clicks to the original event.
+        noteElement?.setAttribute("pointer-events", "visiblePainted");
+        if (playingIds.has(event.id)) noteElement?.setAttribute("data-playing", "true");
+        const fragment = fragments[position];
+        if (fragment.count > 1) {
+          noteElement?.setAttribute("data-notation-start", String(fragment.startTick));
+          noteElement?.setAttribute("data-notation-duration", String(fragment.duration.ticks));
+        }
+        const label = annotations.get(notes[position])?.getSVGElement();
+        if (label) {
+          label.setAttribute("data-testid", "note-label");
+          label.setAttribute("data-label-event-id", event.id);
+          label.setAttribute("aria-label", annotations.get(notes[position])!.getText());
+          label.setAttribute("style", "pointer-events: none; user-select: none");
+        }
+        const previous = rendered.get(event.id);
+        rendered.set(event.id, { first: previous?.first ?? notes[position], last: notes[position], row });
+      });
     });
 
-    const voice = new Voice({
-      numBeats: part.timeSignature.numerator,
-      beatValue: part.timeSignature.denominator,
-    })
-      .addTickables(tickables)
-      .setStrict(false);
+    for (const tie of visualTies) {
+      new StaveTie({ firstNote: tie.from, lastNote: tie.to, firstIndexes: [0], lastIndexes: [0] }).setContext(context).draw();
+    }
+    for (const tie of part.ties) {
+      const first = rendered.get(tie.from);
+      const last = rendered.get(tie.to);
+      if (!first || !last) continue;
 
-    Accidental.applyAccidentals([voice], keySpec);
-    const formatter = new Formatter().joinVoices([voice]);
-    // Annotation-aware VexFlow spacing, expanding dense measures rather than overlapping labels.
-    const inset = labelled ? stave.getNoteStartX() - stave.getX() : 0;
-    const measureWidth = labelled ? Math.max(MEASURE_WIDTH, Math.ceil(formatter.preCalculateMinTotalWidth([voice])) + inset + 40) : MEASURE_WIDTH;
-    if (labelled) stave.setWidth(measureWidth);
-    formatter.format([voice], labelled ? measureWidth - inset - 30 : measureWidth - 40);
-    rowX += measureWidth;
-    canvasWidth = Math.max(canvasWidth, rowX + 10);
-    if (labelled) stave.draw();
-    voice.draw(context, stave);
-    if (atCursor) locateCursor(tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
+      const indexes = { firstIndexes: [0], lastIndexes: [0] };
 
-    events.forEach((event, position) => {
-      const noteElement = notes[position].getSVGElement();
-      noteElement?.setAttribute("data-event-id", event.id);
-      if (playingIds.has(event.id)) noteElement?.setAttribute("data-playing", "true");
-      const label = annotations.get(event.id)?.getSVGElement();
-      if (label) {
-        label.setAttribute("data-testid", "note-label");
-        label.setAttribute("data-label-event-id", event.id);
-        label.setAttribute("aria-label", annotations.get(event.id)!.getText());
-        label.setAttribute("style", "pointer-events: none; user-select: none");
+      if (first.row === last.row) {
+        new StaveTie({ firstNote: first.last, lastNote: last.first, ...indexes })
+          .setContext(context)
+          .draw();
+        continue;
       }
-      rendered.set(event.id, { note: notes[position], row });
-    });
-  });
 
-  for (const tie of part.ties) {
-    const first = rendered.get(tie.from);
-    const last = rendered.get(tie.to);
-    if (!first || !last) continue;
-
-    const indexes = { firstIndexes: [0], lastIndexes: [0] };
-
-    if (first.row === last.row) {
-      new StaveTie({ firstNote: first.note, lastNote: last.note, ...indexes })
-        .setContext(context)
-        .draw();
-      continue;
+      // 줄이 바뀌면 VexFlow는 양끝을 한 번에 그릴 수 없다 → 부분 타이로 나눠 그린다.
+      new StaveTie({ firstNote: first.last, ...indexes }).setContext(context).draw();
+      new StaveTie({ lastNote: last.first, ...indexes }).setContext(context).draw();
+    }
+    if (cursorPoint) {
+      const svg = element.querySelector("svg");
+      if (svg) {
+        const line = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "line");
+        for (const [key, value] of Object.entries({ x1: cursorPoint.x, x2: cursorPoint.x,
+          y1: cursorPoint.y, y2: cursorPoint.y + 75, stroke: "#2563eb", "stroke-width": 2,
+          "pointer-events": "none", "data-testid": "staff-edit-cursor", "data-tick": cursorTick,
+          "aria-label": "편집 커서" })) line.setAttribute(key, String(value));
+        svg.appendChild(line);
+      }
+    }
+    if (expandedLayout) {
+      const svg = element.querySelector?.("svg");
+      const bounds = svg?.getBBox?.();
+      const x = Math.min(0, (bounds?.x ?? 8) - 8);
+      const y = Math.min(0, (bounds?.y ?? 8) - 8);
+      const right = Math.max(canvasWidth, bounds ? bounds.x + bounds.width + 8 : canvasWidth);
+      const bottom = Math.max(height, bounds ? bounds.y + bounds.height + 8 : height);
+      renderer.resize(right - x, bottom - y);
+      svg?.setAttribute("viewBox", `${x} ${y} ${right - x} ${bottom - y}`);
     }
 
-    // 줄이 바뀌면 VexFlow는 양끝을 한 번에 그릴 수 없다 → 부분 타이로 나눠 그린다.
-    new StaveTie({ firstNote: first.note, ...indexes }).setContext(context).draw();
-    new StaveTie({ lastNote: last.note, ...indexes }).setContext(context).draw();
-  }
-  if (cursorPoint) {
-    const svg = element.querySelector("svg");
-    if (svg) {
-      const line = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "line");
-      for (const [key, value] of Object.entries({ x1: cursorPoint.x, x2: cursorPoint.x,
-        y1: cursorPoint.y, y2: cursorPoint.y + 75, stroke: "#2563eb", "stroke-width": 2,
-        "pointer-events": "none", "data-testid": "staff-edit-cursor", "data-tick": cursorTick,
-        "aria-label": "편집 커서" })) line.setAttribute(key, String(value));
-      svg.appendChild(line);
-    }
-  }
-  if (labelled) {
-    const svg = element.querySelector?.("svg");
-    const bounds = svg?.getBBox?.();
-    const x = Math.min(0, (bounds?.x ?? 8) - 8);
-    const y = Math.min(0, (bounds?.y ?? 8) - 8);
-    const right = Math.max(canvasWidth, bounds ? bounds.x + bounds.width + 8 : canvasWidth);
-    const bottom = Math.max(height, bounds ? bounds.y + bounds.height + 8 : height);
-    renderer.resize(right - x, bottom - y);
-    svg?.setAttribute("viewBox", `${x} ${y} ${right - x} ${bottom - y}`);
+  } catch (error) {
+    if (renderRequests.get(element) === request && !options?.signal?.aborted) element.innerHTML = "";
+    throw error;
   }
 
 }

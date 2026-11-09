@@ -628,3 +628,19 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   연속성이 검증되므로 총 길이는 각 세그먼트 길이의 합과 같다. Tone 예약·gate·pause/resume은 그대로 사용한다.
 - 66×960 = **63360 ticks**, 120BPM에서 **33초**, 한 어택으로 전달됨을 호출 데이터로 검증했다.
   실제 스피커 청취를 자동 검증한 것은 아니다. H-02의 비표기 음가·VexFlow 근사 문제는 변경하지 않았다.
+
+## H-02 — 정확한 렌더링 projection (2026-11-09)
+
+- `decomposeNotationDuration(ticks)`는 기존18음가의 정확 합 또는 명시적 NotationIssue를 반환한다.
+  반올림하지 않는다. 최소 요소 수/동률 긴 음가 우선. `planPartNotation(part)`은 원본 이벤트 ID와
+  tick을 참조하는 읽기 전용 fragment 배열 또는 마디/이벤트/시작/길이가 있는 실패 결과다.
+- 렌더 안전 상한: 이벤트64 fragment/430080ticks, Part1024마디/4096 tickable(GhostNote 포함).
+  이는 저장·가져오기 검증 한계가 아니다. Score v2/Part.ties/Command/DB2/OCC에는 새 필드나 제한을 넣지 않는다.
+- VexFlow는 정확 token+실제 Dot, note fragment 사이의 가상 타이, canonical tie의 양끝 fragment를 사용한다.
+  rests는 타이 없이 분해한다. GhostNote의 rational tick과 후행 공백으로 비어 있지 않은 strict Voice를 채운다.
+  first Part 표시 정책 유지. fragment의 data-event-id는 원본 ID, 라벨은 첫 fragment에만 표시한다.
+- `renderScoreInto`는 기보 불가 시 NotationRenderError를 던지고 이전/부분 SVG를 지운다.
+  AbortSignal/최신 요청 확인으로 폐기된 비동기 draw를 차단한다. StaffView는 notation-error 안내와
+  기존 Score 접근을 유지하고, 선택 callback은 원본 이벤트로만 전달한다. 미리보기는 읽기 전용이다.
+- 기보 불가 후보의 조옮김 확정은 UI에서 차단한다. 도메인 엔진/Command/저장 경로는 변경하지 않는다.
+  기보 오류는 손상 저장본 오류가 아니며, 원래 음가의 재생·JSON 백업·정상 저장을 차단하지 않는다.

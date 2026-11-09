@@ -98,6 +98,20 @@ it("confirms exactly once through dispatch, creates one undo snapshot and suppor
   expect(changed.current.parts[0].keySignature.fifths).toBe(2);
   scoreStore.undo(); expect(scoreStore.getState()!.current).toBe(before); scoreStore.redo(); expect(scoreStore.getState()!.current).toBe(changed.current);
 });
+
+it.each([300, 1000])("%i-tick candidate never bypasses exact notation validation on confirmation", (duration) => {
+  scoreStore.init(withMeasureEvents(baseScore(), [createNoteEvent({ id: "h02", step: "C", octave: 4, startTick: 0, durationTicks: duration })]));
+  render(); const before = scoreStore.getState(); const dispatch = vi.spyOn(scoreStore, "dispatch"); open();
+  const confirm = button("확정"); expect(Boolean(confirm.props.disabled)).toBe(duration === 1000);
+  invoke(confirm, "onClick"); render();
+  if (duration === 1000) {
+    expect(dispatch).not.toHaveBeenCalled(); expect(scoreStore.getState()).toBe(before);
+    expect(text(tree)).toContain("기보할 수 없는 후보는 확정할 수 없습니다."); expect(autosave.current!.flush).not.toHaveBeenCalled();
+  } else {
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(scoreStore.getState()!.current.parts[0].measures[0].events[0].durationTicks).toBe(300);
+  }
+});
 it("same-key confirmation preserves redo and timestamps and latches even a double no-op click", () => {
   scoreStore.dispatch({ type: "SetTempo", tempoBpm: 80, updatedAt: "changed" }); scoreStore.undo(); render();
   const before = scoreStore.getState(); open("major:0"); expect(text(tree)).toContain("현재 악보와 같은 결과");

@@ -7,7 +7,7 @@ import { createIndexedDbScoreRepository } from "@/adapters/indexeddb/scoreReposi
 import { exportScoreBackup, importScoreBackup, openOrCreateScore } from "@/application/score-library";
 import { createScoreStore } from "@/store/score-store";
 import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
-import { createNoteEvent, createRestEvent, validateScore, type Score } from "@/domain/score";
+import { createNoteEvent, createRestEvent, planPartNotation, validateScore, type Score } from "@/domain/score";
 import { baseScore, fourNoteScore, longTiedScore, tiedScore } from "../fixtures/scores";
 
 const notation = vi.hoisted(() => ({ voices: [] as Tickable[][], keys: [] as string[], ties: [] as unknown[] }));
@@ -198,4 +198,28 @@ it("preserves all 63360 ticks through JSON import, transpose, undo/redo and Inde
   expect(copy.score.parts).toEqual(changed.parts);
   expect(await schedule(copy.score)).toEqual(afterAudio);
   expect(JSON.stringify(original)).toBe(originalJson);
+});
+
+
+it.each([300, 1000])("%i ticks keep exact playback, JSON, revision and undo/redo independently of notation", async (durationTicks) => {
+  const original = baseScore();
+  original.parts[0].measures[0].events = [createNoteEvent({ id: "h02", step: "C", octave: 4, startTick: 0, durationTicks })];
+  const json = JSON.stringify(original); const repository = createIndexedDbScoreRepository({ dbName: `h02-roundtrip-${durationTicks}` });
+  const imported = await importScoreBackup(repository, json, { id: `h02-${durationTicks}`, importedAt: "2026-11-09T01:00:00.000Z" });
+  const source = imported.score; const baseline = await raw(`h02-roundtrip-${durationTicks}`, source.id);
+  expect(validateScore(source)).toEqual([]);
+  expect(planPartNotation(source.parts[0]).ok).toBe(durationTicks === 300);
+  const audioBefore = await schedule(source);
+  expect(audioBefore.attacks).toEqual([["midi:60", expect.closeTo(durationTicks / 1920 * 0.9, 12), 10.1]]);
+  const session = store(source); const changed = session.getState()!.current;
+  expect(changed.parts[0].measures[0].events[0].durationTicks).toBe(durationTicks);
+  expect((await schedule(changed)).attacks).toEqual([["midi:62", expect.closeTo(durationTicks / 1920 * 0.9, 12), 10.1]]);
+  session.undo(); expect(session.getState()!.current).toBe(source); expect(await schedule(source)).toEqual(audioBefore);
+  session.redo(); expect(session.getState()!.current).toBe(changed);
+  expect(await raw(`h02-roundtrip-${durationTicks}`, source.id)).toEqual(baseline);
+  expect(await repository.save(changed, 1)).toBe(2);
+  const restored = await repository.read(source.id); expect(restored).toEqual({ score: changed, revision: 2 });
+  expect(JSON.parse(exportScoreBackup(restored!.score).json)).toEqual(changed);
+  expect((await schedule(restored!.score)).attacks).toEqual([["midi:62", expect.closeTo(durationTicks / 1920 * 0.9, 12), 10.1]]);
+  expect(JSON.stringify(original)).toBe(json);
 });

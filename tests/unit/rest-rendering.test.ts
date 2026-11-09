@@ -1,3 +1,4 @@
+import { mockVexflowCssFont } from "../fixtures/vexflow-font";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StaveNote, type Accidental, type Tickable } from "vexflow";
 import { renderScoreInto } from "@/adapters/vexflow/renderScore";
@@ -33,6 +34,7 @@ vi.mock("vexflow", async (importOriginal) => {
 });
 
 beforeEach(() => {
+  mockVexflowCssFont();
   captured.voices.length = 0; captured.ties.length = 0;
   captured.keys.length = 0; captured.meters.length = 0;
   vi.spyOn(StaveNote.prototype, "getSVGElement").mockReturnValue(undefined);
@@ -123,7 +125,11 @@ it("links rendered SVG note/rest groups to canonical event IDs for cursor highli
   const score = tiedScore();
   score.parts[0].measures[0].events.unshift(createRestEvent({ id: "rest", startTick: 0, durationTicks: 960 }));
   await renderScoreInto({ innerHTML: "" } as HTMLDivElement, score);
-  expect(attribute.mock.calls).toEqual([["data-event-id", "rest"], ["data-event-id", "t1"], ["data-event-id", "t1:tie1"]]);
+  expect(attribute.mock.calls).toEqual([
+    ["data-event-id", "rest"], ["pointer-events", "visiblePainted"],
+    ["data-event-id", "t1"], ["pointer-events", "visiblePainted"],
+    ["data-event-id", "t1:tie1"], ["pointer-events", "visiblePainted"],
+  ]);
 });
 
 it.each([[0, 30], [4800, 295], [7680, 430]])("renders an empty-gap/end edit cursor at tick %s without changing Score", async (tick, x) => {
