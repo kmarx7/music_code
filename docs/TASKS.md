@@ -770,3 +770,27 @@
 - 제품 코드/패키지/Score v2/DB2/ADR-010/아키텍처 변경 없음. commit/push/deploy/사용자 DB 조작 없음.
 - 다음: Claude에서 인수인계 확인 후 새 사용자 요청에 따라 H-03/D-01부터 범위를 정한다.
   Phase3 계획을 구현 완료 또는 기존 승인으로 간주하지 않는다.
+
+## 7. P3-01~03 — 비파괴 연습 속도 (구현·자동 검증 완료, 미커밋, 2026-11-11)
+
+- 요청: Claude Code 첫 세션. 사용자가 문서 확인 후 "연습 속도 구현까지" 범위를 선택했고,
+  D-01 중 **재생 중 rate 변경 = 현재 위치 즉시 재예약**, **C-08 클립보드 = 제안안 그대로**를 승인했다.
+  A–B loop 경계/설정 유지 정책은 미확정으로 남겼다(MODULE_CONTRACTS D-01 절).
+- 기준: main `e69ab20`. 시작 시 baseline 45파일/706개, typecheck/lint/architecture PASS를 재확인했다.
+- 재사용: `domain/score/playback.ts`, `adapters/tone/playback.ts`의 pause→resume 수명(release/start),
+  `PlaybackControls`의 로컬 state/ref와 요청 토큰. 새 모듈/의존성/상태 시스템/저장 필드 없음.
+- 변경 제품 파일 3개: `src/domain/score/playback.ts`(rate 범위·검증·실효 템포·tick 초 계산),
+  `src/adapters/tone/playback.ts`(`options.rate`, `PlaybackHandle.setRate`),
+  `src/features/playback/PlaybackControls.tsx`(슬라이더 25–150%/5%, 프리셋 50/75/100/125%, 실효 BPM 표시).
+- 신규 테스트: `tests/unit/practice-rate.test.ts` 53개(실패 확인 후 구현), `tests/e2e/practice-rate.spec.ts` 2개.
+  기존 테스트는 삭제·skip·기대값 변경 없음.
+- 실제 실행: `npm run test` **46파일/759개 PASS**, `npm run typecheck` PASS, `npm run lint` PASS,
+  `npm run check:architecture` 63모듈/192의존성/경계56파일 위반0, `npm run test:e2e` 상당
+  (`npx playwright test`, 프로덕션 build+start, 출력 경로만 분리) **Chromium 59/59 PASS**(기존57+신규2).
+  build는 E2E webServer의 `npm run build`로 성공했다. `git diff --check` PASS.
+- 미검증: 실제 스피커 청취(속도 변경 순간의 끊김·재어택 체감 포함), Safari/WebKit/Firefox,
+  iPhone/Android 실기기. 단위 테스트의 Tone은 대역이며 모바일은 hasTouch 에뮬레이션이다.
+- 구현 기본값으로 정한 것(승인 요청 대상): 연습 속도는 Stop/편집/Undo 후에도 편집기 세션 동안 유지, 새로고침 시 100%.
+- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. commit/push/deploy 없음.
+- 다음: (1) 이 변경과 인계 문서의 로컬 커밋 여부 결정, (2) P3-04 전 A–B loop 경계 정책 확정,
+  (3) H-03 브라우저 성능 측정, (4) 실제 청취 인수.

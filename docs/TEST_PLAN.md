@@ -1223,3 +1223,23 @@ npm run test:e2e
 - 정책 문서2개와 H-02 제품/테스트/검증 문서를 분리해 로컬 커밋 대상으로 검토한다.
   GitHub push 및 Vercel 작업은 수행하지 않는다.
 - 최종 로컬 커밋 검토 중 `npm run test`를 재실행하여 **45파일/706개 PASS**를 다시 확인했다.
+
+
+## P3-01~03 — 비파괴 연습 속도 (2026-11-11, Claude Code)
+
+- 단위·통합 **46파일/759개 PASS**(기존706 유지 + 신규53). `tests/unit/practice-rate.test.ts`:
+  - 순수 계약: 범위 0.25–1.5/기본 1, 유효·무효 rate(0/음수/NaN/Infinity/범위 밖/비숫자),
+    120BPM×50%=실효60, 20×0.25=5 및 400×1.5=600 무clamp, 무효 값 RangeError.
+  - Tone 예약(대역): rate 생략=100%와 동일, 50%에서 모든 onset·길이 2배/피치 동일, 0.25/0.5/1/1.5 커서,
+    메트로놈 간격, 타이 단일 어택 길이, pause/resume 잔여 길이, Score/tempo/JSON 불변, 무효 rate는 음성 생성 전 거부.
+  - 재예약: 재생 중 변경 시 tick 보존·이전 음성 dispose 1회·잔여 음만 재예약, 연속 변경 시 음성 누적 없음,
+    동일 값 no-op, paused 변경 후 resume 적용, stop 후 no-op, 무효 값은 진행 중 재생 불변,
+    타이 중간 변경 1회 재어택, 메트로놈 클릭 중복 없는 재예약.
+- typecheck/lint/architecture(63모듈/192의존성/56파일 위반0) PASS.
+- Chromium E2E **59/59 PASS**(기존57+신규2, 프로덕션 build 포함, Claude Code 세션에서 직접 실행).
+  `practice-rate.spec.ts`: 기본100%/슬라이더 속성/프리셋/실효 BPM 표시와 악보 템포 120 유지,
+  키보드 ±5%·Home 25%·End 150%, 재생 중 변경 후 tick 비초기화·계속 진행·하이라이트 1개,
+  일시정지 중 변경 tick 유지, 정지 후 설정 유지, **IndexedDB 원시 row(revision 포함) 완전 동일**, 새로고침 100%,
+  모바일 hasTouch 에뮬레이션 tap.
+- NOT RUN: 실제 오디오 청취, Safari/WebKit/Firefox, 모바일 실기기. 브라우저 E2E는 커서 진행과 DOM을 검사하며
+  실제 재생 속도의 청각적 정확성을 측정하지 않는다(시간 정확성은 Tone 호출 인자 단위 검증에 한정).

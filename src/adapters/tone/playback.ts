@@ -1,4 +1,7 @@
-import { mergeTiedNotes, playbackEndTick, playbackPositionAt, TICKS_PER_QUARTER } from "@/domain/score";
+import {
+  DEFAULT_PRACTICE_RATE, isValidPracticeRate, mergeTiedNotes, playbackEndTick, playbackPositionAt,
+  playbackSecondsPerTick, TICKS_PER_QUARTER,
+} from "@/domain/score";
 import type { PlaybackPosition, Score } from "@/domain/score";
 
 export type PlaybackState = "playing" | "paused" | "stopped";
@@ -7,6 +10,8 @@ export interface PlaybackHandle {
   pause(): void;
   resume(): void;
   setMetronome(enabled: boolean): void;
+  /** Practice rate (0.25–1.5). Playing: reschedules from the current tick. Paused: applies on resume. */
+  setRate(rate: number): void;
   getPosition(): PlaybackPosition;
 }
 
@@ -15,17 +20,21 @@ export async function playScore(
   score: Score,
   options?: {
     metronome?: boolean;
+    /** Non-destructive practice rate; the Score tempo is never modified. Defaults to 1. */
+    rate?: number;
     onPosition?: (position: PlaybackPosition) => void;
     onState?: (state: PlaybackState) => void;
     onEnd?: () => void;
   },
 ): Promise<PlaybackHandle> {
+  let rate = options?.rate ?? DEFAULT_PRACTICE_RATE;
+  // Validate before any audio exists so an invalid rate can never be approximated or half-applied.
+  let tickSeconds = playbackSecondsPerTick(score.tempoBpm, rate);
   const Tone = await import("tone");
   await Tone.start();
   const part = score.parts[0];
   const notes = part ? mergeTiedNotes(part) : [];
   const tiedHeads = new Set(part?.ties.map((tie) => tie.from));
-  const tickSeconds = 60 / score.tempoBpm / TICKS_PER_QUARTER;
   const endTick = playbackEndTick(score);
   let state: PlaybackState = "stopped";
   let finished = false;
@@ -107,6 +116,18 @@ export async function playScore(
         // Skip elapsed clicks, including a beat that has already sounded.
         const from = Tone.immediate() < startAt ? originTick : position().tick + 0.001;
         scheduleClicks(from);
+      }
+    },
+    setRate(next) {
+      if (!isValidPracticeRate(next)) throw new RangeError(`지원하지 않는 연습 속도입니다 (${String(next)}).`);
+      if (finished || next === rate) return;
+      if (state === "playing") {
+        // Same lifecycle as pause→resume: fix the tick on the old clock, drop every old schedule, restart.
+        originTick = position().tick; release();
+        rate = next; tickSeconds = playbackSecondsPerTick(score.tempoBpm, rate);
+        start();
+      } else {
+        rate = next; tickSeconds = playbackSecondsPerTick(score.tempoBpm, rate);
       }
     },
     getPosition: position,

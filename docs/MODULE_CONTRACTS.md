@@ -220,7 +220,7 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
 | C-05 store 조립 | Phase 1에서 단일 Score 소유자 유지하며 추가 |
 | C-06 의존성 도입 | Phase 0 목록 확정(§7), 이후 기능 Phase별 승인 |
 | C-07 저장 버전·migration | **v2 확정**(`Part.ties`), v1 → v2 마이그레이션 구현·테스트 완료 |
-| C-08 클립보드 의미 | Phase 3 전 확정 |
+| C-08 클립보드 의미 | **확정**(2026-11-11 사용자 승인, 아래 D-01 절). 구현은 P3-06~09에서 수행 |
 | C-09 F1 게이트 | Phase 4 전 데이터셋 확정 |
 | C-10 브라우저 매트릭스 | **Chromium(Playwright 1.65.0) 기록됨**. WebKit/Firefox/실기기는 미실행 |
 
@@ -644,3 +644,44 @@ Phase 1-C에서 **Playwright**를 도입했다(사용자 지시). E2E는 `tests/
   기존 Score 접근을 유지하고, 선택 callback은 원본 이벤트로만 전달한다. 미리보기는 읽기 전용이다.
 - 기보 불가 후보의 조옮김 확정은 UI에서 차단한다. 도메인 엔진/Command/저장 경로는 변경하지 않는다.
   기보 오류는 손상 저장본 오류가 아니며, 원래 음가의 재생·JSON 백업·정상 저장을 차단하지 않는다.
+
+## D-01 — Phase 3 runtime·클립보드 정책 확정 (2026-11-11 사용자 승인)
+
+Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 모델/DB 필드/의존성/ADR 변경은 없다.
+
+- **재생 중 연습 속도 변경 = 현재 위치에서 즉시 재예약.** playing은 이전 시계로 현재 tick을 확정하고
+  이전 예약·음성·클릭을 모두 해제한 뒤 같은 tick부터 남은 음을 새 속도로 다시 예약한다.
+  지속 중인 음(타이 포함)은 남은 길이만 1회 다시 어택한다. paused는 tick을 유지하고 resume부터 적용한다.
+  stopped/자연 종료 후에는 다음 Play부터 적용한다. "정지 후 다음 Play부터 적용" 대안은 채택하지 않았다.
+- **C-08 클립보드 = 기존 제안안 그대로 확정.** 첫 Part·같은 문서·메모리 clipboard(시스템 clipboard 미사용).
+  선택은 연속 `[startTick,endTick)`이며 타이 체인을 자르는 선택은 거부한다(전체 체인 선택 안내).
+  붙여넣기는 빈 대상에만 허용하고 충돌·마디 부족·표기 실패는 부분 적용 없이 거부한다.
+  덮어쓰기·뒤 이벤트 자동 밀기·자동 마디 추가·자동 타이 절단 없음. Pitch 철자/MIDI는 보존하고 몰래 조옮기지 않는다.
+  붙여넣는 이벤트는 fresh ID와 타이 참조 매핑, 단일 원자 Command/1회 Undo. Cut은 성공 시에만 clipboard를 교체한다.
+- **아직 미확정(구현 금지):** A–B loop의 끝 경계 예약 방식(rolling scheduler 필요 여부),
+  loop 설정의 편집/Undo/hidden/Stop 시 유지·초기화 정책. P3-04 착수 전 별도 확정한다.
+
+## Phase 3 — 비파괴 연습 속도 (P3-01~03, 2026-11-11)
+
+- `@/domain/score`(기존 `playback.ts`)에 순수 계산을 추가했다: `PRACTICE_RATE_MIN = 0.25`,
+  `PRACTICE_RATE_MAX = 1.5`, `DEFAULT_PRACTICE_RATE = 1`, `isValidPracticeRate(rate)`,
+  `effectiveTempoBpm(tempoBpm, rate)`, `playbackSecondsPerTick(tempoBpm, rate = 1)`.
+  범위 밖·0·NaN·Infinity·비숫자는 반올림/clamp하지 않고 RangeError로 거부한다.
+  실효 템포는 재생 계산 전용이며 Score의 20–400 BPM 검증 범위로 clamp하지 않는다(20×0.25=5, 400×1.5=600).
+  5% 단계는 UI 정책이며 도메인은 범위 안의 유한 실수를 허용한다.
+- `playScore(score, options)`에 선택적 `rate`(기본 1)를 추가했다. 기존 호출은 그대로 동작한다.
+  잘못된 rate는 Tone import/음성 생성 전에 거부한다. 음표·쉼표 간격·타이·메트로놈 클릭·커서가
+  같은 `tickSeconds` 하나를 사용한다. MIDI/주파수와 gate(일반 0.9/타이 1/최소 1ms)는 변경하지 않는다.
+- `PlaybackHandle.setRate(rate)`를 추가했다(D-01 정책). 같은 값·종료 후 호출은 no-op, 잘못된 값은
+  RangeError이며 진행 중 재생과 예약을 건드리지 않는다. 재예약은 기존 pause→resume과 같은
+  release()/start() 수명을 재사용한다. 새 재생 엔진·전역 AudioContext·Tone.Transport를 도입하지 않았다.
+  25ms 타이머는 여전히 UI 알림 주기이며 시계가 아니다.
+- `PlaybackControls`에 연습 속도 슬라이더(25–150%, 5% 간격, 기본 100%)와 프리셋 50/75/100/125%,
+  실효 BPM 표시를 추가했다. 정수 퍼센트의 컴포넌트 로컬 state/ref만 사용한다.
+  Command/Store/IndexedDB/JSON/Undo/revision에 관여하지 않는다. 오디오 초기화 중 바꾼 값은 초기화 완료 직후 적용한다.
+  새 status/alert role은 추가하지 않았다(`data-testid="practice-rate"` span).
+- **세션 유지 정책(구현 기본값, 변경 원하면 요청):** 연습 속도는 Stop·Pause·Score 편집·Undo/Redo·
+  조옮김 미리보기 진입 후에도 같은 편집기 세션에서 유지된다. 새로고침/편집기 재진입 시 100%로 초기화된다.
+  Score 편집 시 재생을 정지하는 기존 정책은 그대로다.
+- Score schemaVersion 2/Part.ties/Command/Repository/DB2/ADR-010/의존성/레이어 불변. ADR-004의 구현이며 새 ADR은 없다.
+  녹음 오디오의 피치 보존 타임스트레치는 제공하지 않는다(PRD MVP-008).
