@@ -1,4 +1,5 @@
 import type { KeySignature, NoteEvent, RestEvent, TimeSignature } from "@/domain/score/types";
+import type { ClipboardPayload } from "@/domain/score/clipboard";
 import type { TransposeSpec } from "@/domain/score/transpose";
 import type { TransposeErrorCode } from "@/domain/music-theory/transpose";
 
@@ -29,6 +30,12 @@ export type EditCommand =
   | { type: "UpdateRest"; partId: string; restId: string; patch: Partial<Pick<RestEvent, "startTick" | "durationTicks">> }
   | { type: "AddMeasure"; partId: string; measureId: string }
   /**
+   * 클립보드 payload를 `startTick`부터 한 번에 붙여넣는다(C-08). payload의 이벤트 ID는 호출 측이 새로 발급한 값이어야 한다.
+   * 대상 `[startTick, startTick + lengthTicks)`는 비어 있어야 하며 덮어쓰기·뒤 이벤트 밀기·마디 추가·타이 절단은 없다.
+   * 마디 경계를 넘게 된 음표만 기존 분할 규칙으로 나눠 타이로 잇는다. 실패는 부분 적용 없이 거부한다.
+   */
+  | { type: "PasteEvents"; partId: string; startTick: number; clipboard: ClipboardPayload }
+  /**
    * 논리 음표(타이 체인) 전체의 길이를 바꾼다.
    * 필요하면 마디 경계에서 다시 분할하고, 뒤 이벤트를 순서대로 재배치한다.
    */
@@ -48,6 +55,8 @@ export type CommandErrorCode =
   | "MEASURE_CAPACITY_EXCEEDED"
   | "NOT_NOTATABLE"
   | "TIE_EDIT_UNSUPPORTED"
+  | "NOTHING_TO_PASTE"
+  | "PASTE_TARGET_OCCUPIED"
   | "INVALID_SCORE";
 
 export interface CommandError {

@@ -130,7 +130,7 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-06 — 연속 구간 선택 projection
 
-- 진행 상태(2026-11-12): **구현·자동 검증 완료**(미커밋). Safari/모바일 실기기/스크린리더는 NOT RUN이다.
+- 진행 상태(2026-11-12): **구현·자동 검증 완료**(로컬 커밋 `f869d78`). Safari/모바일 실기기/스크린리더는 NOT RUN이다.
   UI 입력은 마디 단위로 구현했다(박 단위는 도메인 `selectScoreRange`만 지원).
 - 선행: H-01/H-02/D-01. 예상: score-editor 선택 UI(신규 예정), Editor 로컬 상태, StaffView 최소 연결.
 - 범위: 첫 Part의 마디/시간 범위 선택과 하이라이트. 데이터 편집/clipboard 제외.
@@ -140,6 +140,7 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-07 — 읽기 전용 Copy와 원자 Paste 엔진
 
+- 진행 상태(2026-11-12): **엔진 구현·자동 검증 완료**(미커밋). UI·저장 통합은 P3-08에 남아 있다.
 - 선행: P3-06. 예상: domain/commands/types.ts·apply.ts, application의 copy/paste 계획 함수(신규 예정), 관련 테스트.
 - 범위: 상대 tick/쉼표/gap/타이 정보를 읽기 전용 payload로 만들고 빈 대상에 단일 Paste Command 적용.
   overwrite·shift·자동 마디 증가·시스템 clipboard 제외.

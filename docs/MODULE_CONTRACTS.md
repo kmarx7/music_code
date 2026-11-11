@@ -744,3 +744,27 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   (2) 거부된 선택 요청은 이전 선택을 유지하지 않고 해제한다. (3) 단일 이벤트 선택(`selectedEventId`)과 구간 선택은
   서로 바꾸지 않는 독립 상태다(우선순위 규칙 없음, 편집 패널은 단일 선택만 따른다).
   (4) 이벤트가 없는 빈 구간도 선택으로 허용한다(복사 가능 여부는 P3-07에서 정한다).
+
+## Phase 3 — Copy/Paste 엔진 (P3-07, 2026-11-12)
+
+- `@/domain/score`(신규 `clipboard.ts`): `ClipboardPayload { lengthTicks, events, ties }`.
+  `events[].startTick`은 선택 시작 기준 상대 tick이고 `lengthTicks`가 앞뒤 gap을 보존한다. 이벤트 ID는 원본 ID이며
+  `ties`의 키로만 쓰인다. `copyScoreRange(score, range)`는 `selectScoreRange`로 **현재 Score에서 선택을 다시 계산**하므로
+  stale 선택을 복사할 수 없다. 결과는 `{ ok, clipboard }` 또는 `{ ok: false, issue, message }`
+  (`RangeSelectionIssue | EMPTY_SELECTION`). payload는 Score와 pitch/provenance 객체를 공유하지 않는다.
+  Copy는 Score/이력/저장을 바꾸지 않는다. 시스템 clipboard를 쓰지 않는다. payload는 Score/JSON/DB에 저장하지 않는다.
+- `@/application`(신규 `clipboard.ts`): `planPaste(score, clipboard, { startTick, createId, partId? })`는 순수 함수로
+  모든 원본 ID를 `createId()` 값으로 바꾸고 타이 참조를 매핑한 `PasteEvents` Command 하나를 만든다.
+- `EditCommand`에 `{ type: "PasteEvents", partId, startTick, clipboard }`를, `CommandErrorCode`에
+  `NOTHING_TO_PASTE`, `PASTE_TARGET_OCCUPIED`를 **추가**했다(기존 형태 변경 없음). 적용 순서:
+  Part 확인 → 빈 payload 거부 → 위치/길이 정수 검증 → 마디 용량(`MEASURE_CAPACITY_EXCEEDED`, 자동 마디 추가 없음)
+  → 대상 `[startTick, startTick+lengthTicks)` 점유 검사 → 이벤트 배치 → 타이 매핑 → 기존 `finalize`(validateScore).
+  어느 단계든 실패하면 입력 Score를 그대로 두고 오류만 돌려준다. 성공은 edit-session의 이력 1단위다.
+- **배치 규칙:** 각 이벤트는 `startTick + 상대 tick`에 원래 길이·Pitch 철자/MIDI·velocity·provenance 그대로 놓는다.
+  새 위치에서 마디 경계를 넘게 된 **음표만** 기존 `splitNoteIntoMeasures`로 나누고(`<id>:tieN`) 타이로 잇는다.
+  payload의 타이 `from→to`는 `from`의 마지막 조각 → `to`의 첫 조각으로 연결한다. 경계를 넘지 않는 이벤트는 재분할하지 않는다.
+  ID는 payload 안과 Score 전체에서 유일해야 한다(`DUPLICATE_ID`).
+- **구현 기본값(사용자 명시 승인 아님, 변경 요청 시 조정):** (1) "빈 대상"은 payload의 gap을 포함한 범위 전체가
+  비어 있어야 한다는 뜻으로 구현했다(gap 자리에 기존 음표가 있어도 거부). (2) 경계를 넘게 되는 쉼표는 나누지 않고
+  `NOT_NOTATABLE`로 거부한다. (3) 이벤트가 없는 구간은 선택은 되지만 복사는 거부한다. (4) Paste는 AddNote와 같이
+  `updatedAt`을 바꾸지 않는다. (5) 덮어쓰기·뒤 이벤트 밀기·몰래 조옮김은 없다(C-08 확정안 그대로).

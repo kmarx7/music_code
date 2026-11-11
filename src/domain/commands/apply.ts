@@ -16,6 +16,8 @@ import {
   NOTATABLE_DURATIONS,
 } from "@/domain/score/tie";
 import type { NoteSegment, SplitFailureCode } from "@/domain/score/tie";
+import { cloneScoreEvent } from "@/domain/score/clipboard";
+import type { TieLink } from "@/domain/score/types";
 import type {
   CommandErrorCode,
   CommandResult,
@@ -438,6 +440,96 @@ function resizeNote(
   return finalize(replacePart(score, partId, () => nextPart));
 }
 
+/**
+ * Atomic paste (C-08). Everything is checked against the candidate before one result is returned;
+ * the input Score is never mutated and a failure applies nothing.
+ */
+function pasteEvents(
+  score: Score,
+  command: Extract<EditCommand, { type: "PasteEvents" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+  const { clipboard, startTick } = command;
+  if (clipboard.events.length === 0) return fail("NOTHING_TO_PASTE", "붙여넣을 내용이 없습니다.");
+  if (!Number.isSafeInteger(startTick) || startTick < 0) {
+    return fail("INVALID_DURATION", "붙여넣을 위치는 0 이상의 정수 tick이어야 합니다.");
+  }
+  if (!Number.isSafeInteger(clipboard.lengthTicks) || clipboard.lengthTicks <= 0) {
+    return fail("INVALID_DURATION", "클립보드 길이가 올바르지 않습니다.");
+  }
+
+  const ticksPerMeasure = measureTicks(part.timeSignature);
+  const endTick = startTick + clipboard.lengthTicks;
+  if (endTick > part.measures.length * ticksPerMeasure) {
+    return fail("MEASURE_CAPACITY_EXCEEDED", "붙여넣을 마디 공간이 부족합니다. 마디를 추가한 뒤 다시 시도해 주세요.");
+  }
+  const blocking = flatten(part).find(({ event }) =>
+    event.startTick < endTick && event.startTick + event.durationTicks > startTick);
+  if (blocking) {
+    return fail("PASTE_TARGET_OCCUPIED",
+      `붙여넣을 구간이 비어 있지 않습니다(${Math.floor(blocking.event.startTick / ticksPerMeasure) + 1}마디). 빈 구간에만 붙여넣을 수 있습니다.`);
+  }
+
+  const placements: Placement[] = [];
+  const ties: TieLink[] = [];
+  const chainEnds = new Map<string, { first: string; last: string }>();
+  const usedIds = new Set<string>();
+  const claim = (id: string): boolean => {
+    if (!id.trim() || usedIds.has(id) || hasEventId(score, id)) return false;
+    usedIds.add(id);
+    return true;
+  };
+
+  for (const source of clipboard.events) {
+    const { durationTicks } = source;
+    if (!Number.isSafeInteger(source.startTick) || source.startTick < 0 ||
+        !Number.isSafeInteger(durationTicks) || durationTicks <= 0 ||
+        source.startTick + durationTicks > clipboard.lengthTicks) {
+      return fail("INVALID_DURATION", "클립보드 이벤트의 위치·길이가 올바르지 않습니다.");
+    }
+    const absolute = startTick + source.startTick;
+    const measure = part.measures[Math.floor(absolute / ticksPerMeasure)];
+    const crosses = absolute + durationTicks > (measure.index + 1) * ticksPerMeasure;
+
+    if (source.kind === "rest" || !crosses) {
+      if (crosses) {
+        return fail("NOT_NOTATABLE", "이 위치에서는 쉼표가 마디 경계를 넘습니다. 다른 박 위치에 붙여넣어 주세요.");
+      }
+      if (!claim(source.id)) return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${source.id}`);
+      placements.push({ measureId: measure.id, event: cloneScoreEvent(source, { startTick: absolute }) });
+      if (source.kind === "note") chainEnds.set(source.id, { first: source.id, last: source.id });
+      continue;
+    }
+
+    // Only a note that now crosses a barline is re-split; every other segment keeps its exact duration.
+    const split = splitNoteIntoMeasures(part, {
+      id: source.id, pitch: { ...source.pitch }, startTick: absolute, durationTicks,
+      velocity: source.velocity, provenance: source.provenance ? { ...source.provenance } : undefined,
+    });
+    if (!split.ok) {
+      const mapped = mapSplitFailure(split.code);
+      return fail(mapped.code, mapped.message);
+    }
+    for (const segment of split.segments) {
+      if (!claim(segment.event.id)) return fail("DUPLICATE_ID", `이미 존재하는 이벤트 ID입니다: ${segment.event.id}`);
+      placements.push({ measureId: segment.measureId, event: segment.event });
+    }
+    ties.push(...split.ties);
+    chainEnds.set(source.id, { first: split.segments[0].event.id, last: split.segments[split.segments.length - 1].event.id });
+  }
+
+  for (const tie of clipboard.ties) {
+    const from = chainEnds.get(tie.from);
+    const to = chainEnds.get(tie.to);
+    if (!from || !to) return fail("INVALID_SCORE", "클립보드의 붙임줄이 payload 안의 음표를 가리키지 않습니다.");
+    ties.push({ from: from.last, to: to.first });
+  }
+
+  const nextPart: Part = { ...mergePlacements(part, placements), ties: [...part.ties, ...ties] };
+  return finalize(replacePart(score, command.partId, () => nextPart));
+}
+
 /** Compare only the musical fields owned by transposition, not timestamps or object/key order. */
 function sameTransposeContent(before: Score, after: Score): boolean {
   return before.parts.every((part, p) => {
@@ -524,6 +616,9 @@ export function applyEditCommand(
       };
       return finalize(replacePart(score, command.partId, () => nextPart));
     }
+
+    case "PasteEvents":
+      return pasteEvents(score, command);
 
     case "ResizeNote":
       return resizeNote(score, command.partId, command.noteId, command.durationTicks);

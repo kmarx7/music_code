@@ -10,3 +10,4 @@ export * from "./range";
 export * from "./range-recommendations";
 export * from "./notation";
 export * from "./selection";
+export * from "./clipboard";

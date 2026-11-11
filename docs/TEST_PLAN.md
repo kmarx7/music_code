@@ -1280,3 +1280,19 @@ npm run test:e2e
   **IndexedDB 원시 row 완전 동일**, 조옮김 미리보기 DOM에 하이라이트 없음,
   편집 시 무효화와 Undo/Redo로 되살아나지 않음, 새로고침 초기화, 모바일 hasTouch tap.
 - NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 하이라이트 색 대비의 사람 눈 확인, 대형 악보 성능.
+
+
+## P3-07 — Copy/Paste 엔진 (2026-11-12, Claude Code)
+
+- 단위·통합 **49파일/825개 PASS**(기존811 유지 + 신규14). `tests/unit/clipboard.test.ts`(실패 선확인):
+  - Copy: 상대 tick·쉼표·앞뒤 gap(lengthTicks)·타이, Pitch 철자/MIDI/velocity/provenance 보존,
+    payload와 Score의 객체 비공유, Score 직렬화 불변, CUTS_TIE/CUTS_EVENT/OUT_OF_SCORE/EMPTY_SELECTION 거부.
+  - Paste 성공: 빈 대상에 같은 상대 위치, fresh ID와 타이 참조 매핑, 원본 이벤트·원본 Score 객체 불변,
+    5회 연속 붙여넣기 후 ID 유일, 박 위치가 달라 경계를 넘는 음표의 재분할과 체인 연결(체인 구성원이 분할되는 경우 포함),
+    JSON 왕복 동일·updatedAt 불변, 8분음표 단위 8개 offset에서 성공 결과의 validateScore 통과와 병합 음(소리) 동일.
+  - Paste 거부(부분 적용 없음): 대상 점유(시작·payload의 후행 gap·자기 자신 위), session 객체 동일(past/future 불변),
+    마디 부족·음수/비정수 위치, 경계를 넘는 쉼표(NOT_NOTATABLE), 빈 payload, 새 ID 미발급(DUPLICATE_ID), 없는 Part.
+  - 이력: 성공한 Paste는 Undo 1회로 원본 Score 객체로 돌아가고 Redo 1회로 같은 결과 객체가 된다.
+- typecheck/lint/architecture(67모듈/211의존성/60파일 위반0) PASS.
+- Chromium E2E **63/63 PASS**(신규 없음. UI 변경이 없어 회귀 확인으로만 실행).
+- NOT RUN: 화면 조작을 통한 복사·붙여넣기, 저장/재열기/두 탭 충돌 통합(P3-08), 대형 악보 성능.

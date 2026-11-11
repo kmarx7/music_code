@@ -820,7 +820,7 @@
 - 다음: (1) A–B 변경 커밋 여부, (2) 실제 청취 인수(UAT-A), (3) P3-06 연속 구간 선택(C-08 확정됨),
   (4) H-03 브라우저 성능 측정.
 
-## 9. P3-06 — 연속 구간 선택 projection (구현·자동 검증 완료, 미커밋, 2026-11-12)
+## 9. P3-06 — 연속 구간 선택 projection (구현·자동 검증 완료, 로컬 커밋 `f869d78`, 2026-11-12)
 
 - 요청: 사용자가 "A–B 반복 커밋하고 P3-06 연속 구간 선택 진행"을 지시했다. A–B는 `a5d1965`로 로컬 커밋했다.
 - 정책 근거: D-01의 C-08 확정안(첫 Part, 연속 `[start,end)`, 타이 체인을 자르는 선택 거부).
@@ -845,6 +845,31 @@
   `npx playwright test`(프로덕션 build+start) **Chromium 63/63 PASS**(기존61+신규2).
 - 미검증: Safari/WebKit/Firefox, 모바일 실기기(hasTouch 에뮬레이션만), 하이라이트 색의 실제 시인성·색각 접근성,
   스크린리더 낭독. 대형 악보에서의 선택 계산 성능은 측정하지 않았다(H-03 미수행).
-- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. P3-06 변경분은 commit하지 않았다.
+- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. 작성 시점에는 미커밋이었고,
+  같은 날 사용자 요청으로 `f869d78`에 로컬 커밋했다(push 없음).
 - 다음: (1) P3-06 커밋 여부, (2) P3-07 읽기 전용 Copy·원자 Paste 엔진(새 Command 추가 포함),
   (3) 실제 청취 인수(UAT-A), (4) H-03 브라우저 성능 측정.
+
+## 10. P3-07 — 읽기 전용 Copy와 원자 Paste 엔진 (구현·자동 검증 완료, 미커밋, 2026-11-12)
+
+- 요청: 사용자가 "커밋 해주고 다음 진행"을 지시했다. P3-06은 `f869d78`로 로컬 커밋했다.
+- 범위: 도메인/애플리케이션 엔진만. Copy/Paste 버튼·clipboard 보관·저장 통합은 P3-08이며 **화면에서는 아직 쓸 수 없다.**
+- 정책 근거: D-01의 C-08 확정안. 확정안에 없는 세부(대상 범위 전체가 비어야 함, 경계 넘는 음표만 재분할,
+  경계 넘는 쉼표 거부, 이벤트 없는 구간 복사 거부, updatedAt 미변경)는 구현 기본값으로 정해
+  MODULE_CONTRACTS "Phase 3 — Copy/Paste 엔진" 절에 사용자 명시 승인 항목과 구분해 기록했다.
+- 재사용: `selectScoreRange`(복사 시 재검증), `splitNoteIntoMeasures`/`mapSplitFailure`, `mergePlacements`,
+  `finalize`(validateScore), 기존 edit-session 이력. `store.dispatch` 반복 없이 Command 하나로 적용한다.
+- 신규 제품 파일 2개: `src/domain/score/clipboard.ts`(`ClipboardPayload`, `copyScoreRange`, `cloneScoreEvent`),
+  `src/application/clipboard.ts`(`planPaste`). 변경 제품 파일 4개: `domain/commands/types.ts`(`PasteEvents` Command,
+  오류 코드 `NOTHING_TO_PASTE`/`PASTE_TARGET_OCCUPIED` 추가), `domain/commands/apply.ts`(`pasteEvents`),
+  `domain/score/index.ts`·`application/index.ts`(export). 기존 Command 형태·오류 코드는 그대로다(추가만).
+- 테스트: `tests/unit/clipboard.test.ts` 14개(구현 전 14개 실패 확인 후 구현, 구현 후 첫 실행에서 통과).
+  기존 테스트 삭제·skip·기대값 변경 없음.
+- 실제 실행: `npm run test` **49파일/825개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 67모듈/211의존성/경계60파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 63/63 PASS**(UI 변경 없음, 회귀 확인용).
+- 미검증: 화면을 통한 실제 복사·붙여넣기(UI 없음), IndexedDB 저장/재열기·두 탭 OCC와의 통합(P3-08 범위),
+  대형 악보에서의 붙여넣기 성능(H-03 미수행).
+- Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-07 변경분은 commit하지 않았다.
+- 다음: (1) P3-07 커밋 여부, (2) P3-08 Copy/Paste UI 및 저장 통합, (3) P3-09 원자 Cut,
+  (4) 실제 청취 인수(UAT-A), (5) H-03 브라우저 성능 측정.
