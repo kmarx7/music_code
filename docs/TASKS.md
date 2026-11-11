@@ -1,9 +1,13 @@
 # TASKS.md — Phase 0 작업 및 MVP 추적
 
-- 최종 갱신: 2026-11-09
+- 최종 갱신: 2026-11-11 (Claude Code 인수인계; 제품 기준은 아래 시간순 기록 참조)
 - 작업 단위: `docs/PHASE_0_PLAN.md` P0-01 ~ P0-08
 - 상태 표기: `Done` / `Partial` / `Pending` / `Blocked`
 - 증거는 실제 실행 결과만 기록한다(추정 금지).
+
+> Claude Code로 이어서 작업할 때는 [루트 안내](../CLAUDE.md)와
+> [최신 인수인계](CLAUDE_HANDOFF.md)를 먼저 읽는다. 아래 상단 표는 과거 시점 수치를 포함한다.
+> 최신 H-02 제품 기준은 45파일/706개 및 사용자 Mac Chromium57/57 기록이며, 이번 직접 재검증은 §6 참조.
 
 ## 1. Phase 0 작업 상태
 
@@ -748,3 +752,21 @@
 4. [마스터 플랜](PHASE3_MASTER_PLAN.md)의 제안 계약(C-08, rate/loop 경계)을 확정한 뒤 작은 기능 단계로 진행한다.
 5. 기존 Phase 2 자동 검증 614/55는 유지하되 경계 결함·미검증 항목 해소 전 최종 무조건 인수로 표시하지 않는다.
    강제 종료 저널·다중 Part 확대·MusicXML 입력·PDF 선행·UI 전면 개편은 별도 승인 범위다.
+
+## 6. HANDOFF-01 — Claude Code 인수인계 (Done, 2026-11-11)
+
+- 요청: Codex 사용량 제한에 따라 현재 진행 내용과 남은 작업을 로컬 Markdown으로 상세 전달한다.
+- 기준: main `e69ab20`, 문서 작성 전 clean. 로컬 `origin/main` 대비15커밋 ahead이며 fetch는 수행하지 않았다.
+  H-01 `2d7c776`, H-02 정책 `a4d9a47`, 제품 `e69ab20` 커밋 존재를 확인했다.
+  과거 커밋 보류/권한 오류는 이력이며 현재 미커밋 제품 작업으로 해석하지 않는다.
+- 추가: 루트 `CLAUDE.md`, `docs/CLAUDE_HANDOFF.md`, `docs/CLAUDE_START_PROMPT.md`.
+  기존 문서·모듈·공개 API를 근거로 구현 상태/저장 보호/회귀/미검증/Phase3~6/시작 프롬프트를 정리했다.
+  기존 계획의 낡은 상태와 제안 정책을 구분하고, 같은 로컬 폴더를 열어야 미push 구현을 이어갈 수 있음을 명시했다.
+- 이번 실제 재실행: `npm run test` **45파일/706개 PASS**, `npm run typecheck` PASS,
+  `npm run lint` PASS, `npm run check:architecture` **63모듈/192의존성/경계56파일 위반0**,
+  `npm run build` PASS. 모두 exit0.
+- 이번 E2E는 문서 변경만 하므로 재실행하지 않았다. 사용자 Mac57/57은 §4.38의 기존 제품 검증 기록이다.
+  청취/Safari/모바일 실기기/대형 브라우저 성능은 별도 미검증으로 유지한다.
+- 제품 코드/패키지/Score v2/DB2/ADR-010/아키텍처 변경 없음. commit/push/deploy/사용자 DB 조작 없음.
+- 다음: Claude에서 인수인계 확인 후 새 사용자 요청에 따라 H-03/D-01부터 범위를 정한다.
+  Phase3 계획을 구현 완료 또는 기존 승인으로 간주하지 않는다.
