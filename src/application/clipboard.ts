@@ -1,5 +1,6 @@
 import type { Score } from "@/domain/score/types";
-import { cloneScoreEvent, type ClipboardPayload } from "@/domain/score/clipboard";
+import { cloneScoreEvent, copyScoreRange, type ClipboardPayload } from "@/domain/score/clipboard";
+import type { ScoreRange } from "@/domain/score/selection";
 import type { EditCommand } from "@/domain/commands/types";
 
 export type PastePlan =
@@ -39,5 +40,27 @@ export function planPaste(
       type: "PasteEvents", partId: part.id, startTick: input.startTick,
       clipboard: { lengthTicks: clipboard.lengthTicks, events, ties },
     },
+  };
+}
+
+export type CutPlan =
+  | { ok: true; command: EditCommand; clipboard: ClipboardPayload }
+  | { ok: false; message: string };
+
+/**
+ * Builds one atomic CutEvents command plus the payload that replaces the clipboard.
+ * Pure: the caller dispatches the command once and swaps the clipboard only if that dispatch succeeds.
+ */
+export function planCut(score: Score, range: ScoreRange): CutPlan {
+  const part = score.parts[0];
+  if (!part) return { ok: false, message: "파트가 없습니다." };
+  const copied = copyScoreRange(score, range);
+  if (!copied.ok) {
+    return { ok: false, message: copied.issue === "EMPTY_SELECTION" ? "잘라낼 음표·쉼표가 없습니다." : copied.message };
+  }
+  return {
+    ok: true,
+    command: { type: "CutEvents", partId: part.id, startTick: range.startTick, endTick: range.endTick },
+    clipboard: copied.clipboard,
   };
 }

@@ -786,3 +786,17 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - **구현 기본값(사용자 명시 승인 아님):** append 모드에서는 붙여넣지 않고 안내한다. 성공 시 편집 커서를
   `startTick + lengthTicks`로 옮긴다. 저장 충돌/삭제 상태에서도 메모리 편집은 기존 편집과 같이 허용한다.
   키보드 단축키는 제공하지 않는다. 문서 간 붙여넣기는 없다(C-08 확정안).
+
+## Phase 3 — 원자 Cut (P3-09, 2026-11-12)
+
+- `EditCommand`에 `{ type: "CutEvents", partId, startTick, endTick }`를, `CommandErrorCode`에 `INVALID_SELECTION`,
+  `NOTHING_TO_CUT`을 **추가**했다(기존 형태 변경 없음). 적용 순서: Part 확인(첫 Part만, 아니면 `PART_NOT_FOUND`) →
+  `selectScoreRange`로 현재 Score에서 구간 재검증(실패는 `INVALID_SELECTION`과 선택 규칙의 메시지) → 이벤트 없음 거부
+  (`NOTHING_TO_CUT`) → 구간 이벤트와 그 내부 타이 제거 → 기존 `finalize`(validateScore). 실패는 입력 Score 그대로다.
+  구간이 타이로 닫혀 있으므로 범위 밖 타이는 건드리지 않고 dangling tie가 생기지 않는다. 다른 이벤트·마디는 이동·삭제하지 않는다.
+- `@/application`: `planCut(score, range)` → `{ ok, command, clipboard }` 또는 `{ ok: false, message }`. 순수 함수다.
+  `clipboard`는 `copyScoreRange`와 같은 payload다. **호출 측은 command dispatch가 성공한 뒤에만 clipboard를 교체한다.**
+- `ClipboardControls`: 버튼 "구간 잘라내기"(유효한 구간 선택이 없으면 비활성). prop `onPaste`는 `onCommand`로 이름을 바꿨다
+  (Cut·Paste 공용, 반환은 오류 메시지 또는 null). 실패 시 이전 clipboard를 유지한다.
+- **구현 기본값(사용자 명시 승인 아님):** 이벤트 없는 구간 Cut 거부, Undo/Redo는 clipboard를 바꾸지 않음,
+  Cut 후 편집 커서 유지, `updatedAt` 미변경.

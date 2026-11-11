@@ -874,7 +874,7 @@
 - 다음: (1) P3-07 커밋 여부, (2) P3-08 Copy/Paste UI 및 저장 통합, (3) P3-09 원자 Cut,
   (4) 실제 청취 인수(UAT-A), (5) H-03 브라우저 성능 측정.
 
-## 11. P3-08 — Copy/Paste UI 및 저장 통합 (구현·자동 검증 완료, 미커밋, 2026-11-12)
+## 11. P3-08 — Copy/Paste UI 및 저장 통합 (구현·자동 검증 완료, 로컬 커밋 `3a6fbc8`, 2026-11-12)
 
 - 요청: 사용자가 "커밋해주고 다음 진행"을 지시했다. P3-07은 `635cd37`(`feat(score): add copy payload and atomic paste command`)로
   로컬 커밋했다(push 없음). 위 §10의 "미커밋" 서술은 이 커밋으로 해소됐다.
@@ -899,3 +899,28 @@
   사람이 직접 써 본 사용감(특히 "대상 범위 전체가 비어야 함" 규칙).
 - Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-08 변경분은 commit하지 않았다.
 - 다음: (1) P3-08 커밋 여부, (2) P3-09 원자 Cut, (3) P3-10 통합 인수, (4) 실제 청취 인수(UAT-A), (5) H-03.
+
+## 12. P3-09 — 원자 Cut (구현·자동 검증 완료, 미커밋, 2026-11-12)
+
+- 요청: 사용자가 "커밋해주고 다음 진행"을 지시했다. P3-08은 `3a6fbc8`(`feat(editor): add copy and paste controls`)로
+  로컬 커밋했다(push 없음). 위 §11의 "미커밋" 서술은 이 커밋으로 해소됐다.
+- 범위: 타이가 닫힌 구간 선택의 원자 삭제와 clipboard 교체. 자동 타이 절단·뒤 이벤트 당기기·마디 삭제 없음.
+- 변경 제품 파일 5개: `domain/commands/types.ts`(`CutEvents` Command, 오류 코드 `INVALID_SELECTION`/`NOTHING_TO_CUT` 추가),
+  `domain/commands/apply.ts`(`cutEvents`), `application/clipboard.ts`(`planCut`, `CutPlan`),
+  `features/score-editor/ClipboardControls.tsx`("구간 잘라내기" 버튼, prop `onPaste`→`onCommand`),
+  `app/editor/[scoreId]/page.tsx`(`clipboardCommand`). 신규 제품 파일 없음. 기존 Command·오류 코드는 그대로다(추가만).
+- 동작: `planCut`이 `copyScoreRange`로 payload를 만들고 `CutEvents` Command 하나를 계획한다. Command는 적용 시
+  `selectScoreRange`로 현재 Score에서 구간을 다시 검증한다. UI는 dispatch가 성공한 뒤에만 clipboard를 교체한다.
+  `DeleteEvent` 반복 dispatch는 쓰지 않는다. Undo 1회로 모든 이벤트와 타이가 돌아온다.
+- 구현 기본값(사용자 명시 승인 아님): (1) 이벤트가 없는 구간은 잘라내기 거부, (2) Undo는 악보만 되돌리고 clipboard는
+  잘라낸 내용 그대로 유지(clipboard는 이력 밖), (3) 잘라내기 후 편집 커서는 움직이지 않음, (4) `updatedAt` 미변경.
+- 테스트: `tests/unit/cut.test.ts` 6개(구현 전 6개 실패 확인), `tests/e2e/cut.spec.ts` 2개(UI 구현 전 2개 실패 확인).
+  신규 단위 테스트 1곳에서 `validateScore` 반환형을 잘못 써 구현 직후 1개가 실패했고 그 신규 기대식을 바로잡았다.
+  기존 테스트 삭제·skip·기대값 변경 없음.
+- 실제 실행: `npm run test` **51파일/832개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 68모듈/219의존성/경계61파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 69/69 PASS**(기존67+신규2).
+- 미검증: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보 성능(H-03), 사람의 수동 사용 확인.
+  Cut 전용 두 탭 OCC/Tombstone E2E는 추가하지 않았다(같은 dispatch·autosave 경로인 Paste에서 검증).
+- Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-09 변경분은 commit하지 않았다.
+- 다음: (1) P3-09 커밋 여부, (2) P3-10 Phase 3 통합 인수, (3) 수동 UAT(청취·Safari·실기기), (4) H-03.

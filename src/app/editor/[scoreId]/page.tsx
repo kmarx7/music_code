@@ -215,7 +215,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   }
 
   /** Same single-dispatch path as runCommand; the clipboard panel shows the error next to its buttons. */
-  function pasteCommand(command: EditCommand): string | null {
+  function clipboardCommand(command: EditCommand): string | null {
     const result = scoreStore.dispatch(command);
     if (result && !result.ok) return result.error.message;
     setMessage("");
@@ -386,7 +386,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         <RangeSelect score={score} selection={rangeSelection}
           onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
         <ClipboardControls score={score} selection={rangeSelection} cursorTick={cursorTick} clipboard={clipboard}
-          onCopy={setClipboard} onPaste={pasteCommand} onPasted={moveCursor} />
+          onCopy={setClipboard} onCommand={clipboardCommand} onPasted={moveCursor} />
         <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId}
           rangeEventIds={rangeSelection?.eventIds} />
       </div>

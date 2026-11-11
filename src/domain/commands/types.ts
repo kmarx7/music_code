@@ -36,6 +36,12 @@ export type EditCommand =
    */
   | { type: "PasteEvents"; partId: string; startTick: number; clipboard: ClipboardPayload }
   /**
+   * 첫 Part의 `[startTick, endTick)` 구간에 든 이벤트와 그 내부 타이를 한 번에 삭제한다(C-08 Cut).
+   * 이벤트 중간이나 타이 체인을 자르는 구간, 이벤트가 없는 구간은 거부한다. 빈 자리는 gap으로 남고
+   * 뒤 이벤트를 당기지 않으며 타이를 자동으로 끊지 않는다. clipboard 교체는 호출 측이 성공 후에만 한다.
+   */
+  | { type: "CutEvents"; partId: string; startTick: number; endTick: number }
+  /**
    * 논리 음표(타이 체인) 전체의 길이를 바꾼다.
    * 필요하면 마디 경계에서 다시 분할하고, 뒤 이벤트를 순서대로 재배치한다.
    */
@@ -57,6 +63,8 @@ export type CommandErrorCode =
   | "TIE_EDIT_UNSUPPORTED"
   | "NOTHING_TO_PASTE"
   | "PASTE_TARGET_OCCUPIED"
+  | "INVALID_SELECTION"
+  | "NOTHING_TO_CUT"
   | "INVALID_SCORE";
 
 export interface CommandError {

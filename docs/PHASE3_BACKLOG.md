@@ -151,7 +151,7 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-08 — Copy/Paste UI 및 저장 통합
 
-- 진행 상태(2026-11-12): **구현·자동 검증 완료**(미커밋). 단위·통합 826 PASS, Chromium E2E 67/67 PASS.
+- 진행 상태(2026-11-12): **구현·자동 검증 완료**, 로컬 커밋 `3a6fbc8`. 단위·통합 826 PASS, Chromium E2E 67/67 PASS.
   상세는 TASKS §11, TEST_PLAN "P3-08", MODULE_CONTRACTS "Phase 3 — Copy/Paste UI 및 저장 통합". Safari·실기기는 NOT RUN.
 - 선행: P3-07. 예상: Editor/score-editor 최소 제어, E2E/integration 테스트(신규 예정).
 - 범위: 현재 선택 복사와 기존 편집 커서에 붙여넣기. 문서 간 paste는 초기 제외 제안이다.
@@ -161,6 +161,8 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-09 — 원자 Cut
 
+- 진행 상태(2026-11-12): **구현·자동 검증 완료**(미커밋). 단위·통합 832 PASS, Chromium E2E 69/69 PASS.
+  상세는 TASKS §12, TEST_PLAN "P3-09", MODULE_CONTRACTS "Phase 3 — 원자 Cut". Safari·실기기는 NOT RUN.
 - 선행: P3-08. 예상: 같은 Command/application/UI와 단위·통합·E2E.
 - 범위: 타이가 닫힌 선택의 삭제와 clipboard 교체. 자동 tie 절단·뒤 이벤트 당기기 제외.
 - 수용: 성공한 경우에만 clipboard를 교체한다. 실패는 이전 clipboard/Score/이력 그대로다.

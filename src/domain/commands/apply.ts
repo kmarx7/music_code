@@ -17,6 +17,7 @@ import {
 } from "@/domain/score/tie";
 import type { NoteSegment, SplitFailureCode } from "@/domain/score/tie";
 import { cloneScoreEvent } from "@/domain/score/clipboard";
+import { selectScoreRange } from "@/domain/score/selection";
 import type { TieLink } from "@/domain/score/types";
 import type {
   CommandErrorCode,
@@ -441,6 +442,34 @@ function resizeNote(
 }
 
 /**
+ * Atomic cut (C-08). The range is re-validated against this exact Score, so a stale selection cannot be cut.
+ * Only events inside the tie-closed range and their internal ties are removed; nothing else moves.
+ */
+function cutEvents(
+  score: Score,
+  command: Extract<EditCommand, { type: "CutEvents" }>,
+): CommandResult {
+  const part = partOf(score, command.partId);
+  // Range selection is defined on the first part only (C-08).
+  if (!part || part !== score.parts[0]) {
+    return fail("PART_NOT_FOUND", `구간 잘라내기를 적용할 수 없는 part입니다: ${command.partId}`);
+  }
+  const selected = selectScoreRange(score, { startTick: command.startTick, endTick: command.endTick });
+  if (!selected.ok) return fail("INVALID_SELECTION", selected.message);
+  if (selected.selection.eventIds.length === 0) return fail("NOTHING_TO_CUT", "잘라낼 음표·쉼표가 없습니다.");
+
+  const removed = new Set(selected.selection.eventIds);
+  const nextPart: Part = {
+    ...part,
+    ties: withoutTiesTouching(part.ties, removed),
+    measures: part.measures.map((measure) => measure.events.some((event) => removed.has(event.id))
+      ? { ...measure, events: measure.events.filter((event) => !removed.has(event.id)) }
+      : measure),
+  };
+  return finalize(replacePart(score, command.partId, () => nextPart));
+}
+
+/**
  * Atomic paste (C-08). Everything is checked against the candidate before one result is returned;
  * the input Score is never mutated and a failure applies nothing.
  */
@@ -628,6 +657,9 @@ export function applyEditCommand(
 
     case "DeleteEvent":
       return deleteEvent(score, command);
+
+    case "CutEvents":
+      return cutEvents(score, command);
 
     default:
       return fail("INVALID_SCORE", "지원하지 않는 command 입니다.");

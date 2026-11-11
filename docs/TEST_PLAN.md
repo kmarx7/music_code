@@ -1316,3 +1316,19 @@ npm run test:e2e
   4. 모바일 hasTouch(390×844) tap으로 복사·붙여넣기, 저장 확인, 가로 넘침 없음.
 - 주의: E2E 4개는 구현 전 실패 실행 없이 구현 후 처음 실행했다.
 - NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보 성능, 사람의 수동 사용 확인.
+
+
+## P3-09 — 원자 Cut (2026-11-12, Claude Code)
+
+- 단위·통합 **51파일/832개 PASS**(기존826 유지 + 신규6). `tests/unit/cut.test.ts`(실패 선확인):
+  구간 이벤트·내부 타이만 삭제하고 나머지 이벤트 객체·마디 수·updatedAt 불변, 입력 Score 직렬화 불변, JSON 왕복,
+  payload가 Copy와 동일하고 같은 자리에 붙여넣으면 병합 음(소리) 동일, 범위 밖 타이 보존, 100세그먼트 체인 전체 Cut 후 타이 0,
+  계획 단계 거부(타이 절단·이벤트 중간·빈 구간·악보 밖·역전·비정수·Part 없음), Command 단계 거부
+  (`INVALID_SELECTION`/`NOTHING_TO_CUT`/`PART_NOT_FOUND`, 첫 Part 아님)와 session 객체 동일, Undo 1회=원본 객체·Redo 1회=같은 결과.
+- typecheck/lint/architecture(68모듈/219의존성/61파일 위반0) PASS.
+- Chromium E2E **69/69 PASS**(기존67+신규2, 프로덕션 build 포함, UI 구현 전 실패 확인). `tests/e2e/cut.spec.ts`:
+  선택 없으면 버튼 비활성, 타이를 자르는 구간은 선택 자체가 거부되어 Cut 불가, 빈 마디 Cut 거부 시 이전 clipboard·
+  이벤트 수·**IndexedDB 원시 row 불변**, 성공 시 이벤트 1개만 남고 타이 0·마디 8개 유지·revision 정확히 +1·clipboard 교체·선택 해제,
+  Undo 1회 후 저장 Part가 원본과 동일하고 clipboard는 유지, Redo, 5마디에 붙여넣기(새 ID·타이 재구성), 새로고침 후 유지,
+  모바일 hasTouch tap으로 Cut→Paste와 가로 넘침 없음.
+- NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보 성능, Cut 전용 두 탭 OCC/Tombstone E2E, 수동 사용 확인.
