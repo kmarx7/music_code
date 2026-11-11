@@ -795,7 +795,7 @@
 - 다음: (1) 이 변경과 인계 문서의 로컬 커밋 여부 결정, (2) P3-04 전 A–B loop 경계 정책 확정,
   (3) H-03 브라우저 성능 측정, (4) 실제 청취 인수.
 
-## 8. P3-04~05 — A–B 반복 (구현·자동 검증 완료, 미커밋, 2026-11-11)
+## 8. P3-04~05 — A–B 반복 (구현·자동 검증 완료, 로컬 커밋 `a5d1965`, 2026-11-11)
 
 - 요청: 사용자가 "문서 커밋과 기능 커밋 분리해서 커밋하고 A–B 반복 진행"을 지시했다.
   로컬 커밋 2개 생성: `8a7d8f1`(인계 문서), `277a0e7`(연습 속도+D-01 기록). push/deploy 없음.
@@ -815,6 +815,36 @@
   `npx playwright test`(프로덕션 build+start) **Chromium 61/61 PASS**(기존59+신규2), `git diff --check` PASS.
 - 미검증: 실제 스피커 청취(경계 잔음·중복 어택·장시간 drift 체감), Safari/WebKit/Firefox, 모바일 실기기,
   메인 스레드 장시간 정지 시 다음 pass 예약 지연. Tone은 단위 테스트에서 대역이다.
-- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. A–B 변경분은 commit하지 않았다.
+- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. 작성 시점에는 미커밋이었고,
+  2026-11-12 사용자 요청으로 `a5d1965`에 로컬 커밋했다(push 없음).
 - 다음: (1) A–B 변경 커밋 여부, (2) 실제 청취 인수(UAT-A), (3) P3-06 연속 구간 선택(C-08 확정됨),
   (4) H-03 브라우저 성능 측정.
+
+## 9. P3-06 — 연속 구간 선택 projection (구현·자동 검증 완료, 미커밋, 2026-11-12)
+
+- 요청: 사용자가 "A–B 반복 커밋하고 P3-06 연속 구간 선택 진행"을 지시했다. A–B는 `a5d1965`로 로컬 커밋했다.
+- 정책 근거: D-01의 C-08 확정안(첫 Part, 연속 `[start,end)`, 타이 체인을 자르는 선택 거부).
+  UI 입력 단위(마디)·거부 시 선택 해제·단일 이벤트 선택과의 관계는 구현 기본값으로 정해
+  MODULE_CONTRACTS "Phase 3 — 연속 구간 선택" 절에 사용자 명시 승인 항목과 구분해 기록했다.
+- 재사용: `playbackLoopIssue`/`measureRangeLoop`(범위·마디→tick 검증), `chainIdsOf`(타이 체인),
+  Editor 로컬 state, StaffView의 `data-event-id` DOM. 새 의존성·전역 Store·Command·저장 필드 없음.
+- 신규 제품 파일 2개: `src/domain/score/selection.ts`(`selectScoreRange`, `selectMeasureRange`),
+  `src/features/score-editor/RangeSelect.tsx`(마디 범위 폼·상태·오류).
+  변경 제품 파일 5개: `domain/score/index.ts`·`score-editor/index.ts`(export),
+  `StaffView.tsx`(선택적 `rangeEventIds`, SVG 재렌더 없는 DOM 표시), `app/editor/[scoreId]/page.tsx`(로컬 선택 state·무효화·목록 표시),
+  `app/globals.css`(`data-range-selected` 스타일).
+- 테스트: `tests/unit/range-selection.test.ts` 14개(구현 전 14개 실패 확인 후 구현),
+  `tests/e2e/range-selection.spec.ts` 2개. E2E 첫 실행에서 1건 실패했는데 원인은 테스트의 잘못된 가정
+  (쉼표 삽입이 그 쉼표를 단일 선택하는 기존 동작)이었고, 제품 코드가 아니라 신규 테스트 기대를 실제 동작에 맞췄다.
+  기존 테스트 삭제·skip·기대값 변경 없음.
+- 회귀 1건 발견·수정: StaffView 첫 구현(두 번째 `useRef`와 `.then().catch()`)이 기존
+  `tests/unit/staff-notation-error.test.ts` 2개를 깨뜨렸다. 테스트는 그대로 두고 제품 코드를 고쳤다
+  (선택 ID를 요소별 WeakMap에 보관, 렌더 effect를 마지막에 두고 `.then(ok, fail)`로 오류 안내 시점 유지).
+- 실제 실행(수정 후 재실행): `npm run test` **48파일/811개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 65모듈/201의존성/경계58파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 63/63 PASS**(기존61+신규2).
+- 미검증: Safari/WebKit/Firefox, 모바일 실기기(hasTouch 에뮬레이션만), 하이라이트 색의 실제 시인성·색각 접근성,
+  스크린리더 낭독. 대형 악보에서의 선택 계산 성능은 측정하지 않았다(H-03 미수행).
+- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. P3-06 변경분은 commit하지 않았다.
+- 다음: (1) P3-06 커밋 여부, (2) P3-07 읽기 전용 Copy·원자 Paste 엔진(새 Command 추가 포함),
+  (3) 실제 청취 인수(UAT-A), (4) H-03 브라우저 성능 측정.

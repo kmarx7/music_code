@@ -1263,3 +1263,20 @@ npm run test:e2e
   **IndexedDB 원시 row 완전 동일**, 편집 시 정지 및 유효 범위 유지, 새로고침 초기화, 모바일 hasTouch tap·가로 넘침 없음.
 - NOT RUN: 실제 오디오 청취(PRD의 "audible stuck notes 없음"은 예약 인자·DOM으로만 검증), Safari/WebKit/Firefox,
   모바일 실기기, 장시간 반복 drift 실측, 메인 스레드 정지 상황.
+
+
+## P3-06 — 연속 구간 선택 (2026-11-12, Claude Code)
+
+- 단위·통합 **48파일/811개 PASS**(기존797 유지 + 신규14). `tests/unit/range-selection.test.ts`(실패 선확인):
+  - `[start,end)` 포함 규칙(시작 경계 포함·끝 경계 제외), 시간순 원본 event ID, 쉼표/빈 구간/빈 마디 선택,
+    전체 타이 체인과 내부 링크 포함, 부분 타이 `CUTS_TIE` 거부와 체인 마디 안내, 이벤트 중간 경계 `CUTS_EVENT`,
+    NOT_INTEGER/EMPTY_RANGE/OUT_OF_SCORE, 첫 Part 한정, Score 직렬화 불변, 100세그먼트 체인,
+    마디 번호(4/4·3/4)→tick, 범위 밖·역순·비정수 마디 거부.
+- typecheck/lint/architecture(65모듈/201의존성/58파일 위반0) PASS.
+- Chromium E2E **63/63 PASS**(기존61+신규2, 프로덕션 build 포함, Claude Code 세션에서 직접 실행).
+  `range-selection.spec.ts`: 1마디 선택의 tick/개수/악보·목록 하이라이트, 단일 이벤트 선택(`aria-pressed`)과 독립,
+  타이를 자르는 2마디/3마디 단독 선택 거부와 안내, 키보드 Enter로 2–3마디(음표2·쉼표1) 선택,
+  커서 이동으로 인한 SVG 재렌더 후 하이라이트 유지, 역순 마디 거부, 빈 마디 선택과 해제 버튼,
+  **IndexedDB 원시 row 완전 동일**, 조옮김 미리보기 DOM에 하이라이트 없음,
+  편집 시 무효화와 Undo/Redo로 되살아나지 않음, 새로고침 초기화, 모바일 hasTouch tap.
+- NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 하이라이트 색 대비의 사람 눈 확인, 대형 악보 성능.

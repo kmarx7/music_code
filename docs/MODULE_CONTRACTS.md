@@ -715,3 +715,32 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   Score 편집 시 재생 정지는 기존 정책 그대로다. loop가 켜진 재생은 탭이 hidden이 되면 정지한다.
   loop 없는 일반 재생의 hidden 동작은 바꾸지 않았다. 새로고침/편집기 재진입 시 OFF·1/1로 초기화한다.
 - 속도/loop 변경만으로 Command/dirty/IndexedDB 쓰기/revision 증가가 없다. ADR-004의 구현이며 새 ADR/의존성/레이어 변경 없음.
+
+## Phase 3 — 연속 구간 선택 projection (P3-06, 2026-11-12)
+
+- `@/domain/score`(신규 `selection.ts`)에 순수 계산을 추가했다: `ScoreRange { startTick, endTick }`(반열린 `[start,end)`),
+  `RangeSelection`(범위 + 시간순 원본 `eventIds` + `noteCount`/`restCount` + 범위 안에 완전히 든 `ties` 사본),
+  `RangeSelectionIssue = PlaybackLoopIssue | CUTS_EVENT | CUTS_TIE`,
+  `selectScoreRange(score, range)`, `selectMeasureRange(score, first, last)`(1부터 세는 포함 마디).
+  결과는 `{ ok: true, selection }` 또는 `{ ok: false, issue, message, eventIds }`이며 예외를 던지지 않는다.
+  범위 검증과 마디→tick은 기존 `playbackLoopIssue`/`measureRangeLoop`를 재사용한다. 첫 Part 한정.
+- **포함 규칙(C-08):** `startTick ≤ event.startTick < endTick`인 이벤트를 담는다. 쉼표는 이벤트로, 빈 구간(gap)은
+  범위 자체로 포함된다(이벤트 0개인 선택도 유효). 경계가 이벤트 중간을 지나면 `CUTS_EVENT`, 타이 링크의 한쪽만
+  들어오면 `CUTS_TIE`로 거부하고 `eventIds`에 막는 이벤트/체인 전체를, 메시지에 체인이 걸친 마디를 준다.
+  자르기·자동 확장·타이 절단은 하지 않는다. Score를 읽기만 한다.
+- `RangeSelect`(score-editor 공개 진입점): "구간 첫 마디"/"구간 마지막 마디" 숫자 입력, "구간 선택"·"선택 해제" 버튼,
+  상태(`data-testid="range-selection"`, `data-selected`, `data-start-tick`, `data-end-tick`, `data-event-count`),
+  오류(`range-selection-error`). 새 status/alert role 없이 `aria-live="polite"`만 쓴다. 폼이므로 키보드로 조작된다.
+- 선택 상태는 EditorWorkspace의 React 로컬 state `{ score, selection }` 하나다. 전역 Store/Undo/Command/저장 필드가 없고
+  선택·해제는 dirty/IndexedDB 쓰기/revision 증가를 만들지 않는다.
+- **stale 무효화:** 선택은 계산에 쓴 Score 객체에 묶인다. 현재 Score가 달라지면(편집·Undo/Redo·조옮김 확정·제목 변경 포함)
+  렌더 중 state를 null로 지워 **영구 해제**한다. Undo가 예전 Score 객체를 되돌려도 선택은 되살아나지 않는다.
+  다른 문서는 Workspace가 다시 마운트되어 초기화된다. 새로고침 시 선택 없음.
+- **하이라이트:** `StaffView`에 선택적 `rangeEventIds`를 추가했다(기존 호출 호환). SVG를 다시 그리지 않고
+  `[data-event-id]` 요소에 `data-range-selected="true"`만 붙이며, 다른 이유로 다시 그려진 뒤에도 다시 적용한다.
+  VexFlow 어댑터는 변경하지 않았다. 조옮김 미리보기의 StaffView에는 prop을 넘기지 않아 후보 DOM에는 표시되지 않는다.
+  음표·쉼표 목록 버튼에도 같은 속성을 준다. `data-playing`(재생)과 `aria-pressed`(단일 선택)와 독립이다.
+- **구현 기본값(사용자 명시 승인 아님, 변경 요청 시 조정):** (1) UI 입력은 마디 단위이며 박 단위 선택은 도메인만 지원한다.
+  (2) 거부된 선택 요청은 이전 선택을 유지하지 않고 해제한다. (3) 단일 이벤트 선택(`selectedEventId`)과 구간 선택은
+  서로 바꾸지 않는 독립 상태다(우선순위 규칙 없음, 편집 패널은 단일 선택만 따른다).
+  (4) 이벤트가 없는 빈 구간도 선택으로 허용한다(복사 가능 여부는 P3-07에서 정한다).

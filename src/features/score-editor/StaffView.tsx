@@ -5,16 +5,41 @@ import type { NoteLabelMode } from "@/domain/music-theory";
 import type { Score } from "@/domain/score/types";
 import { NotationRenderError, renderScoreInto } from "@/adapters/vexflow/renderScore";
 
-export function StaffView({ score, cursorTick = null, labelMode = "none", onSelectEvent }: {
+const NO_RANGE: readonly string[] = [];
+/** Latest range selection per staff element, so an async redraw can re-apply it without a redraw of its own. */
+const rangeByStaff = new WeakMap<HTMLElement, readonly string[]>();
+
+/** DOM-only projection of the range selection onto original event glyphs; the Score is untouched. */
+function markRange(root: HTMLElement, eventIds: readonly string[]): void {
+  const selected = new Set(eventIds);
+  root.querySelectorAll?.("[data-event-id]")?.forEach((element) => {
+    if (selected.has(element.getAttribute("data-event-id") ?? "")) element.setAttribute("data-range-selected", "true");
+    else element.removeAttribute("data-range-selected");
+  });
+}
+
+export function StaffView({ score, cursorTick = null, labelMode = "none", onSelectEvent, rangeEventIds = NO_RANGE }: {
   score: Score; cursorTick?: number | null; labelMode?: NoteLabelMode; onSelectEvent?: (eventId: string) => void;
+  /** Original event IDs of the current range selection. Changing it does not redraw the SVG. */
+  rangeEventIds?: readonly string[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
+    rangeByStaff.set(element, rangeEventIds);
+    markRange(element, rangeEventIds);
+  }, [rangeEventIds]);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
     const controller = new AbortController();
-    renderScoreInto(element, score, { cursorTick, labelMode, signal: controller.signal }).catch((error: unknown) => {
+    renderScoreInto(element, score, { cursorTick, labelMode, signal: controller.signal }).then(() => {
+      if (!controller.signal.aborted) markRange(element, rangeByStaff.get(element) ?? NO_RANGE);
+    // Two-argument form: the failure notice must land in the same microtask turn as before.
+    }, (error: unknown) => {
       if (controller.signal.aborted) return;
       // Renderer owns this DOM subtree. Never leave an old or partially drawn SVG on failure.
       const notice = element.ownerDocument.createElement("p");

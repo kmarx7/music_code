@@ -11,12 +11,12 @@ import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { EditCursor, NoteLabelsControl, ScoreSettings, StaffView } from "@/features/score-editor";
+import { EditCursor, NoteLabelsControl, RangeSelect, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import { TransposeTool } from "@/features/transposition";
-import type { PlaybackPosition } from "@/domain/score";
+import type { PlaybackPosition, RangeSelection, Score } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
 const DURATIONS = [
@@ -109,6 +109,10 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const [message, setMessage] = useState("");
   const [playbackStopSignal, setPlaybackStopSignal] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  // Range selection is local UI state bound to the exact Score it was derived from (never stored).
+  const [rangeState, setRangeState] = useState<{ score: Score; selection: RangeSelection } | null>(null);
+  // Any edit/Undo/Redo replaces the Score: drop the selection for good so Undo cannot revive a stale one.
+  if (rangeState && rangeState.score !== session?.current) setRangeState(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const showPosition = useCallback((position: PlaybackPosition) => {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
@@ -195,6 +199,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const ticksPerMeasure = measureTicks(part.timeSignature);
   const ticksPerBeat = TICKS_PER_QUARTER * 4 / part.timeSignature.denominator;
   const tiedIds = new Set(part.ties.flatMap((tie) => [tie.from, tie.to]));
+  const rangeSelection = rangeState?.score === score ? rangeState.selection : null;
+  const rangeIds = new Set(rangeSelection?.eventIds);
 
   function runCommand(command: EditCommand): boolean {
     const result = scoreStore.dispatch(command);
@@ -367,7 +373,10 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
 
       <div style={panel}>
         <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
-        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId} />
+        <RangeSelect score={score} selection={rangeSelection}
+          onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
+        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId}
+          rangeEventIds={rangeSelection?.eventIds} />
       </div>
 
       <div style={panel}>
@@ -397,6 +406,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
                     type="button"
                     data-event-id={event.id}
                     aria-pressed={selected}
+                    data-range-selected={rangeIds.has(event.id) ? "true" : undefined}
                     onClick={() => setSelectedEventId(selected ? null : event.id)}
                     style={{
                       ...button,

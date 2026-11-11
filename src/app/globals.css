@@ -27,3 +27,19 @@ svg [data-playing="true"] text {
   fill: #b36b00;
   stroke: #b36b00;
 }
+
+button[data-range-selected="true"] {
+  box-shadow: 0 0 0 3px #7fb2ff;
+}
+
+svg [data-range-selected="true"] path,
+svg [data-range-selected="true"] text {
+  fill: #1d5fd0;
+  stroke: #1d5fd0;
+}
+
+svg [data-range-selected="true"][data-playing="true"] path,
+svg [data-range-selected="true"][data-playing="true"] text {
+  fill: #b36b00;
+  stroke: #b36b00;
+}
