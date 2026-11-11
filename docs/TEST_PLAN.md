@@ -1243,3 +1243,23 @@ npm run test:e2e
   모바일 hasTouch 에뮬레이션 tap.
 - NOT RUN: 실제 오디오 청취, Safari/WebKit/Firefox, 모바일 실기기. 브라우저 E2E는 커서 진행과 DOM을 검사하며
   실제 재생 속도의 청각적 정확성을 측정하지 않는다(시간 정확성은 Tone 호출 인자 단위 검증에 한정).
+
+
+## P3-04~05 — A–B 반복 (2026-11-11, Claude Code)
+
+- 단위·통합 **47파일/797개 PASS**(기존759 유지 + 신규38). `tests/unit/ab-loop.test.ts`:
+  - 순수 계약: 전체 마디 길이, 범위 검증(NOT_INTEGER/EMPTY_RANGE/OUT_OF_SCORE), 4/4·6/8 마디→tick,
+    잘못된 마디 범위 null, wrap 계산에서 B가 다음 pass에 속함.
+  - 예약(Tone 대역): A에서 시작·범위 밖/B 시작 이벤트 제외, 30 pass의 정확한 시각·중복 없음·단조 증가·음성 1개,
+    다음 pass가 항상 미리 예약되되 적체가 없음, 커서/하이라이트 wrap, A 교차음 잔여 1회 어택과 B clip,
+    타이의 B clip 및 타이 중간 시작, 자연 종료 없음·Score/JSON 불변, Stop 후 추가 예약 없음,
+    pause/resume, 메트로놈 `[A,B)`·경계 클릭 1회·토글 재예약, rate 결합과 loop 중 rate 변경.
+  - live 변경: OFF 시 현재 tick에서 선형 종료, ON 시 범위 안 tick 유지/밖이면 A 이동, paused 적용,
+    동일 범위·종료 후 no-op, 잘못된 범위는 음성 생성 전·live handle 모두 거부하고 재생 불변.
+- typecheck/lint/architecture(63모듈/192의존성/56파일 위반0) PASS.
+- Chromium E2E **61/61 PASS**(기존59+신규2, 프로덕션 build 포함, Claude Code 세션에서 직접 실행).
+  `ab-loop.spec.ts`: 3–4마디 `[7680,15360)` 반복에서 E4/G4만 하이라이트·wrap·20회 표본 모두 범위 안,
+  해제 후 자연 종료와 하이라이트 0, 잘못된 범위 안내와 미적용, hidden 시 정지,
+  **IndexedDB 원시 row 완전 동일**, 편집 시 정지 및 유효 범위 유지, 새로고침 초기화, 모바일 hasTouch tap·가로 넘침 없음.
+- NOT RUN: 실제 오디오 청취(PRD의 "audible stuck notes 없음"은 예약 인자·DOM으로만 검증), Safari/WebKit/Firefox,
+  모바일 실기기, 장시간 반복 drift 실측, 메인 스레드 정지 상황.

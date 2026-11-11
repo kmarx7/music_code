@@ -658,8 +658,9 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   붙여넣기는 빈 대상에만 허용하고 충돌·마디 부족·표기 실패는 부분 적용 없이 거부한다.
   덮어쓰기·뒤 이벤트 자동 밀기·자동 마디 추가·자동 타이 절단 없음. Pitch 철자/MIDI는 보존하고 몰래 조옮기지 않는다.
   붙여넣는 이벤트는 fresh ID와 타이 참조 매핑, 단일 원자 Command/1회 Undo. Cut은 성공 시에만 clipboard를 교체한다.
-- **아직 미확정(구현 금지):** A–B loop의 끝 경계 예약 방식(rolling scheduler 필요 여부),
-  loop 설정의 편집/Undo/hidden/Stop 시 유지·초기화 정책. P3-04 착수 전 별도 확정한다.
+- **A–B loop(2026-11-11 후속):** 사용자가 "A–B 반복 진행"을 지시했다. 끝 경계 예약 방식과
+  설정 유지/초기화 정책은 개별 질의 없이 아래 "Phase 3 — A–B 반복" 절의 구현 기본값으로 정했다.
+  사용자 명시 승인 항목이 아니므로 변경 요청 시 조정한다.
 
 ## Phase 3 — 비파괴 연습 속도 (P3-01~03, 2026-11-11)
 
@@ -685,3 +686,32 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   Score 편집 시 재생을 정지하는 기존 정책은 그대로다.
 - Score schemaVersion 2/Part.ties/Command/Repository/DB2/ADR-010/의존성/레이어 불변. ADR-004의 구현이며 새 ADR은 없다.
   녹음 오디오의 피치 보존 타임스트레치는 제공하지 않는다(PRD MVP-008).
+
+## Phase 3 — A–B 반복 (P3-04~05, 2026-11-11)
+
+- `@/domain/score`(기존 `playback.ts`)에 읽기 전용 계약을 추가했다: `PlaybackLoop {startTick,endTick}`(반열림 `[A,B)`),
+  `PlaybackLoopIssue = NOT_INTEGER | EMPTY_RANGE | OUT_OF_SCORE`, `playbackLoopIssue(score, loop)`,
+  `scoreLengthTicks(score)`(첫 Part 전체 마디 길이, 후행 빈 마디 포함), `measureRangeLoop(score, first, last)`
+  (1부터 세는 포함 마디 → tick, 범위 밖은 null), `playbackLoopTick(loop, originTick, elapsedTicks)`.
+  Score/Part.ties/JSON/Command에 필드를 추가하지 않는다. 첫 Part 한정(기존 재생 범위와 동일).
+- `playScore(score, {loop})`와 `PlaybackHandle.setLoop(loop | null)`을 추가했다. 기존 호출은 그대로다.
+  잘못된 범위는 Tone import/음성 생성 전(또는 live handle에서 예약을 건드리기 전) RangeError로 거부한다.
+- **경계 의미:** loop가 있으면 A에서 시작한다. B 이후는 예약하지 않고 B에서 시작하는 이벤트는 다음 pass에 속한다.
+  B를 넘는 음은 B에서 끝낸다. A가 지속음(타이 포함) 중간이면 남은 부분만 pass마다 1회 어택한다.
+  gate는 기존 정책(일반 0.9/타이 머리 1/최소 1ms)을 잘린 길이에 그대로 적용한다. 타이 연결은 수정하지 않는다.
+  메트로놈 클릭도 `[A,B)` 안의 박만 예약하며 경계 박은 한 번만 울린다. loop 재생은 스스로 끝나지 않는다(onEnd 없음).
+- **예약 방식(rolling):** pass k의 시작 시각은 `startAt + ((B−origin) + (k−1)(B−A))·tickSeconds`의 순수 오디오 시각 계산이다.
+  25ms 타이머는 앞으로 2초(`LOOP_LOOKAHEAD_SECONDS`) 안에 시작하는 pass를 미리 채우는 역할만 하며 경계 시계가 아니다.
+  한 번의 보충은 최대 64 pass다. 음성(Synth)은 재생 구간 동안 하나를 재사용한다. 새 엔진/Transport/전역 AudioContext 없음.
+  한계: 메인 스레드가 2초 넘게 멈추면 다음 pass 예약이 늦을 수 있다(실측 미수행).
+- **live 변경:** `setLoop`/`setRate`는 같은 재예약 수명(현재 tick 확정 → release → start)을 공유한다.
+  loop를 켤 때 현재 tick이 `[A,B)` 안이면 유지하고 밖이면 A로 이동한다. 끄면 현재 tick부터 끝까지 선형 재생한다.
+  paused는 조용히 적용되어 resume부터 반영된다. 동일 범위/종료 후 호출은 no-op이다. Stop은 tick 0으로 돌아간다.
+- `PlaybackControls`: "A–B 반복" 체크박스(기본 OFF)와 "반복 첫 마디"/"반복 마지막 마디" 숫자 입력(기본 1/1),
+  상태 표시(`data-testid="practice-loop"`), 잘못된 범위 안내(`practice-loop-error`). 드래그·다중 loop·영속화는 없다.
+  tick 범위는 저장하지 않고 **매 렌더마다 현재 Score에서 마디 번호로 다시 계산**한다.
+- **설정 유지/무효화 정책(구현 기본값):** 편집·Undo/Redo·조옮김 후에도 마디 번호와 ON 상태를 유지하고,
+  새 Score에서 범위가 유효하면 그대로 쓰며 유효하지 않으면 loop를 적용하지 않고 안내를 표시한다(전체 재생으로 동작).
+  Score 편집 시 재생 정지는 기존 정책 그대로다. loop가 켜진 재생은 탭이 hidden이 되면 정지한다.
+  loop 없는 일반 재생의 hidden 동작은 바꾸지 않았다. 새로고침/편집기 재진입 시 OFF·1/1로 초기화한다.
+- 속도/loop 변경만으로 Command/dirty/IndexedDB 쓰기/revision 증가가 없다. ADR-004의 구현이며 새 ADR/의존성/레이어 변경 없음.

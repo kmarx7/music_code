@@ -1,22 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { storedScore } from "./storage";
-
-async function storedRow(page: Page, id: string) {
-  return page.evaluate(async (scoreId) => {
-    const request = indexedDB.open("music-score-platform");
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    try {
-      const read = db.transaction("scores", "readonly").objectStore("scores").get(scoreId);
-      return await new Promise<unknown>((resolve, reject) => {
-        read.onsuccess = () => resolve(read.result);
-        read.onerror = () => reject(read.error);
-      });
-    } finally { db.close(); }
-  }, id);
-}
+import { expect, test } from "@playwright/test";
+import { storedRow, storedScore } from "./storage";
 
 test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경·무저장·새로고침 초기화", async ({ page }) => {
   const id = "e2e-practice-rate";

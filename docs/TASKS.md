@@ -771,7 +771,7 @@
 - 다음: Claude에서 인수인계 확인 후 새 사용자 요청에 따라 H-03/D-01부터 범위를 정한다.
   Phase3 계획을 구현 완료 또는 기존 승인으로 간주하지 않는다.
 
-## 7. P3-01~03 — 비파괴 연습 속도 (구현·자동 검증 완료, 미커밋, 2026-11-11)
+## 7. P3-01~03 — 비파괴 연습 속도 (구현·자동 검증 완료, 로컬 커밋 `277a0e7`, 2026-11-11)
 
 - 요청: Claude Code 첫 세션. 사용자가 문서 확인 후 "연습 속도 구현까지" 범위를 선택했고,
   D-01 중 **재생 중 rate 변경 = 현재 위치 즉시 재예약**, **C-08 클립보드 = 제안안 그대로**를 승인했다.
@@ -794,3 +794,27 @@
 - Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. commit/push/deploy 없음.
 - 다음: (1) 이 변경과 인계 문서의 로컬 커밋 여부 결정, (2) P3-04 전 A–B loop 경계 정책 확정,
   (3) H-03 브라우저 성능 측정, (4) 실제 청취 인수.
+
+## 8. P3-04~05 — A–B 반복 (구현·자동 검증 완료, 미커밋, 2026-11-11)
+
+- 요청: 사용자가 "문서 커밋과 기능 커밋 분리해서 커밋하고 A–B 반복 진행"을 지시했다.
+  로컬 커밋 2개 생성: `8a7d8f1`(인계 문서), `277a0e7`(연습 속도+D-01 기록). push/deploy 없음.
+- 정책: loop 끝 경계 예약 방식과 설정 유지/무효화/hidden 정책은 개별 질의 없이 구현 기본값으로 정하고
+  MODULE_CONTRACTS "Phase 3 — A–B 반복" 절에 명시했다. 사용자 명시 승인 항목과 구분한다.
+- 재사용: `domain/score/playback.ts`, `adapters/tone/playback.ts`의 기존 예약/정지 수명과 `mergeTiedNotes`,
+  `PlaybackControls`의 로컬 state/ref/요청 토큰. 새 모듈·의존성·상태 시스템·저장 필드 없음.
+- 변경 제품 파일 3개: `src/domain/score/playback.ts`(PlaybackLoop 검증·마디→tick·wrap 계산),
+  `src/adapters/tone/playback.ts`(`options.loop`, `setLoop`, pass 단위 rolling 예약; setRate와 재예약 수명 공유),
+  `src/features/playback/PlaybackControls.tsx`(A–B 체크박스·첫/마지막 마디 입력·상태/오류 표시·hidden 정지).
+- 테스트: `tests/unit/ab-loop.test.ts` 38개, `tests/e2e/ab-loop.spec.ts` 2개 신규.
+  `tests/e2e/storage.ts`에 원시 row 조회 `storedRow`를 추가하고 practice-rate.spec의 동일 헬퍼를 이것으로 교체했다
+  (assertion 변경 없음). 기존 테스트 삭제·skip·기대값 약화 없음.
+  loop 단위 테스트는 구현과 함께 작성해 첫 실행에서 통과했다(실패 선확인 절차는 연습 속도 때와 달리 수행하지 않음).
+- 실제 실행: `npm run test` **47파일/797개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 63모듈/192의존성/경계56파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 61/61 PASS**(기존59+신규2), `git diff --check` PASS.
+- 미검증: 실제 스피커 청취(경계 잔음·중복 어택·장시간 drift 체감), Safari/WebKit/Firefox, 모바일 실기기,
+  메인 스레드 장시간 정지 시 다음 pass 예약 지연. Tone은 단위 테스트에서 대역이다.
+- Score v2/Part.ties/DB2/ADR-010/Command/의존성/레이어 변경 없음. A–B 변경분은 commit하지 않았다.
+- 다음: (1) A–B 변경 커밋 여부, (2) 실제 청취 인수(UAT-A), (3) P3-06 연속 구간 선택(C-08 확정됨),
+  (4) H-03 브라우저 성능 측정.
