@@ -768,3 +768,21 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   비어 있어야 한다는 뜻으로 구현했다(gap 자리에 기존 음표가 있어도 거부). (2) 경계를 넘게 되는 쉼표는 나누지 않고
   `NOT_NOTATABLE`로 거부한다. (3) 이벤트가 없는 구간은 선택은 되지만 복사는 거부한다. (4) Paste는 AddNote와 같이
   `updatedAt`을 바꾸지 않는다. (5) 덮어쓰기·뒤 이벤트 밀기·몰래 조옮김은 없다(C-08 확정안 그대로).
+
+## Phase 3 — Copy/Paste UI 및 저장 통합 (P3-08, 2026-11-12)
+
+- `@/features/score-editor`(신규 `ClipboardControls.tsx`): props `score`, `selection`(현재 Score에서 유효한 구간 선택 또는 null),
+  `cursorTick`(append 모드는 null), `clipboard`, `onCopy(payload)`, `onPaste(command) → 오류 메시지 | null`, `onPasted(endTick)`.
+  컴포넌트는 store/저장소를 직접 만지지 않는다. Copy는 `copyScoreRange`만 호출하고 Command를 만들지 않는다.
+  Paste는 `planPaste`로 만든 `PasteEvents` Command 하나를 `onPaste`로 넘긴다.
+- Editor(`page.tsx`): clipboard는 EditorWorkspace의 React 지역 상태다. Score/JSON/IndexedDB/이력/시스템 clipboard에 넣지 않는다.
+  편집·Undo/Redo 후에도 유지되고 새로고침·악보 전환(재마운트) 시 사라진다. `pasteCommand`는 `scoreStore.dispatch` 1회이며
+  저장은 기존 autosave(debounce·revision CAS·Tombstone 차단)만 사용한다. UI가 revision을 올리거나 별도 저장을 호출하지 않는다.
+- stale 차단: 구간 선택은 Score 객체가 바뀌면 렌더 중 해제되므로 `selection`이 null이 되어 복사 버튼이 비활성화된다.
+  payload는 Score와 객체를 공유하지 않으므로 복사 후 원본을 편집해도 clipboard 내용은 바뀌지 않는다.
+- DOM 계약(테스트용): section `aria-label="복사·붙여넣기"`, 버튼 "구간 복사"/"커서에 붙여넣기",
+  `data-testid="clipboard-status"`(`data-filled="on|off"`, `data-event-count`, `data-length-ticks`),
+  `data-testid="clipboard-feedback"`(`data-kind="ok|error"`, `aria-live="polite"`).
+- **구현 기본값(사용자 명시 승인 아님):** append 모드에서는 붙여넣지 않고 안내한다. 성공 시 편집 커서를
+  `startTick + lengthTicks`로 옮긴다. 저장 충돌/삭제 상태에서도 메모리 편집은 기존 편집과 같이 허용한다.
+  키보드 단축키는 제공하지 않는다. 문서 간 붙여넣기는 없다(C-08 확정안).

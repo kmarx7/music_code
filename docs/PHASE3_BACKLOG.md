@@ -140,7 +140,7 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-07 — 읽기 전용 Copy와 원자 Paste 엔진
 
-- 진행 상태(2026-11-12): **엔진 구현·자동 검증 완료**(미커밋). UI·저장 통합은 P3-08에 남아 있다.
+- 진행 상태(2026-11-12): **엔진 구현·자동 검증 완료**, 로컬 커밋 `635cd37`.
 - 선행: P3-06. 예상: domain/commands/types.ts·apply.ts, application의 copy/paste 계획 함수(신규 예정), 관련 테스트.
 - 범위: 상대 tick/쉼표/gap/타이 정보를 읽기 전용 payload로 만들고 빈 대상에 단일 Paste Command 적용.
   overwrite·shift·자동 마디 증가·시스템 clipboard 제외.
@@ -151,6 +151,8 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-08 — Copy/Paste UI 및 저장 통합
 
+- 진행 상태(2026-11-12): **구현·자동 검증 완료**(미커밋). 단위·통합 826 PASS, Chromium E2E 67/67 PASS.
+  상세는 TASKS §11, TEST_PLAN "P3-08", MODULE_CONTRACTS "Phase 3 — Copy/Paste UI 및 저장 통합". Safari·실기기는 NOT RUN.
 - 선행: P3-07. 예상: Editor/score-editor 최소 제어, E2E/integration 테스트(신규 예정).
 - 범위: 현재 선택 복사와 기존 편집 커서에 붙여넣기. 문서 간 paste는 초기 제외 제안이다.
 - 수용: Copy는 무쓰기, Paste 성공은 기존 autosave만 이용한다. Undo/Redo/저장/재열기/JSON이 일치한다.

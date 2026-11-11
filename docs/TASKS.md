@@ -850,7 +850,7 @@
 - 다음: (1) P3-06 커밋 여부, (2) P3-07 읽기 전용 Copy·원자 Paste 엔진(새 Command 추가 포함),
   (3) 실제 청취 인수(UAT-A), (4) H-03 브라우저 성능 측정.
 
-## 10. P3-07 — 읽기 전용 Copy와 원자 Paste 엔진 (구현·자동 검증 완료, 미커밋, 2026-11-12)
+## 10. P3-07 — 읽기 전용 Copy와 원자 Paste 엔진 (구현·자동 검증 완료, 로컬 커밋 `635cd37`, 2026-11-12)
 
 - 요청: 사용자가 "커밋 해주고 다음 진행"을 지시했다. P3-06은 `f869d78`로 로컬 커밋했다.
 - 범위: 도메인/애플리케이션 엔진만. Copy/Paste 버튼·clipboard 보관·저장 통합은 P3-08이며 **화면에서는 아직 쓸 수 없다.**
@@ -873,3 +873,29 @@
 - Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-07 변경분은 commit하지 않았다.
 - 다음: (1) P3-07 커밋 여부, (2) P3-08 Copy/Paste UI 및 저장 통합, (3) P3-09 원자 Cut,
   (4) 실제 청취 인수(UAT-A), (5) H-03 브라우저 성능 측정.
+
+## 11. P3-08 — Copy/Paste UI 및 저장 통합 (구현·자동 검증 완료, 미커밋, 2026-11-12)
+
+- 요청: 사용자가 "커밋해주고 다음 진행"을 지시했다. P3-07은 `635cd37`(`feat(score): add copy payload and atomic paste command`)로
+  로컬 커밋했다(push 없음). 위 §10의 "미커밋" 서술은 이 커밋으로 해소됐다.
+- 범위: 화면의 "구간 복사"/"커서에 붙여넣기" 제어와 기존 autosave 경로 통합. Cut은 P3-09다.
+- 신규 제품 파일 1개: `src/features/score-editor/ClipboardControls.tsx`. 변경 제품 파일 2개:
+  `src/features/score-editor/index.ts`(export), `src/app/editor/[scoreId]/page.tsx`(clipboard 지역 상태, `pasteCommand`, 배치).
+  도메인/애플리케이션/store/저장소/autosave 코드는 변경하지 않았다. 새 의존성·저장 경로·상태 시스템 없음.
+- 동작: Copy는 현재 Score에서 유효한 구간 선택이 있을 때만 가능하고 `copyScoreRange`로 다시 계산한다(무쓰기).
+  Paste는 편집 커서 tick에 `planPaste` → `scoreStore.dispatch` 1회. 성공하면 커서를 붙여넣은 구간 바로 뒤로 옮긴다.
+  실패(대상 점유·마디 부족·표기 불가·append 모드)는 Score/이력/저장을 그대로 두고 버튼 옆에 사유를 보여 준다.
+  clipboard는 EditorWorkspace 지역 상태라 편집·Undo/Redo 후에도 유지되고 새로고침·다른 악보 이동 시 비워진다.
+- 구현 기본값(사용자 명시 승인 아님): (1) append 모드에서는 붙여넣지 않고 커서 모드 전환을 안내, (2) 성공 후 커서 자동 이동,
+  (3) 저장 충돌/삭제 상태에서도 다른 편집과 동일하게 메모리 붙여넣기는 허용(저장은 기존 차단 그대로),
+  (4) 키보드 단축키(Ctrl/⌘+C/V)는 추가하지 않음 — 건반 입력 단축키·브라우저 기본 복사와 충돌 검토가 필요해 버튼만 제공.
+- 테스트: `tests/integration/paste-persistence.test.ts` 1개, `tests/e2e/copy-paste.spec.ts` 4개 신규.
+  E2E는 UI 구현 전에 작성했으나 **구현 전 실패 실행은 하지 않았고** 구현 후 첫 실행에서 4/4 통과했다.
+  통합 테스트는 P3-07 엔진만으로 통과하는 저장 통합 회귀다. 기존 테스트 삭제·skip·기대값 변경 없음.
+- 실제 실행: `npm run test` **50파일/826개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 68모듈/217의존성/경계61파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 67/67 PASS**(기존63+신규4).
+- 미검증: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보에서의 붙여넣기 성능(H-03 미수행),
+  사람이 직접 써 본 사용감(특히 "대상 범위 전체가 비어야 함" 규칙).
+- Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-08 변경분은 commit하지 않았다.
+- 다음: (1) P3-08 커밋 여부, (2) P3-09 원자 Cut, (3) P3-10 통합 인수, (4) 실제 청취 인수(UAT-A), (5) H-03.

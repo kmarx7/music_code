@@ -11,12 +11,12 @@ import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { EditCursor, NoteLabelsControl, RangeSelect, ScoreSettings, StaffView } from "@/features/score-editor";
+import { ClipboardControls, EditCursor, NoteLabelsControl, RangeSelect, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import { TransposeTool } from "@/features/transposition";
-import type { PlaybackPosition, RangeSelection, Score } from "@/domain/score";
+import type { ClipboardPayload, PlaybackPosition, RangeSelection, Score } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
 const DURATIONS = [
@@ -113,6 +113,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const [rangeState, setRangeState] = useState<{ score: Score; selection: RangeSelection } | null>(null);
   // Any edit/Undo/Redo replaces the Score: drop the selection for good so Undo cannot revive a stale one.
   if (rangeState && rangeState.score !== session?.current) setRangeState(null);
+  // In-memory clipboard for this editor mount only (C-08): never stored in Score, JSON or history.
+  const [clipboard, setClipboard] = useState<ClipboardPayload | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const showPosition = useCallback((position: PlaybackPosition) => {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
@@ -210,6 +212,14 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
     }
     setMessage("");
     return true;
+  }
+
+  /** Same single-dispatch path as runCommand; the clipboard panel shows the error next to its buttons. */
+  function pasteCommand(command: EditCommand): string | null {
+    const result = scoreStore.dispatch(command);
+    if (result && !result.ok) return result.error.message;
+    setMessage("");
+    return null;
   }
 
   function shiftPitch(delta: number) {
@@ -375,6 +385,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
         <RangeSelect score={score} selection={rangeSelection}
           onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
+        <ClipboardControls score={score} selection={rangeSelection} cursorTick={cursorTick} clipboard={clipboard}
+          onCopy={setClipboard} onPaste={pasteCommand} onPasted={moveCursor} />
         <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId}
           rangeEventIds={rangeSelection?.eventIds} />
       </div>

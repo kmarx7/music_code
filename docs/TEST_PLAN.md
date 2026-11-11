@@ -1296,3 +1296,23 @@ npm run test:e2e
 - typecheck/lint/architecture(67모듈/211의존성/60파일 위반0) PASS.
 - Chromium E2E **63/63 PASS**(신규 없음. UI 변경이 없어 회귀 확인으로만 실행).
 - NOT RUN: 화면 조작을 통한 복사·붙여넣기, 저장/재열기/두 탭 충돌 통합(P3-08), 대형 악보 성능.
+
+
+## P3-08 — Copy/Paste UI 및 저장 통합 (2026-11-12, Claude Code)
+
+- 단위·통합 **50파일/826개 PASS**(기존825 유지 + 신규1). `tests/integration/paste-persistence.test.ts`(fake-indexeddb):
+  Copy 후 store/저장본 불변, 타이 포함 Paste의 ID·tick·타이·병합 길이, Undo 후 저장=원본, Redo 후 재열기=붙여넣은 Score,
+  점유 대상 재붙여넣기 거부 시 store 상태 객체·저장본 불변, JSON 백업 왕복 일치와 clipboard/selection 미포함, schemaVersion 2.
+- typecheck/lint/architecture(68모듈/217의존성/61파일 위반0) PASS.
+- Chromium E2E **67/67 PASS**(기존63+신규4, 프로덕션 build 포함). `tests/e2e/copy-paste.spec.ts`:
+  1. 선택·clipboard가 없으면 두 버튼 비활성, 빈 마디 복사 거부, 타이 체인(2–3마디) 복사 후 **IndexedDB 원시 row 완전 동일**,
+     점유 대상/마디 부족 붙여넣기 거부 시 이벤트 수·마디 수·원시 row 불변, 5마디 붙여넣기 성공(저장 tick/길이/MIDI,
+     타이 2개, ID 유일, revision 정확히 +1, 커서 23040으로 이동, 선택 해제), 같은 clipboard로 재붙여넣기(ID 7개 유일, 타이 3개,
+     revision +2), Undo 1회=첫 붙여넣기 상태와 저장본 일치, Redo 복원, 편집 후 stale 선택 복사 불가(버튼 비활성),
+     append 모드 붙여넣기 안내, 다운로드한 JSON 백업=저장본이며 clipboard/selection 미포함, 새로고침 후 악보 유지·clipboard 비움.
+  2. 두 탭 OCC(BroadcastChannel 비활성): 다른 탭이 먼저 저장한 뒤 붙여넣으면 저장 충돌 표시·저장 버튼 비활성,
+     원시 row 불변(다른 탭 제목 유지·붙여넣은 이벤트 없음), 패자 탭의 편집과 Undo/Redo 유지.
+  3. Tombstone: 다른 탭에서 삭제된 뒤 붙여넣어도 원시 row가 Tombstone 그대로이고 직접 URL은 DELETED.
+  4. 모바일 hasTouch(390×844) tap으로 복사·붙여넣기, 저장 확인, 가로 넘침 없음.
+- 주의: E2E 4개는 구현 전 실패 실행 없이 구현 후 처음 실행했다.
+- NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보 성능, 사람의 수동 사용 확인.
