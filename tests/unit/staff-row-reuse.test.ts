@@ -172,3 +172,23 @@ it("a row-crossing tie is drawn inside each end's own row and survives a redraw 
   await renderScoreInto(element, score({ 6: "D" }));
   expect(rows(capture.opened)).toEqual(["0", "1"]); expect(capture.ties).toEqual([]); expect(staff().children[2]).toBe(third);
 });
+
+it("holds the staff height while the first drawing loads, so controls below it do not jump under a press", async () => {
+  const element = Object.assign(host(), { style: { minHeight: "" } }) as HTMLDivElement;
+  const first = renderScoreInto(element, score());
+  // Before the renderer module resolves: 3 rows × 130 + 40 top margin are already reserved.
+  expect(element.style.minHeight).toBe("430px");
+  await first;
+  expect(element.style.minHeight).toBe("");
+  // A redraw keeps the drawn SVG on screen, so nothing needs reserving.
+  const second = renderScoreInto(element, score({ 9: "E" }));
+  expect(element.style.minHeight).toBe("");
+  await second;
+  expect(element.style.minHeight).toBe("");
+  // Labels use taller rows (180), and a failed first draw must not leave the reservation behind.
+  const labelled = Object.assign(host(), { style: { minHeight: "" } }) as HTMLDivElement;
+  const third = renderScoreInto(labelled, score(), { labelMode: "letter" });
+  expect(labelled.style.minHeight).toBe("580px");
+  await third.catch(() => {});
+  expect(labelled.style.minHeight).toBe("");
+});

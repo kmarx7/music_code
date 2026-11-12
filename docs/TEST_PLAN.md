@@ -1434,3 +1434,19 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 후속 재실행(NFD 처리 후, 같은 날): Chromium 71/71 PASS, 단위·통합 840 PASS. WebKit 142개 중 141 PASS / 1 FAIL.
   NFD 4건은 해소. 남은 1건은 `piano-preview.spec.ts:70`의 WebKit Desktop 간헐 실패(단독 8회 반복 중 1회, 음표 3개 기대·2개 저장)로
   원인 미조사·미해결이며 Chromium에서는 재현되지 않았다.
+
+## WebKit 간헐 실패 수정 — 첫 악보 그리기 중 건반 밀림 (2026-11-13, Claude Code)
+대상: `piano-preview.spec.ts:70`(같은 건반 3회 연속 클릭 → 음표 3개). 원인은 TASKS §17 참조
+(첫 악보가 그려지며 건반이 303px 밀려 `pointerup`이 건반 밖에 떨어짐 → `click` 유실).
+
+| 실행 | 조건 | 결과 |
+|---|---|---|
+| 수정 전 재현(임시 진단 spec) | WebKit Desktop, 40회 / 60회 반복 | 각 1회 실패(UI·저장 모두 음표 2개) |
+| 수정 후 재현(같은 spec) | WebKit Desktop, 120회 반복 | 120 PASS |
+| 수정 후 원래 테스트 반복 | WebKit Desktop + iPhone 15 에뮬레이션, 각 40회 | 80 PASS |
+| 단위·통합 | `npm run test` | 52파일 / 841 PASS(높이 예약 테스트 1개 추가) |
+| E2E | Chromium | 71 / 71 PASS |
+| E2E | WebKit Desktop Safari + iPhone 15 에뮬레이션 | 142 / 142 PASS |
+
+- typecheck, lint, architecture(위반 0), `git diff --check` PASS. 테스트 삭제·skip·기대값 약화 없음. 임시 진단 spec과 임시 WebKit 설정은 삭제했다.
+- NOT RUN: 실제 Mac Safari·실기기·실제 청취(UAT-S/A/T/C/R), Firefox. WebKit 자동 실행은 실제 Safari 앱의 대체가 아니다.

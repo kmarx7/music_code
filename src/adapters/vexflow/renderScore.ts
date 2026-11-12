@@ -78,6 +78,14 @@ function liveCache(element: HTMLDivElement): StaffCache | undefined {
   return cache && cache.svg.parentNode === element ? cache : undefined;
 }
 
+/**
+ * Holds the staff's height while the first drawing is still loading, so the controls below it
+ * (piano keys) do not jump under a press that is already in progress. Cleared once the SVG owns the height.
+ */
+function reserveHeight(element: HTMLDivElement, height: number | null): void {
+  if (element.style) element.style.minHeight = height === null ? "" : `${height}px`;
+}
+
 function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
   const accidental =
     event.pitch.alter > 0
@@ -104,9 +112,16 @@ export async function renderScoreInto(
   // A live cache keeps the current SVG on screen until the changed rows are swapped in; otherwise start empty.
   if (!liveCache(element)) { rowCaches.delete(element); element.innerHTML = ""; }
   const part = score.parts[0];
-  if (!part) { rowCaches.delete(element); element.innerHTML = ""; return; }
+  if (!part) { rowCaches.delete(element); element.innerHTML = ""; reserveHeight(element, null); return; }
   const plan = planPartNotation(part);
-  if (!plan.ok) { rowCaches.delete(element); element.innerHTML = ""; throw new NotationRenderError(plan.issue); }
+  if (!plan.ok) {
+    rowCaches.delete(element); element.innerHTML = ""; reserveHeight(element, null);
+    throw new NotationRenderError(plan.issue);
+  }
+  if (!liveCache(element)) {
+    const plannedRows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
+    reserveHeight(element, plannedRows * ((options?.labelMode ?? "none") !== "none" ? 180 : ROW_HEIGHT) + STAVE_TOP);
+  }
   const vexflow = await import("vexflow");
   if (options?.signal?.aborted || renderRequests.get(element) !== request) return;
   try {
@@ -423,10 +438,11 @@ export async function renderScoreInto(
     if (svgContext) {
       rowCaches.set(element, { svg: staffSvg ?? svgContext.svg, rows: layouts, cursor: cursorLine });
     }
+    reserveHeight(element, null);
 
   } catch (error) {
     rowCaches.delete(element);
-    if (renderRequests.get(element) === request && !options?.signal?.aborted) element.innerHTML = "";
+    if (renderRequests.get(element) === request && !options?.signal?.aborted) { element.innerHTML = ""; reserveHeight(element, null); }
     throw error;
   }
 
