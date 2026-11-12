@@ -1,5 +1,5 @@
 import type { KeySignature, Score } from "./types";
-import { transposeScore, type TransposeSpec } from "./transpose";
+import { transposeScore, transposeValidatedScore, type TransposeSpec } from "./transpose-core";
 import { analyzeScoreRange, type RangeAnalysis } from "./range";
 import { KEY_SIGNATURE_OPTIONS } from "../music-theory/key-signatures";
 import type { TransposeError, TransposeInterval } from "../music-theory/transpose";
@@ -44,7 +44,8 @@ export function recommendTranspositions(score: Score, target: TargetMidiRange): 
   const rejected: { spec: TransposeSpec; error: TransposeError }[] = [];
   const unique = new Map<string, RangeRecommendation>(); const automatic = new Set<string>();
   for (const spec of specs) {
-    const transformed = transposeScore(score, spec);
+    // `source` above already validated this exact Score object; candidates are still validated one by one.
+    const transformed = transposeValidatedScore(score, spec);
     if (!transformed.ok) { rejected.push({ spec, error: transformed.error }); continue; }
     const { score: candidate, interval } = transformed.value;
     // For the unchanged source a fixed chromatic AND diatonic interval determines identical musical output.

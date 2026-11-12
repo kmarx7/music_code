@@ -36,7 +36,9 @@ export function RangeRecommendations({ score, disabled, onPreview, onInvalidate 
     <form onSubmit={(event) => {
       event.preventDefault(); if (disabled) return;
       if (!low.trim() || !high.trim()) { setError("목표 최저·최고 MIDI를 모두 입력해 주세요."); return; }
-      const next = { minMidi: Number(low), maxMidi: Number(high) };
+      const requested = { minMidi: Number(low), maxMidi: Number(high) };
+      // An unchanged request keeps the same target object: a repeated or double click never recomputes (H-03).
+      const next = target && target.minMidi === requested.minMidi && target.maxMidi === requested.maxMidi ? target : requested;
       activeTarget.current = next; setError(""); setTarget(next);
     }} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
       <label>목표 최저 MIDI <input aria-label="목표 최저 MIDI" type="number" min={0} max={127} step={1} required value={low}

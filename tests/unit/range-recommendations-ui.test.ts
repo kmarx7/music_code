@@ -71,3 +71,13 @@ it("MIDI 0 target is displayed with the existing converter and no Score pitch is
   const before = JSON.stringify(score); change("목표 최저 MIDI", "0"); expect(text(tree)).toContain("C-1"); submit();
   expect(JSON.stringify(score)).toBe(before);
 });
+it("re-submitting an unchanged target keeps the same target object, so a double click never recomputes", () => {
+  change("목표 최저 MIDI", "62"); change("목표 최고 MIDI", "69"); submit();
+  const first = hooks.values[2]; expect(first).toEqual({ minMidi: 62, maxMidi: 69 });
+  const buttons = previewButtons().length;
+  submit(); submit();
+  expect(hooks.values[2]).toBe(first); expect(previewButtons()).toHaveLength(buttons);
+  (previewButtons()[0].props.onClick as () => void)(); expect(onPreview).toHaveBeenCalledTimes(1);
+  change("목표 최고 MIDI", "70"); expect(hooks.values[2]).toBeNull();
+  submit(); expect(hooks.values[2]).not.toBe(first); expect(hooks.values[2]).toEqual({ minMidi: 62, maxMidi: 70 });
+});

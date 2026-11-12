@@ -800,3 +800,18 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   (Cut·Paste 공용, 반환은 오류 메시지 또는 null). 실패 시 이전 clipboard를 유지한다.
 - **구현 기본값(사용자 명시 승인 아님):** 이벤트 없는 구간 Cut 거부, Undo/Redo는 clipboard를 바꾸지 않음,
   Cut 후 편집 커서 유지, `updatedAt` 미변경.
+
+## 악보 줄 캐시(H-03, 2026-11-13, 미커밋)
+
+- 위치: `adapters/vexflow/renderScore.ts` 내부. 공개 시그니처 `renderScoreInto(element, score, options)`는 그대로다.
+- 단위: 줄(4마디). 줄마다 SVG `<g class="vf-staff-row" data-staff-row="n">` 하나.
+- 캐시 키(줄 서명): 줄 번호, 라벨 모드, 음자리표, 조표, 박자, 마디별 [index, 이벤트 수, 조각별 이벤트 id·종류·음높이·
+  시작 tick·길이·조각 순번·타이 연속 여부], 그 줄에 닿는 타이 목록. 서명이 같으면 기존 줄 노드를 그대로 둔다.
+- 무효화: 서명이 다른 줄만 다시 그려 제자리 교체한다. 라벨·조표·음자리표·박자 변경은 모든 줄 서명을 바꾼다.
+  렌더 실패, Part 없음, 기보 계획 실패, 캐시된 SVG가 요소에서 떨어진 경우에는 캐시를 버리고 전체를 다시 그린다.
+  편집 커서 선은 캐시하지 않고 매번 다시 만든다. 재생 하이라이트(`data-playing`)·구간 선택 속성은 기존대로 호출 측이 다시 적용한다.
+- 메모리 상한: 요소별 `WeakMap` 항목 하나. 화면에 있는 SVG의 줄 그룹(최대 ceil(마디 수/4)개)과 줄별 커서 기준점만 가진다.
+  과거 Score·Undo 이력·화면 밖 노드는 보관하지 않으며 요소가 사라지면 함께 회수된다.
+- Score·JSON·저장 이력에는 아무것도 쓰지 않는다. 실제 `SVGContext`가 아니면(단위 테스트 double) 캐시 없이 전부 그린다.
+- 내부 모듈 `domain/score/transpose-core.ts`: `transposeScore`(공개, 입력 검증 포함)와 `transposeValidatedScore`
+  (비공개, 이미 검증된 같은 Score 객체에만 사용). 추천 엔진만 후자를 쓰며 후보별 결과 검증은 생략하지 않는다.

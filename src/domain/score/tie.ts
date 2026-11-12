@@ -57,6 +57,21 @@ export function noteById(part: Part, eventId: string): NoteEvent | undefined {
   return event && event.kind === "note" ? event : undefined;
 }
 
+/**
+ * One-pass ID index with the same answer as `noteById` for every ID (the first match in measure order wins,
+ * also for duplicated IDs). Built per call and never cached, so it cannot go stale.
+ */
+function noteLookup(part: Part): (eventId: string) => NoteEvent | undefined {
+  const index = new Map<string, ScoreEvent>();
+  for (const measure of part.measures) for (const event of measure.events) {
+    if (!index.has(event.id)) index.set(event.id, event);
+  }
+  return (eventId) => {
+    const event = index.get(eventId);
+    return event && event.kind === "note" ? event : undefined;
+  };
+}
+
 export function notesSorted(part: Part): NoteEvent[] {
   return part.measures
     .flatMap((measure) => measure.events)
@@ -116,6 +131,7 @@ export interface MergedNote {
  */
 export function mergeTiedNotes(part: Part): MergedNote[] {
   const { incoming, outgoing } = linkMaps(part);
+  const noteById = noteLookup(part);
 
   const merged: MergedNote[] = [];
   for (const note of notesSorted(part)) {
@@ -123,7 +139,7 @@ export function mergeTiedNotes(part: Part): MergedNote[] {
 
     let endTick = note.startTick + note.durationTicks;
     for (const id of walkLinkIds(note.id, outgoing)) {
-      const target = noteById(part, id);
+      const target = noteById(id);
       if (!target) throw new Error(`TIE_UNKNOWN_REF: 연결 대상 note를 찾을 수 없습니다 (${id}).`);
       endTick = target.startTick + target.durationTicks;
     }
@@ -263,6 +279,7 @@ export function findTieIssues(
   const seen = new Set<string>();
   const outgoing = new Map<string, string>();
   const incoming = new Map<string, string>();
+  const noteById = noteLookup(part);
 
   for (const tie of part.ties) {
     if (typeof tie?.from !== "string" || typeof tie?.to !== "string") {
@@ -275,8 +292,8 @@ export function findTieIssues(
     }
 
     const path = `${options.pathPrefix}.ties[${tie.from}->${tie.to}]`;
-    const from = noteById(part, tie.from);
-    const to = noteById(part, tie.to);
+    const from = noteById(tie.from);
+    const to = noteById(tie.to);
 
     if (!from || !to) {
       issues.push({

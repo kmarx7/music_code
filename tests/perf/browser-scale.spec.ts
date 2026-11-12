@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { expect, test, type CDPSession, type Locator, type Page } from "@playwright/test";
 import { createEmptyScore, createNoteEvent, serializeScore, validateScore } from "../../src/domain/score";
 import type { Part, Score, TieLink } from "../../src/domain/score";
 
@@ -46,7 +46,18 @@ function buildScore({ name, measures, parts, tied }: Fixture): Score {
   return built;
 }
 
-interface Probe { wallMs: number; eventMs: number; longTaskMaxMs: number; longTaskSumMs: number; longTasks: number; timerLagMaxMs: number }
+interface Probe {
+  wallMs: number; eventMs: number; longTaskMaxMs: number; longTaskSumMs: number; longTasks: number; timerLagMaxMs: number;
+  /** Main-thread time split from CDP Performance metrics: long tasks do not count style/layout work done outside a task. */
+  scriptMs: number; styleMs: number; layoutMs: number; taskMs: number;
+}
+
+let metricsCdp: CDPSession | null = null;
+async function mainThreadMs() {
+  const { metrics } = await metricsCdp!.send("Performance.getMetrics");
+  const ms = (name: string) => (metrics.find((metric) => metric.name === name)?.value ?? 0) * 1000;
+  return { scriptMs: ms("ScriptDuration"), styleMs: ms("RecalcStyleDuration"), layoutMs: ms("LayoutDuration"), taskMs: ms("TaskDuration") };
+}
 
 async function installProbe(page: Page) {
   await page.addInitScript(() => {
@@ -81,11 +92,16 @@ async function installProbe(page: Page) {
 /** Runs `act`, waits for `done`, and returns wall time (includes Playwright IPC) plus in-page probes. */
 async function probe(page: Page, act: () => Promise<unknown>, done: () => Promise<unknown>): Promise<Probe> {
   await page.evaluate(() => (window as unknown as { __perfBegin(): void }).__perfBegin());
+  const before = await mainThreadMs();
   const start = Date.now();
   await act(); await done();
   const wallMs = Date.now() - start;
   const rest = await page.evaluate(() => (window as unknown as { __perfEnd(): Promise<Omit<Probe, "wallMs">> }).__perfEnd());
-  return { wallMs, ...rest };
+  const after = await mainThreadMs();
+  return {
+    wallMs, ...rest, scriptMs: after.scriptMs - before.scriptMs, styleMs: after.styleMs - before.styleMs,
+    layoutMs: after.layoutMs - before.layoutMs, taskMs: after.taskMs - before.taskMs,
+  };
 }
 
 async function heapMb(cdp: CDPSession) {
@@ -99,7 +115,7 @@ const stats = (values: number[]) => {
   const round = (value: number) => Number(value.toFixed(1));
   return { median: round(sorted[Math.floor(sorted.length / 2)]), min: round(sorted[0]), max: round(sorted[sorted.length - 1]), samples: sorted.length };
 };
-const summarize = (probes: Probe[]) => Object.fromEntries((Object.keys(probes[0]) as (keyof Probe)[])
+const summarize = <K extends string>(probes: Record<K, number>[]) => Object.fromEntries((Object.keys(probes[0]) as K[])
   .map((key) => [key, stats(probes.map((item) => item[key]))]));
 
 const results: Record<string, unknown>[] = [];
@@ -119,6 +135,8 @@ for (const fixture of FIXTURES) {
     const score = buildScore(fixture);
     const json = serializeScore(score);
     const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Performance.enable");
+    metricsCdp = cdp;
     await installProbe(page);
 
     // Import through the real library flow, then open the only score in this fresh profile.
@@ -143,7 +161,7 @@ for (const fixture of FIXTURES) {
       };
 
       // 1. Open: navigation until every first-Part event is drawn on the staff.
-      const opens: Probe[] = [];
+      const opens: Omit<Probe, "scriptMs" | "styleMs" | "layoutMs" | "taskMs">[] = []; // a navigation resets the CDP counters
       for (let sample = 0; sample < SAMPLES; sample += 1) {
         await page.goto("about:blank");
         const start = Date.now();
@@ -165,9 +183,13 @@ for (const fixture of FIXTURES) {
 
       // 2. Display-only interaction: note labels redraw the whole staff.
       const labels: Probe[] = [];
+      // Probed actions use element handles resolved beforehand: a role/label locator computes accessible names
+      // for the whole page inside the probe window (≈115 ms on 256 measures), which is harness cost, not app cost.
+      const handle = async (locator: Locator) => (await locator.elementHandle())!;
       const labelSelect = page.getByLabel("악보 라벨", { exact: true });
+      const labelHandle = await handle(labelSelect);
       for (let sample = 0; sample < SAMPLES; sample += 1) {
-        labels.push(await probe(page, () => labelSelect.selectOption("letter"),
+        labels.push(await probe(page, () => labelHandle.selectOption("letter"),
           () => expect(staff.getByTestId("note-label")).toHaveCount(firstPartLabels)));
         await labelSelect.selectOption("none");
         await expect(staff.getByTestId("note-label")).toHaveCount(0);
@@ -178,11 +200,13 @@ for (const fixture of FIXTURES) {
       const edits: Probe[] = [];
       const undos: Probe[] = [];
       const summary = page.getByTestId("score-summary");
+      const addHandle = await handle(page.getByRole("button", { name: "마디 추가", exact: true }));
+      const undoHandle = await handle(page.getByRole("button", { name: "Undo", exact: true }));
       for (let sample = 0; sample < SAMPLES; sample += 1) {
         const before = await summary.textContent();
-        edits.push(await probe(page, () => page.getByRole("button", { name: "마디 추가", exact: true }).click(),
+        edits.push(await probe(page, () => addHandle.click(),
           () => expect(summary).not.toHaveText(before ?? "")));
-        undos.push(await probe(page, () => page.getByRole("button", { name: "Undo", exact: true }).click(),
+        undos.push(await probe(page, () => undoHandle.click(),
           () => expect(summary).toHaveText(before ?? "")));
       }
       row.addMeasure = summarize(edits);
@@ -195,13 +219,14 @@ for (const fixture of FIXTURES) {
       const high = page.getByLabel("목표 최고 MIDI", { exact: true });
       const calc = page.getByRole("button", { name: "추천 계산", exact: true });
       const recSummary = page.getByTestId("range-recommendation-summary");
+      const calcHandle = await handle(calc);
       const recommend = async (min: number, max: number, clicks: number) => {
         const probes: Probe[] = [];
         for (let sample = 0; sample < SAMPLES; sample += 1) {
           await low.fill(""); // clearing first guarantees a change event, which invalidates the previous result
           await low.fill(String(min)); await high.fill(String(max));
           await expect(recSummary).toHaveCount(0);
-          probes.push(await probe(page, () => calc.click({ clickCount: clicks }), () => expect(recSummary).toBeVisible()));
+          probes.push(await probe(page, () => calcHandle.click({ clickCount: clicks }), () => expect(recSummary).toBeVisible()));
         }
         return summarize(probes);
       };

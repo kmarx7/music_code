@@ -52,6 +52,32 @@ export class NotationRenderError extends Error {
 }
 const renderRequests = new WeakMap<HTMLDivElement, number>();
 
+/** One drawn staff row (up to MEASURES_PER_ROW measures) and what is needed to reuse it without redrawing. */
+interface RowLayout {
+  /** Everything that decides the row's pixels. Equal signature => the old `<g>` is still exact. */
+  signature: string;
+  group: SVGGElement | null;
+  /** Right edge of the row, for the canvas width. */
+  endX: number;
+  /** True when a measure of this row used the expanded (label / split-note) spacing. */
+  spaced: boolean;
+  /** Cursor anchors per measure: measure start, every tickable, measure end. */
+  measures: { start: number; points: { tick: number; x: number }[] }[];
+}
+/**
+ * Row cache (H-03). Holds only the SVG and row groups that are on screen for a staff element — no history,
+ * at most ceil(measures / 4) entries — and dies with the element (WeakMap). While it is valid the next
+ * render keeps that SVG in place and swaps only the rows whose signature changed.
+ * It is dropped on any failure and ignored once its SVG left the element, so a stale row is never shown.
+ */
+interface StaffCache { svg: SVGSVGElement; rows: RowLayout[]; cursor: SVGElement | null }
+const rowCaches = new WeakMap<HTMLDivElement, StaffCache>();
+/** The cache of `element`, only while its SVG is still the element's own child. */
+function liveCache(element: HTMLDivElement): StaffCache | undefined {
+  const cache = rowCaches.get(element);
+  return cache && cache.svg.parentNode === element ? cache : undefined;
+}
+
 function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
   const accidental =
     event.pitch.alter > 0
@@ -75,11 +101,12 @@ export async function renderScoreInto(
   renderRequests.set(element, request);
   const playingIds = new Set(Array.from(element.querySelectorAll?.('[data-event-id][data-playing="true"]') ?? [])
     .map((note) => note.getAttribute("data-event-id")));
-  element.innerHTML = "";
+  // A live cache keeps the current SVG on screen until the changed rows are swapped in; otherwise start empty.
+  if (!liveCache(element)) { rowCaches.delete(element); element.innerHTML = ""; }
   const part = score.parts[0];
-  if (!part) return;
+  if (!part) { rowCaches.delete(element); element.innerHTML = ""; return; }
   const plan = planPartNotation(part);
-  if (!plan.ok) throw new NotationRenderError(plan.issue);
+  if (!plan.ok) { rowCaches.delete(element); element.innerHTML = ""; throw new NotationRenderError(plan.issue); }
   const vexflow = await import("vexflow");
   if (options?.signal?.aborted || renderRequests.get(element) !== request) return;
   try {
@@ -94,6 +121,7 @@ export async function renderScoreInto(
       GhostNote,
       Dot,
       Annotation,
+      SVGContext,
     } = vexflow;
 
 
@@ -111,6 +139,9 @@ export async function renderScoreInto(
     const width = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
     const height = rows * rowHeight + STAVE_TOP;
 
+    const kept = liveCache(element);
+    if (!kept) { rowCaches.delete(element); element.innerHTML = ""; }
+    // With a kept SVG this renderer is only a scratch surface: changed rows are drawn here and moved over.
     const renderer = new Renderer(element, Renderer.Backends.SVG);
     renderer.resize(width, height);
     const context = renderer.getContext();
@@ -123,15 +154,65 @@ export async function renderScoreInto(
       string,
       { first: InstanceType<typeof StaveNote>; last: InstanceType<typeof StaveNote>; row: number }
     >();
-    const visualTies: { from: InstanceType<typeof StaveNote>; to: InstanceType<typeof StaveNote> }[] = [];
+    const visualTies: { from: InstanceType<typeof StaveNote>; to: InstanceType<typeof StaveNote>; row: number }[] = [];
+
+    // Rows are independent: a row is redrawn only when its own signature changed (H-03).
+    // Without a real SVG context (unit-test doubles) every row is drawn and nothing is cached.
+    const svgContext = context instanceof SVGContext ? context : null;
+    const previousRows = svgContext ? kept?.rows : undefined;
+    const layouts: RowLayout[] = [];
+    const planned = plan.measures;
+    const rowOfEvent = new Map<string, number>();
+    plan.measures.forEach((fragments, index) => {
+      for (const fragment of fragments) rowOfEvent.set(fragment.event.id, Math.floor(index / MEASURES_PER_ROW));
+    });
+    const tieSignatures: string[][] = [];
+    for (const tie of part.ties) {
+      const fromRow = rowOfEvent.get(tie.from);
+      const toRow = rowOfEvent.get(tie.to);
+      if (fromRow === undefined || toRow === undefined) continue;
+      const entry = `${tie.from}>${tie.to}>${fromRow === toRow ? "same" : "cross"}`;
+      (tieSignatures[fromRow] ??= []).push(entry);
+      if (toRow !== fromRow) (tieSignatures[toRow] ??= []).push(entry);
+    }
+    function signatureOf(row: number): string {
+      const from = row * MEASURES_PER_ROW;
+      return JSON.stringify([row, labelMode, part.clef, keySpec, part.timeSignature.numerator, part.timeSignature.denominator,
+        part.measures.slice(from, from + MEASURES_PER_ROW).map((measure, offset) => [measure.index, measure.events.length,
+          planned[from + offset].map((fragment) => [fragment.event.id, fragment.event.kind,
+            fragment.event.kind === "note" ? vexKeyOf(fragment.event) : "", fragment.startTick, fragment.duration.base,
+            fragment.duration.dots, fragment.duration.ticks, fragment.index, fragment.count,
+            continuation.has(fragment.event.id) ? 1 : 0])]),
+        tieSignatures[row] ?? []]);
+    }
+    let layout: RowLayout = { signature: "", group: null, endX: 0, spaced: false, measures: [] };
+    let reused = false;
 
     part.measures.forEach((measure, index) => {
       const fragments = plan.measures[index];
       const spaced = labelled || fragments.some((fragment) => fragment.count > 1);
-      expandedLayout ||= spaced;
       const row = Math.floor(index / MEASURES_PER_ROW);
       const column = index % MEASURES_PER_ROW;
-      if (column === 0) { rowX = 10; rowY = row * rowHeight + STAVE_TOP; }
+      if (column === 0) {
+        rowX = 10; rowY = row * rowHeight + STAVE_TOP;
+        const signature = svgContext ? signatureOf(row) : "";
+        const previous = previousRows?.[row];
+        reused = Boolean(svgContext && previous?.group && previous.signature === signature);
+        if (reused && previous) {
+          layout = previous; // stays where it is in the kept SVG
+        } else {
+          const group: SVGGElement | null = svgContext ? svgContext.openGroup("staff-row") : null;
+          group?.setAttribute("data-staff-row", String(row));
+          layout = { signature, group, endX: rowX, spaced: false, measures: [] };
+        }
+        layouts.push(layout);
+      }
+      if (reused) return;
+      const closeRow = () => {
+        layout.endX = rowX;
+        if (svgContext && (column === MEASURES_PER_ROW - 1 || index === part.measures.length - 1)) svgContext.closeGroup();
+      };
+      layout.spaced ||= spaced;
       const stave = new Stave(
         rowX,
         rowY,
@@ -152,20 +233,14 @@ export async function renderScoreInto(
       stave.setContext(context);
       if (!spaced || measure.events.length === 0) stave.draw();
       const start = measureStartTick(measure.index, part.timeSignature);
-      const atCursor = cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick) &&
-        cursorTick >= start && (cursorTick < start + length ||
-          (index === part.measures.length - 1 && cursorTick === start + length));
-      function locateCursor(anchors: { tick: number; x: number }[] = []) {
-        if (!atCursor) return;
-        const points = [{ tick: start, x: stave.getNoteStartX() }, ...anchors,
-          { tick: start + length, x: stave.getNoteEndX() }];
-        const right = points.findIndex((point) => point.tick > cursorTick!);
-        const left = right < 0 ? points.at(-1)! : points[Math.max(0, right - 1)];
-        const next = right < 0 ? left : points[right];
-        const ratio = next.tick === left.tick ? 0 : (cursorTick! - left.tick) / (next.tick - left.tick);
-        cursorPoint = { x: left.x + ratio * (next.x - left.x), y: rowY + 10 };
+      // A cached row keeps every anchor for later cursor moves; otherwise only the cursor's own measure is measured.
+      const anchored = svgContext !== null ||
+        (cursorTick !== null && cursorTick !== undefined && cursorTick >= start && cursorTick <= start + length);
+      function recordAnchors(anchors: () => { tick: number; x: number }[] = () => []) {
+        layout.measures.push({ start, points: anchored ? [{ tick: start, x: stave.getNoteStartX() }, ...anchors(),
+          { tick: start + length, x: stave.getNoteEndX() }] : [] });
       }
-      if (measure.events.length === 0) { locateCursor(); rowX += MEASURE_WIDTH; return; }
+      if (measure.events.length === 0) { recordAnchors(); rowX += MEASURE_WIDTH; closeRow(); return; }
 
       const events = fragments.map((fragment) => fragment.event);
       const notes = fragments.map((fragment) => {
@@ -207,7 +282,7 @@ export async function renderScoreInto(
         tickables.push(notes[position]); ticks.push(fragment.startTick);
         cursor = fragment.startTick + fragment.duration.ticks;
         if (fragment.index > 0 && fragment.event.kind === "note") {
-          visualTies.push({ from: notes[position - 1], to: notes[position] });
+          visualTies.push({ from: notes[position - 1], to: notes[position], row });
         }
       });
       if (cursor < start + length) addGap(cursor, start + length - cursor);
@@ -227,10 +302,9 @@ export async function renderScoreInto(
       if (spaced) stave.setWidth(measureWidth);
       formatter.format([voice], spaced ? measureWidth - inset - 30 : measureWidth - 40);
       rowX += measureWidth;
-      canvasWidth = Math.max(canvasWidth, rowX + 10);
       if (spaced) stave.draw();
       voice.draw(context, stave);
-      if (atCursor) locateCursor(tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
+      recordAnchors(() => tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
 
       events.forEach((event, position) => {
         const noteElement = notes[position].getSVGElement();
@@ -254,31 +328,71 @@ export async function renderScoreInto(
         const previous = rendered.get(event.id);
         rendered.set(event.id, { first: previous?.first ?? notes[position], last: notes[position], row });
       });
+      closeRow();
     });
 
+    for (const row of layouts) {
+      canvasWidth = Math.max(canvasWidth, row.endX + 10);
+      expandedLayout ||= row.spaced;
+    }
+
+    // Ties keep their original draw order, but each one lands inside the group of the row it belongs to,
+    // so a reused row already carries its ties and a redrawn row gets all of them back.
+    type Tie = InstanceType<typeof StaveTie>;
+    function drawTie(row: number, tie: Tie) {
+      const group = layouts[row]?.group;
+      if (!svgContext || !group) { tie.setContext(context).draw(); return; }
+      const parent = svgContext.parent;
+      svgContext.parent = group;
+      try { tie.setContext(context).draw(); } finally { svgContext.parent = parent; }
+    }
     for (const tie of visualTies) {
-      new StaveTie({ firstNote: tie.from, lastNote: tie.to, firstIndexes: [0], lastIndexes: [0] }).setContext(context).draw();
+      drawTie(tie.row, new StaveTie({ firstNote: tie.from, lastNote: tie.to, firstIndexes: [0], lastIndexes: [0] }));
     }
     for (const tie of part.ties) {
+      const fromRow = rowOfEvent.get(tie.from);
+      const toRow = rowOfEvent.get(tie.to);
+      if (fromRow === undefined || toRow === undefined) continue;
+      // An end inside a reused row is absent here: that row's group already contains its part of the tie.
       const first = rendered.get(tie.from);
       const last = rendered.get(tie.to);
-      if (!first || !last) continue;
-
       const indexes = { firstIndexes: [0], lastIndexes: [0] };
 
-      if (first.row === last.row) {
-        new StaveTie({ firstNote: first.last, lastNote: last.first, ...indexes })
-          .setContext(context)
-          .draw();
+      if (fromRow === toRow) {
+        if (first && last) drawTie(fromRow, new StaveTie({ firstNote: first.last, lastNote: last.first, ...indexes }));
         continue;
       }
 
       // 줄이 바뀌면 VexFlow는 양끝을 한 번에 그릴 수 없다 → 부분 타이로 나눠 그린다.
-      new StaveTie({ firstNote: first.last, ...indexes }).setContext(context).draw();
-      new StaveTie({ lastNote: last.first, ...indexes }).setContext(context).draw();
+      if (first) drawTie(fromRow, new StaveTie({ firstNote: first.last, ...indexes }));
+      if (last) drawTie(toRow, new StaveTie({ lastNote: last.first, ...indexes }));
     }
+    if (cursorTick !== null && cursorTick !== undefined && Number.isSafeInteger(cursorTick)) {
+      layouts.forEach((row, rowIndex) => row.measures.forEach((measure, column) => {
+        const isLast = rowIndex * MEASURES_PER_ROW + column === part.measures.length - 1;
+        if (!measure.points.length || cursorTick < measure.start || !(cursorTick < measure.start + length || (isLast && cursorTick === measure.start + length))) return;
+        const right = measure.points.findIndex((point) => point.tick > cursorTick);
+        const left = right < 0 ? measure.points.at(-1)! : measure.points[Math.max(0, right - 1)];
+        const next = right < 0 ? left : measure.points[right];
+        const ratio = next.tick === left.tick ? 0 : (cursorTick - left.tick) / (next.tick - left.tick);
+        cursorPoint = { x: left.x + ratio * (next.x - left.x), y: rowIndex * rowHeight + STAVE_TOP + 10 };
+      }));
+    }
+    // Move the redrawn rows into the kept SVG (same position), drop rows that no longer exist and the scratch SVG.
+    const staffSvg = svgContext && kept && previousRows ? kept.svg : null;
+    if (svgContext && kept && staffSvg) {
+      kept.cursor?.remove();
+      layouts.forEach((row, index) => {
+        const previous = previousRows?.[index];
+        if (!row.group || row === previous) return;
+        if (previous?.group) previous.group.replaceWith(row.group); else staffSvg.appendChild(row.group);
+      });
+      previousRows?.slice(layouts.length).forEach((row) => row.group?.remove());
+      svgContext.svg.remove();
+    }
+    let cursorLine: SVGElement | null = null;
     if (cursorPoint) {
-      const svg = element.querySelector("svg");
+      const svg = staffSvg ?? element.querySelector("svg");
       if (svg) {
         const line = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "line");
         for (const [key, value] of Object.entries({ x1: cursorPoint.x, x2: cursorPoint.x,
@@ -286,20 +400,32 @@ export async function renderScoreInto(
           "pointer-events": "none", "data-testid": "staff-edit-cursor", "data-tick": cursorTick,
           "aria-label": "편집 커서" })) line.setAttribute(key, String(value));
         svg.appendChild(line);
+        cursorLine = line;
       }
     }
+    // The scratch SVG carries the size the renderer computed; the kept one takes it over.
+    const syncSize = () => {
+      if (!svgContext || !staffSvg) return;
+      for (const attribute of Array.from(svgContext.svg.attributes)) staffSvg.setAttribute(attribute.name, attribute.value);
+    };
+    syncSize();
     if (expandedLayout) {
-      const svg = element.querySelector?.("svg");
+      const svg = staffSvg ?? element.querySelector?.("svg");
       const bounds = svg?.getBBox?.();
       const x = Math.min(0, (bounds?.x ?? 8) - 8);
       const y = Math.min(0, (bounds?.y ?? 8) - 8);
       const right = Math.max(canvasWidth, bounds ? bounds.x + bounds.width + 8 : canvasWidth);
       const bottom = Math.max(height, bounds ? bounds.y + bounds.height + 8 : height);
       renderer.resize(right - x, bottom - y);
+      syncSize();
       svg?.setAttribute("viewBox", `${x} ${y} ${right - x} ${bottom - y}`);
+    }
+    if (svgContext) {
+      rowCaches.set(element, { svg: staffSvg ?? svgContext.svg, rows: layouts, cursor: cursorLine });
     }
 
   } catch (error) {
+    rowCaches.delete(element);
     if (renderRequests.get(element) === request && !options?.signal?.aborted) element.innerHTML = "";
     throw error;
   }
