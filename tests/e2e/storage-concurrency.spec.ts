@@ -43,7 +43,7 @@ test("같은 context 두 탭의 동일 revision 저장은 한 번만 커밋하�
   await expect(loser.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
   const download = loser.waitForEvent("download");
   await loser.getByRole("button", { name: "현재 내용 JSON 백업", exact: true }).click();
-  expect((await download).suggestedFilename()).toBe(`${loserTitle}.json`);
+  expect((await download).suggestedFilename().normalize("NFC")).toBe(`${loserTitle}.json`); // WebKit reports NFD
   await loser.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(loser.getByRole("heading", { name: "새 악보", exact: true })).toBeVisible();
   await loser.getByRole("button", { name: "Redo", exact: true }).click();

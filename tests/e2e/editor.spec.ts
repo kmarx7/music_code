@@ -180,7 +180,8 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   const downloadEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
   const download = await downloadEvent;
-  expect(download.suggestedFilename()).toBe("백업 연습곡.json");
+  // The app hands the browser an NFC name; WebKit on macOS reports it decomposed (NFD). Compare the same text in one form.
+  expect(download.suggestedFilename().normalize("NFC")).toBe("백업 연습곡.json");
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));

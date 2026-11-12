@@ -8,7 +8,8 @@ export function exportScoreBackup(score: Score): { json: string; filename: strin
   const json = serializeScore(score);
   const validated = deserializeScore(json);
   if (!validated.ok) throw new Error(validated.message);
-  const name = score.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim().slice(0, 80) || "score";
+  // NFC first: a decomposed (NFD) Hangul title would otherwise be cut mid-syllable by the 80-unit limit.
+  const name = score.title.normalize("NFC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim().slice(0, 80) || "score";
   return { json, filename: `${name}.json` };
 }
 

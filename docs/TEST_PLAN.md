@@ -1416,3 +1416,21 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
   Chromium E2E 71/71 PASS.
 - NOT RUN: Safari/Firefox, 실제 모바일·저사양 기기, 실제 청취, 재생 중 부하, 256마디 초과, 긴 단일 타이 체인,
   Undo 이력 누적 메모리, 수동 UAT. 허용 지연 수치가 합의되지 않아 성능 PASS를 선언하지 않는다.
+
+## 수동 UAT 사전 점검 — WebKit 자동 실행 (2026-11-13, Claude Code)
+
+수동 UAT-S/A/T의 **대체가 아니다**. 제품 코드 `6b70db9`, Playwright 1.65.0, WebKit 27.2(build 2388), macOS 27.0.1.
+기존 E2E 71개를 프로젝트 "Desktop Safari"와 "iPhone 15"(에뮬레이션)로 실행. 임시 설정 파일은 실행 후 삭제했다.
+
+| 조건 | PASS | FAIL | 실패 내용 |
+|---|---:|---:|---|
+| WebKit Desktop Safari | 69 | 2 | `editor.spec.ts:157` JSON 다운로드, `storage-concurrency.spec.ts:30` 패자 JSON 백업 |
+| WebKit iPhone 15 에뮬레이션 | 69 | 2 | 위와 같은 2개 |
+
+- 4건 모두 `download.suggestedFilename()`이 한글 NFD로 와서 NFC 기대값과 달랐다(NFC 정규화 후 동일). 기대값은 약화하지 않았다.
+  해당 두 테스트의 단언 이후 단계(JSON 내용 확인·복원, Undo/Redo·새 ID 저장)는 WebKit에서 실행되지 않았다.
+- NOT RUN(사람·실기기 필요): UAT-S 실제 Mac Safari 27.0.1 수동, UAT-A 실제 청취(A-01~05와 rate/loop 경계),
+  UAT-T 실제 iPhone Safari/Android Chrome, UAT-C Mac Chrome 수동, UAT-R 이탈/강제 종료. Firefox도 실행하지 않았다.
+- 후속 재실행(NFD 처리 후, 같은 날): Chromium 71/71 PASS, 단위·통합 840 PASS. WebKit 142개 중 141 PASS / 1 FAIL.
+  NFD 4건은 해소. 남은 1건은 `piano-preview.spec.ts:70`의 WebKit Desktop 간헐 실패(단독 8회 반복 중 1회, 음표 3개 기대·2개 저장)로
+  원인 미조사·미해결이며 Chromium에서는 재현되지 않았다.

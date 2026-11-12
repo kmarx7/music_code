@@ -53,6 +53,27 @@ describe("JSON backup and import", () => {
     expect(JSON.parse(backup.json).title).toBe(score.title);
   });
 
+  it("gives a decomposed (NFD) Hangul title a composed (NFC) filename and leaves the stored title untouched", () => {
+    const title = "연습곡".normalize("NFD");
+    const backup = exportScoreBackup({ ...tiedScore(), title });
+    expect(backup.filename).toBe("연습곡.json");
+    expect(backup.filename).toBe(backup.filename.normalize("NFC"));
+    expect(JSON.parse(backup.json).title).toBe(title);
+    const long = exportScoreBackup({ ...tiedScore(), title: "가".repeat(90).normalize("NFD") });
+    expect(long.filename).toBe(`${"가".repeat(80)}.json`);
+  });
+
+  it("gives a decomposed (NFD) Hangul title a composed (NFC) filename and leaves the stored title untouched", () => {
+    const title = "백업 연습곡".normalize("NFD");
+    const backup = exportScoreBackup({ ...tiedScore(), title });
+    expect(backup.filename).toBe("백업 연습곡.json");
+    expect(backup.filename).toBe(backup.filename.normalize("NFC"));
+    expect(JSON.parse(backup.json).title).toBe(title);
+    // 80 composed syllables stay whole: the limit is applied after composing.
+    const long = exportScoreBackup({ ...tiedScore(), title: "가".repeat(90).normalize("NFD") });
+    expect(long.filename).toBe(`${"가".repeat(80)}.json`);
+  });
+
   it("imports a v1 score using the existing v2 migration", async () => {
     const legacy = JSON.parse(serializeScore(tiedScore()));
     legacy.schemaVersion = 1;

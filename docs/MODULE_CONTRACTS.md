@@ -801,7 +801,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - **구현 기본값(사용자 명시 승인 아님):** 이벤트 없는 구간 Cut 거부, Undo/Redo는 clipboard를 바꾸지 않음,
   Cut 후 편집 커서 유지, `updatedAt` 미변경.
 
-## 악보 줄 캐시(H-03, 2026-11-13, 미커밋)
+## 악보 줄 캐시(H-03, 2026-11-13, 로컬 커밋 `6b70db9`)
 
 - 위치: `adapters/vexflow/renderScore.ts` 내부. 공개 시그니처 `renderScoreInto(element, score, options)`는 그대로다.
 - 단위: 줄(4마디). 줄마다 SVG `<g class="vf-staff-row" data-staff-row="n">` 하나.
