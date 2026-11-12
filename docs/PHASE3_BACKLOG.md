@@ -161,7 +161,7 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-09 — 원자 Cut
 
-- 진행 상태(2026-11-12): **구현·자동 검증 완료**(미커밋). 단위·통합 832 PASS, Chromium E2E 69/69 PASS.
+- 진행 상태(2026-11-12): **구현·자동 검증 완료**(로컬 커밋 `adca21e`). 단위·통합 832 PASS, Chromium E2E 69/69 PASS.
   상세는 TASKS §12, TEST_PLAN "P3-09", MODULE_CONTRACTS "Phase 3 — 원자 Cut". Safari·실기기는 NOT RUN.
 - 선행: P3-08. 예상: 같은 Command/application/UI와 단위·통합·E2E.
 - 범위: 타이가 닫힌 선택의 삭제와 clipboard 교체. 자동 tie 절단·뒤 이벤트 당기기 제외.
@@ -173,6 +173,10 @@ H-01/H-02의 결함 수정과 새 기능을 같은 커밋에 섞지 않는다.
 
 ### P3-10 — Phase 3 통합 인수
 
+- 진행 상태(2026-11-12): **자동 검증 부분 완료, 전체 인수는 미완료**(미커밋). 통합 E2E
+  `tests/e2e/phase3-integration.spec.ts` 1개 추가, 재현된 결함 없음, 제품 코드 변경 없음.
+  단위·통합 832 PASS, Chromium E2E 70/70 PASS. 아래 수동 UAT가 모두 NOT RUN이라 인수 완료로 표시하지 않는다.
+  상세는 TASKS §13, TEST_PLAN "P3-10".
 - 선행: P3-03/P3-05/P3-09 및 아래 UAT. 예상: tests/docs, 재현된 결함만 최소 수정.
 - 수용: transpose→labels→range→copy/paste→rate/loop→save/reopen/JSON 흐름 일치.
   실패/no-op/Undo/OCC/삭제/손상 보호와 기존 614/55 assertion을 유지하고 신규 테스트를 실제 실행한다.

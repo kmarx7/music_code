@@ -1332,3 +1332,19 @@ npm run test:e2e
   Undo 1회 후 저장 Part가 원본과 동일하고 clipboard는 유지, Redo, 5마디에 붙여넣기(새 ID·타이 재구성), 새로고침 후 유지,
   모바일 hasTouch tap으로 Cut→Paste와 가로 넘침 없음.
 - NOT RUN: Safari/WebKit/Firefox, 모바일 실기기, 스크린리더, 대형 악보 성능, Cut 전용 두 탭 OCC/Tombstone E2E, 수동 사용 확인.
+
+
+## P3-10 — Phase 3 통합 인수 (2026-11-12, Claude Code)
+
+- 단위·통합 **51파일/832개 PASS**(변경 없음). typecheck/lint/architecture(68모듈/219의존성/61파일 위반0) PASS.
+- Chromium E2E **70/70 PASS**(기존69+신규1, 프로덕션 build 포함). `tests/e2e/phase3-integration.spec.ts`:
+  입력(온음표, 마디 경계 타이) → 조옮김 C→D 확정(저장 음높이·fifths 2) → letter 라벨이 조옮김된 음을 표시 →
+  2–3마디 선택·복사 → 5마디 붙여넣기 → 1마디 잘라내기 → 7마디 붙여넣기(저장 이벤트 5개·타이 2개·ID 고유) →
+  150% + A–B 반복 5–6마디 재생 중 재생 tick이 [15360, 23040) 유지와 재생 하이라이트 1개 →
+  라벨/선택/clipboard/rate/loop 후 **IndexedDB 원시 row 불변** → JSON 백업 = 저장 Score, 연습·UI 키 없음 →
+  Undo 4회로 단계별 복원(조표 0 포함)·Redo 4회 후 저장 Score 동일 → 새로고침 후 연습·UI 상태 기본값 복귀 →
+  악보함에서 재열기 후 저장 Score 동일.
+- 인수 테스트라 실패 선확인 없음(첫 실행 통과). 재현된 결함 없음, 제품 수정 없음.
+- 이 흐름에 미포함: 두 탭 OCC, Tombstone, 손상 row, 거부/no-op. 기능별 기존 E2E 통과로 유지 확인.
+- NOT RUN: 수동 UAT-C/S/A/T/R 전부(Mac Chrome 수동, Safari, 실제 청취, iPhone/Android 실기기, hidden/강제 종료 복구),
+  WebKit/Firefox 자동화, 스크린리더, 대형 악보 성능(H-03).

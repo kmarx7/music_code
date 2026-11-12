@@ -900,7 +900,7 @@
 - Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-08 변경분은 commit하지 않았다.
 - 다음: (1) P3-08 커밋 여부, (2) P3-09 원자 Cut, (3) P3-10 통합 인수, (4) 실제 청취 인수(UAT-A), (5) H-03.
 
-## 12. P3-09 — 원자 Cut (구현·자동 검증 완료, 미커밋, 2026-11-12)
+## 12. P3-09 — 원자 Cut (구현·자동 검증 완료, 로컬 커밋 `adca21e`, 2026-11-12)
 
 - 요청: 사용자가 "커밋해주고 다음 진행"을 지시했다. P3-08은 `3a6fbc8`(`feat(editor): add copy and paste controls`)로
   로컬 커밋했다(push 없음). 위 §11의 "미커밋" 서술은 이 커밋으로 해소됐다.
@@ -924,3 +924,32 @@
   Cut 전용 두 탭 OCC/Tombstone E2E는 추가하지 않았다(같은 dispatch·autosave 경로인 Paste에서 검증).
 - Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-09 변경분은 commit하지 않았다.
 - 다음: (1) P3-09 커밋 여부, (2) P3-10 Phase 3 통합 인수, (3) 수동 UAT(청취·Safari·실기기), (4) H-03.
+
+## 13. P3-10 — Phase 3 통합 인수 (자동 검증 완료·수동 UAT NOT RUN, 미커밋, 2026-11-12)
+
+- 요청: 사용자가 "커밋해주고 다음 진행"을 지시했다. P3-09는 `adca21e`(`feat(editor): add atomic cut`)로
+  로컬 커밋했다(push 없음). 위 §12의 "commit하지 않았다" 서술은 이 커밋으로 해소됐다.
+- 범위: Phase 3 기능을 한 흐름으로 묶는 자동 인수 테스트와 문서. 제품 코드 변경 없음, 신규 기능 없음.
+- 신규 파일 1개: `tests/e2e/phase3-integration.spec.ts`(테스트 1개). 한 악보에서 순서대로
+  입력(온음표 + 마디를 넘는 타이) → 조옮김 C→D 확정 → 라벨(letter) → 2–3마디 선택·복사 → 5마디 붙여넣기 →
+  1마디 잘라내기 → 7마디 붙여넣기 → 연습 속도 150% + A–B 반복(5–6마디) 재생 → JSON 백업 →
+  Undo 4회/Redo 4회 → 새로고침 → 악보함에서 재열기를 수행한다.
+- 확인한 것: 각 단계의 IndexedDB 저장 Part(시작 tick·길이·MIDI), 조표 fifths 2, 타이 2개, 이벤트 ID 5개 고유,
+  schemaVersion 2, 반복 재생 중 재생 tick이 반복 구간 [15360, 23040) 안에 머무름(12회 표본), 라벨·선택·clipboard·
+  rate·loop 조작 후 **원시 row 불변**(revision 포함), tempoBpm 120 불변, JSON 백업 = 저장 Score이며
+  연습·UI 상태 키 없음, Undo가 붙여넣기→잘라내기→붙여넣기→조옮김을 1회씩 되돌리고 Redo 후 저장 Score 동일,
+  새로고침 후 라벨/rate/loop/선택/clipboard 기본값 복귀와 악보 유지, 재열기 후 저장 Score 동일.
+- 재현된 결함: 없음. 따라서 제품 수정 없음. 이 테스트는 이미 구현된 기능의 인수 테스트라 실패 선확인 단계가 없고
+  첫 실행에서 통과했다(회귀 감지력을 변이로 따로 확인하지는 않았다).
+- 이 통합 흐름에 넣지 않은 것: 두 탭 OCC·Tombstone·손상 row·거부/no-op 경로. 각 기능의 기존 E2E
+  (`copy-paste`, `cut`, `transpose-integration`, `ab-loop` 등)가 그대로 통과하는 것으로 유지를 확인했다.
+- 실제 실행: `npm run test` **51파일/832개 PASS**, typecheck/lint PASS,
+  `npm run check:architecture` 68모듈/219의존성/경계61파일 위반0,
+  `npx playwright test`(프로덕션 build+start) **Chromium 70/70 PASS**(기존69+신규1), `git diff --check` PASS.
+  기존 테스트 삭제·skip·기대값 변경 없음.
+- **인수 상태: 자동 검증 부분만 완료.** BACKLOG의 수동 UAT-C/S/A/T/R는 전부 NOT RUN이므로 P3-10 전체 인수는
+  완료가 아니다. 실제 스피커 청취(속도·반복 경계), Mac Safari, iPhone/Android 실기기, hidden/강제 종료 복구,
+  스크린리더, 대형 악보 성능(H-03)은 검증하지 않았다.
+- 사용자 확인 대기: 연습 속도·반복·구간 선택·붙여넣기·잘라내기의 구현 기본값(§7~§12, 사용자 명시 승인 아님).
+- Score v2/Part.ties/DB2/ADR-010/의존성/레이어 변경 없음. P3-10 변경분은 commit하지 않았다.
+- 다음: (1) P3-10 커밋 여부, (2) 수동 UAT 실행(사용자), (3) 구현 기본값 확정, (4) H-03, (5) Phase 4 이후는 별도 승인.
