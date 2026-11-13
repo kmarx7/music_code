@@ -1450,3 +1450,14 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - typecheck, lint, architecture(위반 0), `git diff --check` PASS. 테스트 삭제·skip·기대값 약화 없음. 임시 진단 spec과 임시 WebKit 설정은 삭제했다.
 - NOT RUN: 실제 Mac Safari·실기기·실제 청취(UAT-S/A/T/C/R), Firefox. WebKit 자동 실행은 실제 Safari 앱의 대체가 아니다.
+
+## 공개 시험 주소 자동 점검 (2026-11-13, Claude Code)
+대상 `https://00musiccode.vercel.app`(코드 `9a8b3dc`). 기존 E2E 71개, 로컬 서버 없이 배포 주소로 실행. 임시 설정은 삭제했다.
+
+| 조건 | PASS | FAIL |
+|---|---:|---:|
+| Chromium | 71 | 0 |
+| WebKit Desktop Safari | 71 | 0 |
+| WebKit iPhone 15 에뮬레이션 | 71 | 0 |
+
+- NOT RUN: 수동 UAT-S/A/T/R/C 전부, Firefox. 이 실행은 실제 Safari·실기기·청취의 대체가 아니다.
