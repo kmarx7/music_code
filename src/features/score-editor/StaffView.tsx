@@ -55,6 +55,10 @@ export function StaffView({ score, cursorTick = null, labelMode = "none", onSele
     <div
       ref={ref}
       data-testid="staff"
+      // A wide score scrolls sideways; keyboard users scroll it with the arrow keys once it has focus (WCAG 2.1.1).
+      role="region"
+      aria-label="악보"
+      tabIndex={0}
       onClick={(event) => {
         if (!onSelectEvent || !(event.target instanceof Element)) return;
         const id = event.target.closest("[data-event-id]")?.getAttribute("data-event-id");

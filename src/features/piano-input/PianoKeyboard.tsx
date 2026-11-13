@@ -5,8 +5,8 @@ import { createPianoPreview, type PianoPreview } from "@/adapters/tone/pianoPrev
 import type { Pitch } from "@/domain/score/types";
 import { buildPianoKeys, midiToPitch, pitchFromComputerKey } from "./keys";
 
-const WHITE_WIDTH = 26;
-const BLACK_WIDTH = 16;
+const WHITE_WIDTH = 34; // P6-04: black keys reach the WCAG 2.5.8 24×24 px target size
+const BLACK_WIDTH = 24;
 const WHITE_HEIGHT = 120;
 const BLACK_HEIGHT = 74;
 
