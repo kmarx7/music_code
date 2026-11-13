@@ -1,7 +1,8 @@
 import { measureTicks } from "@/domain/score/create";
 import { SUPPORTED_DENOMINATORS, TICKS_PER_QUARTER } from "@/domain/score/constants";
 import type { ClipboardPayload } from "@/domain/score/clipboard";
-import type { KeySignature, TimeSignature } from "@/domain/score/types";
+import type { KeySignature, Score, TimeSignature } from "@/domain/score/types";
+import type { EditCommand } from "@/domain/commands/types";
 import {
   estimatePitchTrack, quantizeSegments, segmentNotes, transcriptionToClipboard, type QuantizedNote,
 } from "@/domain/transcription";
@@ -87,5 +88,39 @@ export function transcribeRecording(recording: AudioRecording, settings: Transcr
   return {
     ok: true, notes: quantized.notes,
     clipboard: transcriptionToClipboard(quantized, { key: settings.key, timeSignature: settings.timeSignature, nextId: settings.nextId }),
+  };
+}
+
+/** Where a confirmed take goes: after the last measure that holds an event, or at the start of the cursor's measure. */
+export type TranscriptionTarget = "end" | "cursor";
+
+export type TranscriptionCommitPlan =
+  | { ok: true; command: Extract<EditCommand, { type: "PasteEvents" }>; startMeasure: number }
+  | { ok: false; message: string };
+
+/**
+ * One PasteEvents command for a take (decision 5): measure-aligned, empty target only, and with the IDs of any measures
+ * the take needs beyond the score's end, so the whole confirmation — new measures included — is one Undo step.
+ */
+export function planTranscriptionCommit(score: Score, clipboard: ClipboardPayload, options: {
+  target: TranscriptionTarget; cursorTick: number | null; nextMeasureId: () => string;
+}): TranscriptionCommitPlan {
+  if (clipboard.events.length === 0 || clipboard.lengthTicks <= 0) return { ok: false, message: "악보에 넣을 음표가 없습니다." };
+  const part = score.parts[0];
+  const bar = measureTicks(part.timeSignature);
+  let startTick: number;
+  if (options.target === "cursor") {
+    if (options.cursorTick === null) return { ok: false, message: "넣을 위치의 커서를 먼저 놓아 주세요." };
+    startTick = Math.floor(options.cursorTick / bar) * bar;
+  } else {
+    const lastEnd = part.measures.flatMap((measure) => measure.events)
+      .reduce((end, event) => Math.max(end, event.startTick + event.durationTicks), 0);
+    startTick = Math.ceil(lastEnd / bar) * bar;
+  }
+  const needed = Math.max(0, Math.ceil((startTick + clipboard.lengthTicks - part.measures.length * bar) / bar));
+  return {
+    ok: true, startMeasure: startTick / bar + 1,
+    command: { type: "PasteEvents", partId: part.id, startTick, clipboard,
+      newMeasureIds: Array.from({ length: needed }, () => options.nextMeasureId()) },
   };
 }

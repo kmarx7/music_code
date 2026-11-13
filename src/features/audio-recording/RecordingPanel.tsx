@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AudioCaptureError, planRecording, recordingDownbeatSeconds, transcribeRecording,
-  type AudioCaptureSession, type AudioTranscriptionPort, type RecordingPlan, type TranscribeResult,
+  AudioCaptureError, planRecording, planTranscriptionCommit, recordingDownbeatSeconds, transcribeRecording,
+  type AudioCaptureSession, type AudioTranscriptionPort, type RecordingPlan, type TranscribeResult, type TranscriptionTarget,
 } from "@/application";
 import { createMicrophoneCapture } from "@/adapters/web-audio";
-import type { Score } from "@/domain/score";
+import { applyEditCommand, type EditCommand } from "@/domain/commands";
+import { letterName, type NoteLabelMode } from "@/domain/music-theory";
+import type { NoteEvent, Score } from "@/domain/score";
+import { StaffView } from "@/features/score-editor";
 import { formatRecordingTime, recordingProgress } from "./progress";
 
 const button: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, border: "1px solid #c8cfdb", background: "#fff", cursor: "pointer" };
@@ -14,6 +17,8 @@ const panel: React.CSSProperties = { background: "#ffffff", border: "1px solid #
 const note: React.CSSProperties = { fontSize: 13, color: "#4a5568", margin: "4px 0" };
 /** The level meter and beat display refresh at most this often; chunks arrive about every 11 ms. */
 const DISPLAY_INTERVAL_MS = 50;
+/** Candidate notes below this confidence are marked for checking (PRD MVP-003 low-confidence regions). */
+export const LOW_CONFIDENCE = 0.8;
 
 type PanelState =
   | { kind: "idle" }
@@ -27,8 +32,13 @@ type PanelState =
  * Humming capture (PRD MVP-002, P4-06). Recording and its PCM live only in this component's memory:
  * nothing is dispatched, saved or uploaded here. The take uses the Score's tempo and meter, locked when it starts.
  */
-export function RecordingPanel({ score, port, onStart, onTranscribed }: {
+export function RecordingPanel({ score, cursorTick = null, labelMode = "none", port, onStart, onTranscribed, onCommand }: {
   score: Score;
+  /** Edit cursor, for "insert from the cursor's measure". */
+  cursorTick?: number | null;
+  labelMode?: NoteLabelMode;
+  /** The editor's single dispatch path. Returns an error message, or null on success. */
+  onCommand?: (command: EditCommand) => string | null;
   /** Injected in tests; the browser microphone otherwise. */
   port?: AudioTranscriptionPort;
   /** Called before the microphone opens, e.g. to stop playback. */
@@ -38,6 +48,9 @@ export function RecordingPanel({ score, port, onStart, onTranscribed }: {
   const [state, setState] = useState<PanelState>({ kind: "idle" });
   const [consent, setConsent] = useState(false);
   const [metronome, setMetronome] = useState(true);
+  const [target, setTarget] = useState<TranscriptionTarget>("end");
+  const [notice, setNotice] = useState("");
+  const [commitError, setCommitError] = useState("");
   const session = useRef<AudioCaptureSession | null>(null);
   const plan = useRef<RecordingPlan | null>(null);
   const settings = useRef<{ tempoBpm: number; score: Score } | null>(null);
@@ -49,8 +62,31 @@ export function RecordingPanel({ score, port, onStart, onTranscribed }: {
   // Leaving the editor must release the microphone.
   useEffect(() => () => { session.current?.cancel(); session.current = null; }, []);
 
+  const candidate = state.kind === "result" && state.result.ok ? state.result : null;
+  // Read-only preview: the same command applied to the current Score. Nothing is dispatched until the user confirms.
+  const previewed = useMemo(() => {
+    if (!candidate) return null;
+    let next = 0;
+    const plan = planTranscriptionCommit(score, candidate.clipboard, { target, cursorTick, nextMeasureId: () => `preview-measure-${next++}` });
+    if (!plan.ok) return { ok: false as const, message: plan.message };
+    const result = applyEditCommand(score, plan.command);
+    return result.ok ? { ok: true as const, score: result.score, startMeasure: plan.startMeasure } : { ok: false as const, message: result.error.message };
+  }, [candidate, score, target, cursorTick]);
+
+  function confirm() {
+    if (!candidate || !onCommand) return;
+    // Re-plan against the Score as it is now, with real IDs; the preview may be stale by a render.
+    const plan = planTranscriptionCommit(score, candidate.clipboard, { target, cursorTick, nextMeasureId: () => crypto.randomUUID() });
+    if (!plan.ok) { setCommitError(plan.message); return; }
+    const error = onCommand(plan.command);
+    if (error) { setCommitError(error); return; }
+    setNotice(`${plan.startMeasure}마디부터 음표 ${candidate.notes.length}개를 넣었습니다. Undo로 한 번에 되돌릴 수 있습니다.`);
+    setState({ kind: "idle" });
+  }
+
   async function start() {
     onStart?.();
+    setNotice(""); setCommitError("");
     const locked = planRecording(score.tempoBpm, part.timeSignature);
     plan.current = locked; settings.current = { tempoBpm: score.tempoBpm, score };
     setState({ kind: "starting" });
@@ -151,9 +187,45 @@ export function RecordingPanel({ score, port, onStart, onTranscribed }: {
 
       {state.kind === "result" && (
         <p role="status" data-testid="recording-result" data-ok={String(state.result.ok)} style={{ ...note, color: state.result.ok ? "#1f2937" : "#b42318" }}>
-          {state.result.ok ? `음표 ${state.result.notes.length}개를 찾았습니다.` : state.result.message}
+          {state.result.ok ? `음표 ${state.result.notes.length}개를 찾았습니다. 확인한 뒤 악보에 넣어 주세요.` : state.result.message}
         </p>
       )}
+
+      {candidate && (
+        <div data-testid="recording-review" style={{ marginTop: 8 }}>
+          <ol aria-label="채보 후보 음표" style={{ display: "flex", flexWrap: "wrap", gap: 6, listStyle: "none", padding: 0, margin: "0 0 8px" }}>
+            {candidate.clipboard.events.filter((event): event is NoteEvent => event.kind === "note").map((event) => {
+              const low = (event.provenance?.confidence ?? 1) < LOW_CONFIDENCE;
+              return (
+                <li key={event.id} data-low-confidence={String(low)}
+                  style={{ fontSize: 13, padding: "2px 8px", borderRadius: 6, border: `1px solid ${low ? "#d97706" : "#d9dee8"}`,
+                    background: low ? "#fffbeb" : "#f7f8fa" }}>
+                  {letterName(event.pitch)}{low ? <span aria-label="확인 필요"> ?</span> : null}
+                </li>
+              );
+            })}
+          </ol>
+          {candidate.clipboard.events.some((event) => event.kind === "note" && (event.provenance?.confidence ?? 1) < LOW_CONFIDENCE) &&
+            <p style={note}>?가 붙은 음은 분석 확신이 낮습니다. 넣은 뒤 확인해 주세요.</p>}
+          <div role="radiogroup" aria-label="넣을 위치" style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "4px 0 8px", fontSize: 14 }}>
+            <label><input type="radio" name="recording-target" checked={target === "end"} onChange={() => setTarget("end")} /> 악보 끝에 이어쓰기</label>
+            <label><input type="radio" name="recording-target" checked={target === "cursor"} onChange={() => setTarget("cursor")} /> 커서가 있는 마디부터</label>
+          </div>
+          {previewed?.ok ? (
+            <>
+              <p style={note}>{previewed.startMeasure}마디부터 넣으면 아래와 같습니다(미리보기, 아직 저장되지 않음).</p>
+              <div data-testid="recording-candidate"><StaffView score={previewed.score} labelMode={labelMode} /></div>
+            </>
+          ) : previewed ? <p role="alert" style={{ ...note, color: "#b42318" }}>{previewed.message}</p> : null}
+          {commitError ? <p role="alert" style={{ ...note, color: "#b42318" }}>{commitError}</p> : null}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button type="button" style={button} disabled={!previewed?.ok || !onCommand} onClick={confirm}>악보에 넣기</button>
+            <button type="button" style={button} onClick={() => { setCommitError(""); setState({ kind: "idle" }); }}>후보 버리기</button>
+          </div>
+        </div>
+      )}
+
+      {notice ? <p role="status" data-testid="recording-notice" style={note}>{notice}</p> : null}
 
       {state.kind === "error" && <p role="alert" style={{ ...note, color: "#b42318" }}>{state.message}</p>}
     </section>

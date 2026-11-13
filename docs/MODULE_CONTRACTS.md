@@ -872,3 +872,15 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   - `transcribeRecording(recording, { tempoBpm, timeSignature, key, downbeatSeconds?, nextId })` →
     `{ ok: true, notes, clipboard }` | `{ ok: false, issue: "SILENT" | "NO_NOTES", message }`. 최고 표본 < 0.01이면 SILENT.
     Domain 파이프라인(음높이 → 분할 → 격자 → 후보)을 메인 스레드에서 실행하며 녹음을 수정하지 않는다.
+
+## Phase 4 — 채보 확정 (P4-07, 2026-11-13 사용자 승인)
+
+- `PasteEvents`에 선택 필드 `newMeasureIds?: readonly string[]` 추가(하위 호환 확장). 주지 않으면 기존과 같다.
+  - 대상 끝이 마디 용량을 넘을 때만, 필요한 수만큼 앞에서부터 이 ID로 빈 마디를 해당 Part 뒤에 덧붙이고 같은 Command에서 붙여넣는다.
+  - ID가 모자라면 `MEASURE_CAPACITY_EXCEEDED`, 비었거나 중복·기존 마디 ID면 `DUPLICATE_ID`. 실패는 Score 불변. 빈 대상·덮어쓰기 금지 규칙은 그대로다.
+  - 결과는 Command 1개이므로 Undo 1회로 새 마디까지 되돌린다.
+- `planTranscriptionCommit(score, clipboard, { target: "end" | "cursor", cursorTick, nextMeasureId })` (`@/application`).
+  - `end`: 첫 Part에서 이벤트가 있는 마지막 마디의 다음 마디 시작(빈 악보는 1마디). `cursor`: 커서가 있는 마디의 시작. 커서가 없으면 실패.
+  - 필요한 새 마디 수만큼 `nextMeasureId`로 ID를 만들어 `PasteEvents` 명령과 시작 마디 번호를 돌려준다. 빈 후보는 실패.
+- `RecordingPanel` 검토 단계: 후보 음 목록(신뢰도 0.8 미만 `?` 표시), 위치 선택, 같은 명령을 현재 Score에 적용한 읽기 전용 미리보기(`StaffView`),
+  "악보에 넣기"(편집기의 기존 단일 dispatch), "후보 버리기". 확정 직전 최신 Score로 다시 계획한다.

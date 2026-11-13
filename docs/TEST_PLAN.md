@@ -1534,3 +1534,14 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - 전체: `npm run test` 60파일/924 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 74/74 PASS**.
 - 가짜 마이크는 허밍이 아니다. NOT RUN: 실제 마이크·허밍·박 정렬·Safari·iPhone·Android(최종 수동 UAT).
+
+## Phase 4 P4-07 — 후보 검토와 원자 확정 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `paste-new-measures.test.ts` (5) | ID 없으면 기존처럼 용량 거부, 필요한 만큼만 새 마디·ID·index, 맞으면 추가 없음, ID 부족·기존·중복 거부와 불변, 빈 대상 규칙 유지 | PASS |
+| `transcription-commit.test.ts` (4) | 끝 이어쓰기 위치와 새 마디 수, 빈 악보 1마디, 커서 마디 시작, 커서 없음·빈 후보 거부 | PASS |
+| `tests/e2e/recording.spec.ts` (+1, 총 4) | 440Hz 입력으로 후보·미리보기·위치 선택·확정·마디 추가·저장·Undo 1회 복원 | PASS |
+
+- 전체: `npm run test` 62파일/933 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 75/75 PASS**.
+- NOT RUN: 실제 허밍·마이크·Safari·실기기(최종 UAT).

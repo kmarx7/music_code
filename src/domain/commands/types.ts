@@ -33,8 +33,10 @@ export type EditCommand =
    * 클립보드 payload를 `startTick`부터 한 번에 붙여넣는다(C-08). payload의 이벤트 ID는 호출 측이 새로 발급한 값이어야 한다.
    * 대상 `[startTick, startTick + lengthTicks)`는 비어 있어야 하며 덮어쓰기·뒤 이벤트 밀기·마디 추가·타이 절단은 없다.
    * 마디 경계를 넘게 된 음표만 기존 분할 규칙으로 나눠 타이로 잇는다. 실패는 부분 적용 없이 거부한다.
+   * `newMeasureIds`(선택, 2026-11-13 채보 확정용): 공간이 모자랄 때만 필요한 수만큼 이 ID로 빈 마디를 뒤에 덧붙인 뒤 같은 Command 안에서 붙여넣는다.
+   * 남는 ID는 쓰지 않는다. 주지 않으면 기존과 같이 마디를 추가하지 않는다. 빈 대상 규칙은 그대로다.
    */
-  | { type: "PasteEvents"; partId: string; startTick: number; clipboard: ClipboardPayload }
+  | { type: "PasteEvents"; partId: string; startTick: number; clipboard: ClipboardPayload; newMeasureIds?: readonly string[] }
   /**
    * 첫 Part의 `[startTick, endTick)` 구간에 든 이벤트와 그 내부 타이를 한 번에 삭제한다(C-08 Cut).
    * 이벤트 중간이나 타이 체인을 자르는 구간, 이벤트가 없는 구간은 거부한다. 빈 자리는 gap으로 남고

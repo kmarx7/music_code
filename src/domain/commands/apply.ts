@@ -477,8 +477,8 @@ function pasteEvents(
   score: Score,
   command: Extract<EditCommand, { type: "PasteEvents" }>,
 ): CommandResult {
-  const part = partOf(score, command.partId);
-  if (!part) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
+  const original = partOf(score, command.partId);
+  if (!original) return fail("PART_NOT_FOUND", `part를 찾을 수 없습니다: ${command.partId}`);
   const { clipboard, startTick } = command;
   if (clipboard.events.length === 0) return fail("NOTHING_TO_PASTE", "붙여넣을 내용이 없습니다.");
   if (!Number.isSafeInteger(startTick) || startTick < 0) {
@@ -488,10 +488,21 @@ function pasteEvents(
     return fail("INVALID_DURATION", "클립보드 길이가 올바르지 않습니다.");
   }
 
-  const ticksPerMeasure = measureTicks(part.timeSignature);
+  const ticksPerMeasure = measureTicks(original.timeSignature);
   const endTick = startTick + clipboard.lengthTicks;
-  if (endTick > part.measures.length * ticksPerMeasure) {
-    return fail("MEASURE_CAPACITY_EXCEEDED", "붙여넣을 마디 공간이 부족합니다. 마디를 추가한 뒤 다시 시도해 주세요.");
+  let part = original;
+  const capacity = original.measures.length * ticksPerMeasure;
+  if (endTick > capacity) {
+    // Only as many new measures as the paste needs, and only when the caller supplied their IDs.
+    const added = (command.newMeasureIds ?? []).slice(0, Math.ceil((endTick - capacity) / ticksPerMeasure));
+    if (added.length * ticksPerMeasure < endTick - capacity) {
+      return fail("MEASURE_CAPACITY_EXCEEDED", "붙여넣을 마디 공간이 부족합니다. 마디를 추가한 뒤 다시 시도해 주세요.");
+    }
+    if (new Set(added).size !== added.length || added.some((id) => !id.trim() || original.measures.some((measure) => measure.id === id))) {
+      return fail("DUPLICATE_ID", "새 마디 ID가 비었거나 이미 사용 중입니다.");
+    }
+    part = { ...original, measures: [...original.measures,
+      ...added.map((id, offset) => ({ id, index: original.measures.length + offset, events: [] }))] };
   }
   const blocking = flatten(part).find(({ event }) =>
     event.startTick < endTick && event.startTick + event.durationTicks > startTick);

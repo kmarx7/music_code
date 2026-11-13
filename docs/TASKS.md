@@ -1304,3 +1304,20 @@
 - 한계: 가짜 장치의 입력은 허밍이 아니다(결과 내용은 검사하지 않고 상태만 검사). 실제 마이크·허밍·카운트인 박 정렬·출력/입력 지연·
   Safari·iPhone(녹음과 클릭 동시 사용)·에코 제거 영향은 최종 수동 UAT 대상이다.
 - 다음: P4-07 후보 검토와 원자 확정(빈 마디 확보, 붙여넣는 위치 정책 결정 필요).
+
+## 28. P4-07 — 후보 검토와 원자 확정 (완료, 2026-11-13)
+
+- 사용자 승인("진행해줘"): (1) 빈 마디가 모자라면 확정과 같은 Command로 추가 — `PasteEvents`의 하위 호환 선택 필드 `newMeasureIds`,
+  (2) 넣을 위치는 악보 끝 이어쓰기와 커서가 있는 마디 시작. 마디 중간 위치는 지원하지 않는다(쉼표가 마디를 넘지 않도록).
+- 재사용: 기존 `PasteEvents`(빈 대상·덮어쓰기 없음·마디 넘는 음표 분할·타이), 편집기의 `clipboardCommand` 단일 dispatch와 자동 저장,
+  조옮김과 같은 읽기 전용 후보 `StaffView` 미리보기 방식, 기존 Undo/Redo 스냅샷.
+- 변경: `domain/commands/types.ts`·`apply.ts`(pasteEvents에 새 마디 덧붙이기), `application/transcription.ts`(`planTranscriptionCommit`),
+  `RecordingPanel`(검토·확정 UI), 편집기 연결(`cursorTick`, `labelMode`, `onCommand`).
+- 구현 기본값(Claude 판단): 낮은 신뢰도 기준 0.8, 기본 위치 "악보 끝에 이어쓰기", 확정 후 처음 상태 + 안내문.
+- TDD 기록: Domain(5)·application(4) 테스트를 먼저 실패시킨 뒤 구현했다. 패널은 E2E(구현 후 작성).
+- E2E(새 1개): 페이지 안 440Hz 일정음을 마이크로 넣어 결정적 결과를 만든다. 후보 A4, 낮은 신뢰도 없음, "2마디부터" 미리보기, 확정 전 저장 불변,
+  커서 없이 커서 위치 선택 시 안내·확정 불가, 확정 후 마디 증가·모든 채보 음 MIDI 69·provenance transcription·2마디 시작 tick 3840, Undo 1회로 이전 저장본과 동일.
+- 검증: typecheck PASS, lint PASS, `npm run test` 62파일/933 PASS(이전 60/924 + 9), architecture 80모듈/256의존성·경계 73파일 위반 0, build PASS,
+  `git diff --check` 깨끗, **`npm run test:e2e` 75/75 PASS**(기존 74 + 1).
+- 한계: 일정음·가짜 장치는 허밍이 아니다. 실제 허밍 결과의 검토 부담(손으로 고칠 양)은 최종 UAT에서 기록한다.
+- 다음: P4-08 통합 인수(녹음→확정→편집→저장→재열기 흐름 정리, 품질 수치, 수동 UAT 절차).
