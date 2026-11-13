@@ -23,13 +23,16 @@ async function editorWithNotes(page: Page, id: string) {
   await expect(page.getByTestId("editor-content").getByTestId("staff").locator("svg")).toBeVisible();
 }
 
-test("접근성(axe, WCAG 2.2 AA): 홈·악보함", async ({ page }) => {
+test("접근성(axe, WCAG 2.2 AA): 홈·악보함·라이선스", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("home-recent")).not.toContainText("불러오는 중");
   expect(blocking(await audit(page, "home"))).toEqual([]);
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "악보함", exact: true })).toBeVisible();
   expect(blocking(await audit(page, "library"))).toEqual([]);
+  await page.goto("/licenses");
+  await expect(page.getByRole("heading", { name: "오픈소스 라이선스", exact: true })).toBeVisible();
+  expect(blocking(await audit(page, "licenses"))).toEqual([]);
 });
 
 test("접근성(axe, WCAG 2.2 AA): 편집기·조옮김 미리보기·인쇄 화면", async ({ page }) => {
