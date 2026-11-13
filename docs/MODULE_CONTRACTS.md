@@ -660,7 +660,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   붙여넣는 이벤트는 fresh ID와 타이 참조 매핑, 단일 원자 Command/1회 Undo. Cut은 성공 시에만 clipboard를 교체한다.
 - **A–B loop(2026-11-11 후속):** 사용자가 "A–B 반복 진행"을 지시했다. 끝 경계 예약 방식과
   설정 유지/초기화 정책은 개별 질의 없이 아래 "Phase 3 — A–B 반복" 절의 구현 기본값으로 정했다.
-  사용자 명시 승인 항목이 아니므로 변경 요청 시 조정한다.
+  당시에는 사용자 명시 승인 항목이 아니었으나 **2026-11-13 사용자가 그대로 확정했다**(TASKS §20).
 
 ## Phase 3 — 비파괴 연습 속도 (P3-01~03, 2026-11-11)
 
@@ -681,7 +681,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   실효 BPM 표시를 추가했다. 정수 퍼센트의 컴포넌트 로컬 state/ref만 사용한다.
   Command/Store/IndexedDB/JSON/Undo/revision에 관여하지 않는다. 오디오 초기화 중 바꾼 값은 초기화 완료 직후 적용한다.
   새 status/alert role은 추가하지 않았다(`data-testid="practice-rate"` span).
-- **세션 유지 정책(구현 기본값, 변경 원하면 요청):** 연습 속도는 Stop·Pause·Score 편집·Undo/Redo·
+- **세션 유지 정책(구현 기본값, 2026-11-13 사용자 확정):** 연습 속도는 Stop·Pause·Score 편집·Undo/Redo·
   조옮김 미리보기 진입 후에도 같은 편집기 세션에서 유지된다. 새로고침/편집기 재진입 시 100%로 초기화된다.
   Score 편집 시 재생을 정지하는 기존 정책은 그대로다.
 - Score schemaVersion 2/Part.ties/Command/Repository/DB2/ADR-010/의존성/레이어 불변. ADR-004의 구현이며 새 ADR은 없다.
@@ -710,7 +710,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - `PlaybackControls`: "A–B 반복" 체크박스(기본 OFF)와 "반복 첫 마디"/"반복 마지막 마디" 숫자 입력(기본 1/1),
   상태 표시(`data-testid="practice-loop"`), 잘못된 범위 안내(`practice-loop-error`). 드래그·다중 loop·영속화는 없다.
   tick 범위는 저장하지 않고 **매 렌더마다 현재 Score에서 마디 번호로 다시 계산**한다.
-- **설정 유지/무효화 정책(구현 기본값):** 편집·Undo/Redo·조옮김 후에도 마디 번호와 ON 상태를 유지하고,
+- **설정 유지/무효화 정책(구현 기본값, 2026-11-13 사용자 확정):** 편집·Undo/Redo·조옮김 후에도 마디 번호와 ON 상태를 유지하고,
   새 Score에서 범위가 유효하면 그대로 쓰며 유효하지 않으면 loop를 적용하지 않고 안내를 표시한다(전체 재생으로 동작).
   Score 편집 시 재생 정지는 기존 정책 그대로다. loop가 켜진 재생은 탭이 hidden이 되면 정지한다.
   loop 없는 일반 재생의 hidden 동작은 바꾸지 않았다. 새로고침/편집기 재진입 시 OFF·1/1로 초기화한다.
@@ -740,7 +740,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   `[data-event-id]` 요소에 `data-range-selected="true"`만 붙이며, 다른 이유로 다시 그려진 뒤에도 다시 적용한다.
   VexFlow 어댑터는 변경하지 않았다. 조옮김 미리보기의 StaffView에는 prop을 넘기지 않아 후보 DOM에는 표시되지 않는다.
   음표·쉼표 목록 버튼에도 같은 속성을 준다. `data-playing`(재생)과 `aria-pressed`(단일 선택)와 독립이다.
-- **구현 기본값(사용자 명시 승인 아님, 변경 요청 시 조정):** (1) UI 입력은 마디 단위이며 박 단위 선택은 도메인만 지원한다.
+- **구현 기본값(2026-11-13 사용자 확정):** (1) UI 입력은 마디 단위이며 박 단위 선택은 도메인만 지원한다.
   (2) 거부된 선택 요청은 이전 선택을 유지하지 않고 해제한다. (3) 단일 이벤트 선택(`selectedEventId`)과 구간 선택은
   서로 바꾸지 않는 독립 상태다(우선순위 규칙 없음, 편집 패널은 단일 선택만 따른다).
   (4) 이벤트가 없는 빈 구간도 선택으로 허용한다(복사 가능 여부는 P3-07에서 정한다).
@@ -764,7 +764,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   새 위치에서 마디 경계를 넘게 된 **음표만** 기존 `splitNoteIntoMeasures`로 나누고(`<id>:tieN`) 타이로 잇는다.
   payload의 타이 `from→to`는 `from`의 마지막 조각 → `to`의 첫 조각으로 연결한다. 경계를 넘지 않는 이벤트는 재분할하지 않는다.
   ID는 payload 안과 Score 전체에서 유일해야 한다(`DUPLICATE_ID`).
-- **구현 기본값(사용자 명시 승인 아님, 변경 요청 시 조정):** (1) "빈 대상"은 payload의 gap을 포함한 범위 전체가
+- **구현 기본값(2026-11-13 사용자 확정):** (1) "빈 대상"은 payload의 gap을 포함한 범위 전체가
   비어 있어야 한다는 뜻으로 구현했다(gap 자리에 기존 음표가 있어도 거부). (2) 경계를 넘게 되는 쉼표는 나누지 않고
   `NOT_NOTATABLE`로 거부한다. (3) 이벤트가 없는 구간은 선택은 되지만 복사는 거부한다. (4) Paste는 AddNote와 같이
   `updatedAt`을 바꾸지 않는다. (5) 덮어쓰기·뒤 이벤트 밀기·몰래 조옮김은 없다(C-08 확정안 그대로).
@@ -783,7 +783,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - DOM 계약(테스트용): section `aria-label="복사·붙여넣기"`, 버튼 "구간 복사"/"커서에 붙여넣기",
   `data-testid="clipboard-status"`(`data-filled="on|off"`, `data-event-count`, `data-length-ticks`),
   `data-testid="clipboard-feedback"`(`data-kind="ok|error"`, `aria-live="polite"`).
-- **구현 기본값(사용자 명시 승인 아님):** append 모드에서는 붙여넣지 않고 안내한다. 성공 시 편집 커서를
+- **구현 기본값(2026-11-13 사용자 확정):** append 모드에서는 붙여넣지 않고 안내한다. 성공 시 편집 커서를
   `startTick + lengthTicks`로 옮긴다. 저장 충돌/삭제 상태에서도 메모리 편집은 기존 편집과 같이 허용한다.
   키보드 단축키는 제공하지 않는다. 문서 간 붙여넣기는 없다(C-08 확정안).
 
@@ -798,7 +798,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   `clipboard`는 `copyScoreRange`와 같은 payload다. **호출 측은 command dispatch가 성공한 뒤에만 clipboard를 교체한다.**
 - `ClipboardControls`: 버튼 "구간 잘라내기"(유효한 구간 선택이 없으면 비활성). prop `onPaste`는 `onCommand`로 이름을 바꿨다
   (Cut·Paste 공용, 반환은 오류 메시지 또는 null). 실패 시 이전 clipboard를 유지한다.
-- **구현 기본값(사용자 명시 승인 아님):** 이벤트 없는 구간 Cut 거부, Undo/Redo는 clipboard를 바꾸지 않음,
+- **구현 기본값(2026-11-13 사용자 확정):** 이벤트 없는 구간 Cut 거부, Undo/Redo는 clipboard를 바꾸지 않음,
   Cut 후 편집 커서 유지, `updatedAt` 미변경.
 
 ## 악보 줄 캐시(H-03, 2026-11-13, 로컬 커밋 `6b70db9`)
