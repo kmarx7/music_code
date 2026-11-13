@@ -1545,3 +1545,13 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - 전체: `npm run test` 62파일/933 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 75/75 PASS**.
 - NOT RUN: 실제 허밍·마이크·Safari·실기기(최종 UAT).
+
+## Phase 4 P4-08 — 통합 인수 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/phase4-integration.spec.ts` (1) | 녹음→후보 순서→커서 마디 확정→피아노 편집→재생→Undo/Redo→새로고침·재열기→DB 구조 불변→JSON 무녹음 | PASS |
+| 녹음 E2E 반복 | `recording` 4 + `phase4-integration` 1을 `--repeat-each=3` | 15/15 PASS |
+
+- 전체: `npm run test` 62파일/933 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 76/76 PASS**.
+- 수동 절차: [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5A UAT-H. 상태 NOT RUN.
