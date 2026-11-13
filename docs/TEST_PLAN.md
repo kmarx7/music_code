@@ -1502,3 +1502,13 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 미끄러짐 규칙을 끄면(최대 길이 0) 해당 단위 테스트와 fixture 테스트가 실패함을 확인했다.
 - 전체: `npm run test` 56파일/884 PASS, typecheck·lint·architecture·build PASS.
 - NOT RUN: 실제 허밍·마이크·브라우저. E2E(UI 변경 없음).
+
+## Phase 4 P4-04 — 격자 맞춤과 후보 변환 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `transcription-quantize.test.ts` (13) | 조표 철자(음계음·C♭·E#·반음계 샵/플랫·범위 거부), 첫 박 기준 16분 격자 반올림, 최소 1격자·이동량, 첫 박 이전 버림·걸친 음 자름, 단선율 끊기·같은 시작 충돌, 빈 입력·잘못된 설정 거부, 음표·쉼표·ID·철자·provenance, 마디 경계 쉼표 분할, 빈 악보 PasteEvents 1회·검증·타이, 빈 payload, 합성 40사례 전체 흐름 하한 | PASS |
+
+- 하한(구현 전 고정): note F1 ≥ 0.95, 옥타브 오류 0, 길이 일치 ≥ 0.9, 붙여넣기·검증 실패 0. 실측 F1 1.000, 길이 일치 370/370, 실패 0(TASKS §25).
+- 전체: `npm run test` 57파일/897 PASS, typecheck·lint·architecture·build PASS.
+- NOT RUN: 실제 허밍·마이크·브라우저. E2E(UI 변경 없음).

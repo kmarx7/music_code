@@ -840,3 +840,16 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
     결과는 시간순이며 겹치지 않는다. 쉼표는 별도 객체 없이 음 사이 빈 구간이다.
   - 옵션: `minNoteSeconds`(기본 0.06, 0 이상), `levelDipRatio`(기본 0.5, 0 초과 1 미만).
 - 초 → tick 변환·표기 가능 길이 맞춤은 P4-04의 책임이다.
+
+## Phase 4 — 격자 맞춤과 후보 변환 (P4-04, 2026-11-13)
+
+- `spellMidiInKey(midi, key): Pitch` (`@/domain/music-theory`). 조성 음계음은 조표 철자, 그 밖은 fifths ≥ 0이면 샵, < 0이면 플랫.
+  0–127 정수가 아니면 RangeError. 기존 Pitch/MIDI 보존 규칙과 같은 `createPitch`를 쓴다.
+- `quantizeSegments(segments, options): QuantizeResult` (`@/domain/transcription`).
+  - 옵션: `tempoBpm`(> 0), `timeSignature`(지원 분모), `downbeatSeconds`(≥ 0, 기본 0), `gridTicks`(기본 240, 4분음표와 마디를 나눠야 함). 위반은 RangeError.
+  - 결과 `notes`: 시간순·비중첩 `{ midi, startTick, durationTicks, confidence, onsetShiftSeconds, endShiftSeconds }`, tick은 첫 박 기준.
+    `lengthTicks`는 마지막 음 끝. `dropped`: `BEFORE_DOWNBEAT` | `COLLISION`(입력 index).
+  - 양자화는 연주 시각의 명시적 격자 맞춤이며 저장된 Score를 근사하지 않는다(H-02와 별개). 모든 길이는 격자 배수라 표기 가능하다.
+- `transcriptionToClipboard(result, { key, timeSignature, nextId }): ClipboardPayload`.
+  - 음표는 `provenance: { source: "transcription", confidence }`, 빈 곳은 쉼표(마디 시작 기준으로 마디마다 분할). `ties`는 비어 있다.
+  - ID는 호출 측이 새로 발급한다. 확정은 기존 `PasteEvents` 1회(결정 5)이며 그 검증·분할·타이 규칙을 그대로 따른다.

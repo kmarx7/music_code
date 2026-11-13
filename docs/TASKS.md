@@ -1219,3 +1219,33 @@
   build PASS, `git diff --check` 깨끗. UI 변경이 없어 E2E 미실행.
 - NOT RUN: 실제 허밍·마이크·브라우저.
 - 다음: P4-04 격자 맞춤과 후보 변환(초 → tick, 표기 불가 길이 정책 결정 필요).
+
+## 25. P4-04 — 격자 맞춤과 후보 변환 (완료, 2026-11-13)
+
+- 사용자 지시: "계속 진행해줘"(P4-04). 백로그의 "표기 불가 길이 정책은 착수 시 결정"은 아래 Claude 판단으로 정했다(변경 가능).
+- **표기 불가 길이 정책(Claude 판단)**: 시작·끝을 16분음표 격자(240 tick, 옵션)로 맞춘다. 모든 길이가 240의 배수라
+  H-02 정확 분해로 항상 표기 가능하므로 거부 경로가 필요 없다. 맞춤은 저장된 Score가 아니라 연주 시각의 명시적 양자화이며,
+  음마다 이동량(`onsetShiftSeconds`/`endShiftSeconds`)을 보고하고 사용자가 P4-07에서 검토한다. 셋잇단·스윙은 지원하지 않는다(tuplet 모델 없음).
+- 재사용: 후보는 기존 `ClipboardPayload` 형식이다. 확정은 기존 `PasteEvents` Command 하나로 하며(결정 5) 빈 대상·덮어쓰기 없음·
+  마디 경계를 넘는 음표의 분할·타이를 그대로 쓴다. `createRestEvent`, `measureTicks`, `createPitch`, 붙여넣기 검증을 재사용했다.
+- 신규:
+  - `src/domain/music-theory/spell.ts` `spellMidiInKey(midi, key)`: 조성 음계음은 조표 철자(F장조 B♭, G♭장조 C♭, F#장조 E#),
+    그 밖은 샵·무조표 조에서 샵, 플랫 조에서 플랫. 기존 피아노 입력의 `midiToPitch`(샵 고정, features 층)는 Domain이 쓸 수 없어 새로 두었다.
+  - `src/domain/transcription/quantize.ts`: `quantizeSegments(segments, { tempoBpm, timeSignature, downbeatSeconds, gridTicks })`
+    → `{ notes, lengthTicks, dropped }`. 실제 끝이 첫 박 이전인 음은 `BEFORE_DOWNBEAT`로 버리고 걸친 음은 0에서 자른다.
+    최소 1격자, 앞 음은 다음 음 시작에서 끊어 단선율 유지, 같은 격자 시작은 더 길게 연주된 쪽을 남기고 `COLLISION`.
+    `transcriptionToClipboard(result, { key, timeSignature, nextId })`: 음표(provenance `transcription`·confidence)와 빈 곳 쉼표,
+    쉼표는 마디 시작 기준으로 마디마다 나눈다. ID는 호출 측 주입(Domain은 무작위를 만들지 않음).
+- TDD 기록: 테스트 먼저 실패(함수 없음). 구현 중 실패 1건: 첫 박 바로 위의 짧은 음이 반올림으로 끝 0 tick이 되어
+  `BEFORE_DOWNBEAT`로 잘못 분류됐다. 판정을 반올림 결과가 아니라 실제 연주 시각으로 고쳤다. 기준은 바꾸지 않았다.
+- 결과(합성 40사례 전체 흐름: PCM → 음높이 → 분할 → 격자 → 후보 → 빈 악보에 PasteEvents → validateScore):
+  기준 370음, 결과 370음, TP 370, note F1 **1.000**(C-09 채점기, 시작 허용 오차 0 tick), 옥타브·음높이 오류 0, 길이 일치 370/370,
+  붙여넣기·검증 실패 0. **합성음 수치이며 실제 허밍 품질(C-09 목표 F1 ≥ 0.90)의 근거가 아니다.**
+- 하한(구현 전 고정): F1 ≥ 0.95, 옥타브 오류 0, 길이 일치 ≥ 0.9, 40사례 모두 붙여넣기·검증 성공.
+- P4-07에 넘길 점: `lengthTicks`만큼 빈 마디가 있어야 한다(`PasteEvents`는 마디를 추가하지 않음). 쉼표는 마디 시작 기준으로 나뉘어 있으므로
+  마디 중간 커서에 붙이면 쉼표가 마디를 넘어 거부될 수 있다. 마디 시작 이어쓰기 또는 커서 위치에 맞춘 재분할 중 결정이 필요하다.
+  `NoteSegment` 이름이 `@/domain/score`의 타이 분할 타입과 겹친다(서로 다른 모듈이라 동작 문제는 없음).
+- 검증: typecheck PASS, lint PASS, `npm run test` 57파일/897 PASS(이전 56/884 + 13), architecture 74모듈/234의존성·경계 67파일 위반 0,
+  build PASS, `git diff --check` 깨끗. UI 변경이 없어 E2E 미실행.
+- NOT RUN: 실제 허밍·마이크·브라우저.
+- 다음: P4-05 마이크 캡처 adapter와 포트(선행 권고: Phase 3 수동 UAT-S/UAT-A).
