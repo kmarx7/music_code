@@ -27,6 +27,10 @@ function twoPartScore(): Score {
 }
 
 describe("writeMusicXml", () => {
+  it("names the product as the encoding software", () => {
+    expect(str(xml(fourNoteScore()), "//identification/encoding/software")).toBe("허밍버드");
+  });
+
   it("writes a valid MusicXML 4.0 partwise document with 960 divisions", () => {
     const text = xml(fourNoteScore());
     valid(text);

@@ -17,6 +17,11 @@ async function scoreCount(page: Page): Promise<number> {
 
 test("홈 첫 방문: 소개·시작 버튼·로컬 저장 안내, 최근 악보는 비어 있고 고정 데모 링크는 없다", async ({ page }) => {
   await page.goto("/");
+  await expect(page).toHaveTitle("허밍버드 — 흥얼거린 멜로디를 악보로");
+  await expect(page.getByTestId("brand")).toHaveText("허밍버드");
+  const icon = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute("href");
+  expect((await page.request.get(icon!)).headers()["content-type"]).toContain("image/svg+xml");
+  expect(await page.locator('meta[property="og:site_name"]').getAttribute("content")).toBe("허밍버드");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "허밍으로 시작", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "피아노로 시작", exact: true })).toBeEnabled();
@@ -26,6 +31,7 @@ test("홈 첫 방문: 소개·시작 버튼·로컬 저장 안내, 최근 악보
   await expect(page.getByText("Phase 1")).toHaveCount(0);
   await page.getByRole("link", { name: "오픈소스 라이선스" }).click();
   await expect(page.getByRole("heading", { name: "오픈소스 라이선스", exact: true })).toBeVisible();
+  await expect(page).toHaveTitle("오픈소스 라이선스 · 허밍버드");
   await expect(page.locator("#ofl")).toContainText("SIL OPEN FONT LICENSE Version 1.1");
   await expect(page.getByRole("row")).toHaveCount(15); // header + 14 components
 });

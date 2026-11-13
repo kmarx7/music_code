@@ -94,7 +94,7 @@ export function writeMusicXml(score: Readonly<Score>): ExportWriteResult {
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">',
     '<score-partwise version="4.0">',
     `  <work><work-title>${escapeXml(score.title)}</work-title></work>`,
-    "  <identification><encoding><software>Music Score Platform</software></encoding></identification>",
+    "  <identification><encoding><software>허밍버드</software></encoding></identification>",
     "  <part-list>",
     ...score.parts.map((part, p) => `    <score-part id="P${p + 1}"><part-name>${escapeXml(part.name)}</part-name></score-part>`),
     "  </part-list>",

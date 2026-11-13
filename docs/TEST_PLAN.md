@@ -1658,3 +1658,9 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 도구 자체 검증(`tests/unit/humming-eval.test.ts`, 21개): WAV 16/24/32-bit·float·스테레오 평균·알 수 없는 청크 건너뛰기·비WAV/8-bit 거부, 정답 JSON 검증(템포·박자·음·downbeat·octaveShift), 합성 허밍 WAV F1 = 1(downbeat 지정·first-note 정렬·첫 음이 tick 0 뒤), 틀린 정답 TP 0, 무음 테이크는 정답 전체 FN, 짝 없는 파일 오류 행, 판정 PASS/FAIL/INSUFFICIENT 경계, 템플릿 20개(기존 파일 보존).
 - CLI 실행: 합성 22테이크 → 보고서 생성, PASS(F1 1.000). 저장소 안 폴더(`tests`) 거부.
 - 합성 신호 점수는 실제 허밍 품질을 말하지 않는다. 실제 결과(C-09, 결정 9): **NOT RUN**. 절차: `docs/HUMMING_EVAL.md`.
+
+## Phase 6 P6-09(일부) — 제품 이름·파비콘 (2026-11-14, Claude Code)
+
+- E2E `home.spec.ts`: 문서 제목 "허밍버드 — 흥얼거린 멜로디를 악보로", 홈 상단 표기, `link[rel=icon]` SVG 응답, `og:site_name`, 라이선스 화면 제목 "오픈소스 라이선스 · 허밍버드".
+- 단위 `musicxml-export.test.ts`: `<software>허밍버드</software>`.
+- 미확인: 실제 공유 미리보기(카카오톡·슬랙 등)와 iPhone 홈 화면 아이콘 — 배포 후 UAT.

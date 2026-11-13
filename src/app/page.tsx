@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createNewScore, listScores, type ScoreSummary } from "@/application";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { formatDate } from "@/shared";
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from "./brand";
 
 const RECENT_COUNT = 3;
 
@@ -57,8 +58,13 @@ export default function HomePage() {
 
   return (
     <main style={page}>
+      <p style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 28px", fontSize: 15, fontWeight: 700, color: "#1b2a4a" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- 24px static SVG mark; next/image adds nothing here */}
+        <img src="/icon.svg" alt="" width={24} height={24} />
+        <span data-testid="brand">{PRODUCT_NAME}</span>
+      </p>
       <h1 style={{ fontSize: 30, lineHeight: 1.25, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
-        흥얼거린 멜로디를 악보로
+        {PRODUCT_TAGLINE}
       </h1>
       <p style={{ fontSize: 16, margin: "0 0 24px", maxWidth: 560 }}>
         허밍을 녹음하거나 화면 피아노로 음을 넣으면 악보가 됩니다. 고치고, 조를 옮기고, 느리게 반복해 연습한 뒤
