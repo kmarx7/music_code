@@ -162,7 +162,8 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 |---|---|---|
 | `ScoreRepository` | 인터페이스만 정의 (`src/application/ports.ts`) | IndexedDB adapter는 Phase 1 |
 | `AudioTranscriptionPort` | **정의(2026-11-13, P4-05)** | 아래 "Phase 4 — 마이크 캡처 포트" 절 |
-| `PlaybackPort`, `ExportPort` | 미정의 | Phase 1/5에서 계약화 |
+| `ExportPort` | **정의(2026-11-13, P5-01)** | 아래 "Phase 5 — 출력" 절 |
+| `PlaybackPort` | 미정의 | 재생은 기존 features/playback 구현을 유지 |
 
 어댑터는 App(조립 지점)에서만 구체 구현을 연결한다. Application은 포트만 참조한다.
 
@@ -884,3 +885,26 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   - 필요한 새 마디 수만큼 `nextMeasureId`로 ID를 만들어 `PasteEvents` 명령과 시작 마디 번호를 돌려준다. 빈 후보는 실패.
 - `RecordingPanel` 검토 단계: 후보 음 목록(신뢰도 0.8 미만 `?` 표시), 위치 선택, 같은 명령을 현재 Score에 적용한 읽기 전용 미리보기(`StaffView`),
   "악보에 넣기"(편집기의 기존 단일 dispatch), "후보 버리기". 확정 직전 최신 Score로 다시 계획한다.
+
+## Phase 5 — 출력 (D-03 승인, P5-01~08, 2026-11-13)
+
+결정 원문: [PHASE5_MASTER_PLAN](PHASE5_MASTER_PLAN.md) §4(권고안 그대로 승인), 구현 기본값은 같은 문서 §8.
+
+- **Application** (`src/application/export.ts`, 포트는 `ports.ts`)
+  - `ExportPort { format: "midi" | "musicxml"; mimeType; write(score): ExportWriteResult }` — 형식 adapter가 구현한다.
+  - `exportScore(score, port): ExportResult` — Score를 직렬화·역직렬화로 검증한 **독립 사본**을 writer에 넘긴다.
+    원본 Score·저장소·이력은 바뀌지 않는다. 검증 실패는 `INVALID_SCORE`, writer 실패는 그대로 전달하며 파일은 없다.
+  - `exportFileName(title, format)` — NFC → 금지 문자 `_` → trim → 80자 → 빈 이름 `score` + `.json/.mid/.musicxml/.pdf`.
+    `exportScoreBackup`도 이 함수를 쓴다(기존 동작 동일).
+  - `ExportIssue { code: "INVALID_SCORE" | NotationIssue code; message; measureNumber?; eventId? }`.
+- **Adapters**
+  - `src/adapters/midi` — `writeMidi(score): Uint8Array`, `midiExport`. 모든 Part, 원래 템포, 타이 합침(`mergeTiedNotes`), 정확 tick.
+  - `src/adapters/musicxml` — `writeMusicXml(score): ExportWriteResult`, `musicXmlExport`. 모든 Part, `planPartNotation` 정확 분해 재사용.
+    기보 불가 길이는 `NOT_NOTATABLE` 등으로 거부(마디 번호·이벤트 ID 포함).
+  - `src/adapters/file-export/download.ts` — `downloadFile({ data, filename, mimeType })`. `downloadScoreJson`은 이를 사용한다.
+  - `src/adapters/vexflow/printRows.ts` — `renderPrintRows(host, score, labelMode)`가 편집 렌더러 결과를 줄 단위 SVG로 나눈다.
+    `printRowViewBox`는 순수 계산. `renderScore.ts`는 `STAFF_ROW_LAYOUT`만 새로 내보낸다(렌더링 동작 변경 없음).
+- **Feature** `src/features/export` — `ExportControls`(편집기), `PrintView`(인쇄 화면), `printPath(scoreId, labelMode)`.
+- **Route** `/print/[scoreId]?labels=letter|fixed-do` — `repository.load`만 호출한다. 생성·저장·삭제·자동 저장 없음.
+- 연습 속도·A–B 반복·선택·후보·라벨은 Score에 없으므로 어떤 출력에도 들어가지 않는다. 라벨은 인쇄 화면에만 쿼리로 전달된다.
+- 새 런타임 의존성 없음. MusicXML XSD는 테스트 fixture로만 저장소에 있다(앱 번들 미포함).

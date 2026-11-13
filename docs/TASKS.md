@@ -1342,3 +1342,27 @@
   `git diff --check` 깨끗, **`npm run test:e2e` 76/76 PASS**(기존 75 + 1).
 - NOT RUN: UAT-H 전체(실제 허밍·마이크·Safari·iPhone·Android), Phase 3 UAT.
 - 다음: Phase 5(PDF/MIDI/MusicXML 출력)는 별도 승인 범위(마스터 플랜 §7). 착수 전 출력 형식별 지원 범위 결정이 필요하다.
+
+## 30. Phase 5 계획 — D-03 제안 (문서만, 2026-11-13)
+
+- 사용자 지시: "진행해줘"(Phase 5 계획 문서 작성). 제품 코드·테스트·의존성 변경 없음.
+- 문서: [PHASE5_MASTER_PLAN](PHASE5_MASTER_PLAN.md)(범위·유지 계약·형식별 설계·결정 8개·위험), [PHASE5_BACKLOG](PHASE5_BACKLOG.md)(D-03, P5-01~08).
+- 근거 확인: PRD MVP-014·Phase 5 완료 기준, ARCHITECTURE §4·§11(출력은 독립 adapter), ADR-004(출력 템포는 원래 템포),
+  H-02 정확 분해, 기존 JSON 백업 파일 이름 규칙·다운로드 adapter. 이 Mac의 도구: `xmllint`, `pdfinfo`, `pdftotext` 있음, MuseScore·GarageBand 없음.
+- 권고안 요약: PDF는 인쇄 전용 화면 + 브라우저 "PDF로 저장"(의존성 없음), A4 세로, MIDI·MusicXML은 모든 Part·PDF는 첫 Part,
+  MIDI type 1·960·원래 템포·전체 길이·타이 합침, MusicXML 4.0·빈 구간은 `<forward>`, 라벨은 PDF만, XSD+xmllint·독립 MIDI 파서·pdftotext 검사,
+  파일 이름은 JSON 백업 규칙 공유.
+- **상태: 제안.** 사용자가 D-03을 승인하기 전에는 구현하지 않는다.
+- 검증: 문서만 변경해 테스트는 재실행하지 않았다. `git diff --check` 확인.
+
+## 31. Phase 5 출력 구현 — D-03 승인, P5-01~08 (2026-11-13)
+
+- 사용자 지시: "그대로 진행해줘"(D-03 권고안 그대로 승인), 이어서 "계속해줘". 새 런타임 의존성 없음. Score 스키마·DB2·저장 계약 변경 없음.
+- 구현: 출력 계약(`ExportPort`·`exportScore`·`exportFileName`), MIDI writer, MusicXML writer, 인쇄 화면 `/print/[scoreId]`(줄 단위 SVG·A4·페이지 번호),
+  편집기 "내보내기"(PDF는 저장 후 새 탭, MIDI·MusicXML 다운로드). 세부와 구현 기본값: [PHASE5_MASTER_PLAN](PHASE5_MASTER_PLAN.md) §8, [MODULE_CONTRACTS](MODULE_CONTRACTS.md) "Phase 5 — 출력".
+- 테스트 자산: 테스트용 독립 SMF 파서, MusicXML 4.0 공식 XSD 무수정 사본+오프라인 카탈로그(`tests/fixtures/musicxml-4.0/`, W3C FSA 고지 유지), `/usr/bin/xmllint` 연결.
+- 테스트 작성 중 바로잡은 것(제품 코드 아님): SMF 파서의 청크 끝 계산 순서 버그, 템포 기대값 계산 실수(666 667 µs), pdftotext 공백 처리, 통합 E2E 기대값(F→D장조는 G, 음이름 라벨은 옥타브 포함).
+- 검증(최종): typecheck·lint PASS, `npm run test` 66파일/980 PASS, architecture 91 modules/295 deps·boundaries 84파일 위반 0, build PASS,
+  **`npm run test:e2e` 81/81 PASS**, 출력 E2E `--repeat-each=3` 12/12, 통합 E2E `--repeat-each=3` 3/3. 64마디 PDF 3쪽 이미지 육안 확인(Chromium).
+- **NOT RUN**: 수동 UAT-X(외부 악보 프로그램에서 MIDI/MusicXML 열기, 실제 프린터, Mac Safari·iPhone 인쇄, Safari 페이지 번호). 이 Mac에는 MuseScore·GarageBand 없음.
+- 공개 시험 주소는 여전히 Phase 4 이전 코드다. 재배포는 사용자 승인 대상. 커밋하지 않았다.

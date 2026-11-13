@@ -1555,3 +1555,19 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - 전체: `npm run test` 62파일/933 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 76/76 PASS**.
 - 수동 절차: [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5A UAT-H. 상태 NOT RUN.
+
+## Phase 5 P5-01~08 — 출력 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/score-export.test.ts` (6) | 파일 이름 규칙 공유(JSON 백업과 동일), NFD→NFC·80자·빈 제목, writer에 독립 사본 전달(원본 불변), writer 오류 전달, 잘못된 Score는 writer 미호출 | PASS |
+| `tests/unit/midi-export.test.ts` (18) | 헤더 바이트, 템포·박자·조표(음수 fifths)·제목 meta, 전체 길이(gate 없음), 타이 합침(300개 체인 포함), 11개 Part 채널(10번 제외)·program 0, 같은 음 연속, 기보 불가 tick, velocity 0→1, 트랙 끝=마지막 마디 끝, 빈/쉼표만 악보, fixture 6종 독립 파서 왕복 | PASS |
+| `tests/unit/musicxml-export.test.ts` (19) | 공식 4.0 XSD 검증(`/usr/bin/xmllint --nonet`, 로컬 카탈로그), 제목·Part 이름 특수문자·제어문자, 조표·박자·음자리표·템포, 철자(♯·♭·𝄫), type/dot, 쉼표, 한 이벤트 조각 타이, `Part.ties` 마디 넘김, `<forward>` 빈 구간, 다중 Part, 기보 불가 거부(마디 번호), fixture 6종 되읽기(마디 수·철자·마디별 길이 합) | PASS |
+| `tests/unit/print-rows.test.ts` (4) | 인쇄 줄 viewBox: 공통 폭, 기본 줄 영역, 덧줄·라벨 확장, 좌우 확장 | PASS |
+| `tests/e2e/export.spec.ts` (4) | 편집기 MIDI·MusicXML 다운로드 이름·내용·XSD, 저장 행(revision 포함) 불변·Undo 정상 / 저장 후 새 탭 인쇄 화면 → `page.pdf()` A4 1쪽, 제목·머리글·페이지 번호, 도구 막대 비인쇄 / 64마디 3쪽·줄 `break-inside: avoid` / 라벨 반영, 기보 불가·없는 악보 오류, MIDI는 기보 불가도 출력 | PASS, `--repeat-each=3` 12/12 |
+| `tests/e2e/phase5-integration.spec.ts` (1) | 피아노 입력→반음 편집→D장조 조옮김→연습 속도 50%·음이름 라벨→MIDI(원래 템포 120·조표 2)·MusicXML(XSD·철자·가사 없음)·PDF(D 장조·라벨 D4 E4 G4 A4)→저장 불변→Undo | PASS, `--repeat-each=3` 3/3 |
+
+- 전체: `npm run test` 66파일/980 PASS(통합 E2E 추가 전 측정), typecheck·lint PASS, architecture 91 modules/295 deps 위반 0·boundaries 84파일 위반 0, build PASS(`/print/[scoreId]` 동적 경로), **`npm run test:e2e` 80/80 PASS**(통합 E2E 추가 전). 통합 E2E 추가 후 최종 수치는 TASKS §31.
+- 시각 확인: 64마디 PDF를 이미지로 바꿔 3쪽 모두 줄이 페이지 사이에서 잘리지 않음을 눈으로 확인했다(Chromium).
+- 독립 도구: MIDI는 이 Mac에 외부 파서(mido·MuseScore·GarageBand)가 없어 테스트용 독립 파서만 썼다. 외부 프로그램 열기는 UAT-X.
+- 수동 절차: [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5B UAT-X. 상태 NOT RUN.
