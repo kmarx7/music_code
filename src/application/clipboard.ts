@@ -64,3 +64,22 @@ export function planCut(score: Score, range: ScoreRange): CutPlan {
     clipboard: copied.clipboard,
   };
 }
+
+export type DeleteRangePlan =
+  | { ok: true; command: EditCommand }
+  | { ok: false; message: string };
+
+/**
+ * Deletes the selected range (MVP-006): the same atomic CutEvents command and tie-chain rules as Cut,
+ * but the in-memory clipboard is left as it is. One command, one Undo.
+ */
+export function planDeleteRange(score: Score, range: ScoreRange): DeleteRangePlan {
+  const part = score.parts[0];
+  if (!part) return { ok: false, message: "파트가 없습니다." };
+  // The copy is only the validation (tie chains, overlaps); its payload is discarded.
+  const copied = copyScoreRange(score, range);
+  if (!copied.ok) {
+    return { ok: false, message: copied.issue === "EMPTY_SELECTION" ? "삭제할 음표·쉼표가 없습니다." : copied.message };
+  }
+  return { ok: true, command: { type: "CutEvents", partId: part.id, startTick: range.startTick, endTick: range.endTick } };
+}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ClipboardPayload, RangeSelection, Score } from "@/domain/score";
 import { copyScoreRange, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
-import { planCut, planPaste } from "@/application";
+import { planCut, planDeleteRange, planPaste } from "@/application";
 
 interface ClipboardControlsProps {
   score: Score;
@@ -53,6 +53,14 @@ export function ClipboardControls({ score, selection, cursorTick, clipboard, onC
     setFeedback({ kind: "ok", text: "선택한 구간을 잘라냈습니다. 빈 자리는 그대로 남으며 Undo 한 번으로 되돌릴 수 있습니다." });
   }
 
+  function remove() {
+    if (!selection) return;
+    const plan = planDeleteRange(score, selection);
+    const error = plan.ok ? onCommand(plan.command) : plan.message;
+    if (error !== null) { setFeedback({ kind: "error", text: error }); return; }
+    setFeedback({ kind: "ok", text: "선택한 구간을 삭제했습니다. 빈 자리는 그대로 남고 클립보드는 바뀌지 않습니다. Undo 한 번으로 되돌릴 수 있습니다." });
+  }
+
   function paste() {
     if (!clipboard) return;
     if (cursorTick === null) {
@@ -73,6 +81,7 @@ export function ClipboardControls({ score, selection, cursorTick, clipboard, onC
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
       <button type="button" disabled={!selection} onClick={copy}>구간 복사</button>
       <button type="button" disabled={!selection} onClick={cut}>구간 잘라내기</button>
+      <button type="button" disabled={!selection} onClick={remove}>구간 삭제</button>
       <button type="button" disabled={!clipboard} onClick={paste}>커서에 붙여넣기</button>
       <span data-testid="clipboard-status" data-filled={clipboard ? "on" : "off"}
         data-event-count={clipboard?.events.length ?? 0} data-length-ticks={clipboard?.lengthTicks ?? ""}>
@@ -83,6 +92,6 @@ export function ClipboardControls({ score, selection, cursorTick, clipboard, onC
     </div>
     {feedback && <p data-testid="clipboard-feedback" data-kind={feedback.kind} aria-live="polite"
       style={{ margin: "8px 0 0", color: feedback.kind === "error" ? "#b91c1c" : "#1c1f26" }}>{feedback.text}</p>}
-    <p style={{ fontSize: 12, marginBottom: 0 }}>선택한 구간을 복사하거나 잘라내 편집 커서 위치에 붙여넣습니다. 잘라낸 자리는 비워 두며 뒤 음표를 당기지 않습니다. 붙여넣을 구간 전체가 비어 있어야 하며 기존 음표를 덮어쓰거나 밀어내지 않고 마디를 자동으로 추가하지 않습니다. 클립보드는 이 화면에서만 유지되고 새로고침하면 비워집니다.</p>
+    <p style={{ fontSize: 12, marginBottom: 0 }}>선택한 구간을 복사하거나 잘라내 편집 커서 위치에 붙여넣습니다. 구간 삭제는 클립보드를 바꾸지 않습니다. 잘라내거나 삭제한 자리는 비워 두며 뒤 음표를 당기지 않습니다. 붙여넣을 구간 전체가 비어 있어야 하며 기존 음표를 덮어쓰거나 밀어내지 않고 마디를 자동으로 추가하지 않습니다. 클립보드는 이 화면에서만 유지되고 새로고침하면 비워집니다.</p>
   </section>;
 }

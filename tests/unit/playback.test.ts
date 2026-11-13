@@ -203,3 +203,29 @@ it.each(["missing", "cycle"])("rejects %s ties before scheduling any audio voice
   expect(audio.voices).toHaveLength(0); expect(vi.getTimerCount()).toBe(0);
   expect(JSON.stringify(score)).toBe(before);
 });
+
+it("starts from a cursor tick: a note under the cursor sounds its remainder, later notes follow (MVP-012)", async () => {
+  const score = fourNoteScore(); const before = structuredClone(score);
+  const handle = await play(score, { fromTick: 1440 });
+  expect(handle.getPosition().tick).toBe(1440);
+  const calls = audio.voices[0].attack.mock.calls;
+  expect(calls.map((call) => call[0])).toEqual([62, 64, 67]);
+  expect(calls[0][1]).toBeCloseTo(480 * (0.5 / 960) * 0.9); // remaining half beat at 120 BPM, playback gate
+  expect(calls[1][2] - calls[0][2]).toBeCloseTo(0.25);
+  await vi.advanceTimersByTimeAsync(200 + 250); // 0.2 s scheduling lead-in, then half a beat
+  expect(handle.getPosition().tick).toBeCloseTo(1920);
+  expect(score).toEqual(before);
+});
+
+it("a cursor start inside the A–B loop is kept; outside it starts at A", async () => {
+  const score = fourNoteScore();
+  const loop = { startTick: 0, endTick: measureTicks(score.parts[0].timeSignature) };
+  expect((await play(score, { fromTick: 960, loop })).getPosition().tick).toBe(960);
+  const later = { startTick: measureTicks(score.parts[0].timeSignature), endTick: 2 * measureTicks(score.parts[0].timeSignature) };
+  expect((await play(score, { fromTick: 960, loop: later })).getPosition().tick).toBe(later.startTick);
+});
+
+it.each([-1, 0.5, Number.NaN, 2 * 3840 + 1])("rejects an invalid start tick %s before any audio starts", async (fromTick) => {
+  await expect(playScore(fourNoteScore(), { fromTick })).rejects.toThrow(RangeError);
+  expect(audio.voices).toHaveLength(0);
+});

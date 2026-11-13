@@ -247,6 +247,19 @@ export function createMicrophoneCapture(environment: CaptureEnvironment = browse
         finished,
         stop() { finish("user"); return finished; },
         cancel() { finish(captureError("ABORTED")); },
+        recent(seconds) {
+          if (done) return new Float32Array(0);
+          const wanted = Math.min(captured, Math.max(0, Math.round(seconds * context!.sampleRate)));
+          const out = new Float32Array(wanted);
+          // Walk back from the newest chunk; only the requested tail is copied.
+          for (let index = chunks.length - 1, end = wanted; index >= 0 && end > 0; index -= 1) {
+            const chunk = chunks[index];
+            const take = Math.min(end, chunk.length);
+            out.set(chunk.subarray(chunk.length - take), end - take);
+            end -= take;
+          }
+          return out;
+        },
       };
     },
   };

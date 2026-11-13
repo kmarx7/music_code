@@ -1,6 +1,6 @@
 import {
   DEFAULT_PRACTICE_RATE, isValidPracticeRate, mergeTiedNotes, playbackEndTick, playbackLoopIssue,
-  playbackLoopTick, playbackPositionAt, playbackSecondsPerTick, TICKS_PER_QUARTER,
+  playbackLoopTick, playbackPositionAt, playbackSecondsPerTick, scoreLengthTicks, TICKS_PER_QUARTER,
 } from "@/domain/score";
 import type { PlaybackLoop, PlaybackPosition, Score } from "@/domain/score";
 
@@ -36,6 +36,8 @@ export async function playScore(
     rate?: number;
     /** Non-destructive A–B loop; playback starts at A and never ends on its own. */
     loop?: PlaybackLoop | null;
+    /** Start tick (edit cursor, MVP-012). Inside a loop it is kept; outside the loop playback starts at A. */
+    fromTick?: number;
     onPosition?: (position: PlaybackPosition) => void;
     onState?: (state: PlaybackState) => void;
     onEnd?: () => void;
@@ -46,6 +48,10 @@ export async function playScore(
   let tickSeconds = playbackSecondsPerTick(score.tempoBpm, rate);
   let loop: PlaybackLoop | null = options?.loop ? { ...options.loop } : null;
   assertLoop(score, loop);
+  const fromTick = options?.fromTick ?? 0;
+  if (!Number.isSafeInteger(fromTick) || fromTick < 0 || fromTick > scoreLengthTicks(score)) {
+    throw new RangeError(`지원하지 않는 재생 시작 위치입니다 (${String(fromTick)}).`);
+  }
   const Tone = await import("tone");
   await Tone.start();
   const part = score.parts[0];
@@ -54,7 +60,7 @@ export async function playScore(
   const endTick = playbackEndTick(score);
   let state: PlaybackState = "stopped";
   let finished = false;
-  let originTick = loop ? loop.startTick : 0;
+  let originTick = loop && (fromTick < loop.startTick || fromTick >= loop.endTick) ? loop.startTick : fromTick;
   let startAt = 0;
   /** Number of passes already handed to Tone since the last start(); pass 0 begins at originTick. */
   let scheduledPasses = 0;

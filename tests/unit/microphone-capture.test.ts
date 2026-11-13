@@ -98,6 +98,20 @@ describe("createMicrophoneCapture", () => {
     expect(levels).toEqual([{ rms: 0.5, peak: 0.5, seconds: 4 / 48000 }, { rms: 0, peak: 0, seconds: 6 / 48000 }]);
   });
 
+  it("hands out a copy of the most recent samples for the live pitch display", async () => {
+    const f = fakes(1000);
+    const session = await createMicrophoneCapture(f.environment).startCapture({ maxSeconds: 10 });
+    expect(session.recent?.(0.1)).toEqual(new Float32Array(0));
+    f.push([1, 2, 3]); f.push([4, 5]); f.push([6, 7, 8, 9]);
+    expect(session.recent?.(0.004)).toEqual(Float32Array.from([6, 7, 8, 9]));
+    expect(session.recent?.(0.006)).toEqual(Float32Array.from([4, 5, 6, 7, 8, 9]));
+    expect(session.recent?.(1)).toEqual(Float32Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9]));
+    const copy = session.recent!(0.002); copy[0] = 99;
+    const recording = await session.stop();
+    expect(Array.from(recording.samples)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(session.recent?.(1)).toEqual(new Float32Array(0)); // nothing is kept after the take ends
+  });
+
   it("maps getUserMedia failures to capture error codes without opening an audio context", async () => {
     const cases: [string, string][] = [["NotAllowedError", "PERMISSION_DENIED"], ["SecurityError", "PERMISSION_DENIED"],
       ["NotFoundError", "NO_DEVICE"], ["OverconstrainedError", "NO_DEVICE"], ["NotReadableError", "DEVICE_BUSY"],

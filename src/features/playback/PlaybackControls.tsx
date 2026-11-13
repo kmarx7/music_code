@@ -22,10 +22,12 @@ const measureInput = { width: 56, padding: "4px 6px", borderRadius: 6, border: "
 const button = { padding: "6px 12px", borderRadius: 8, border: "1px solid #c8cfdb", background: "#fff", cursor: "pointer" };
 
 /** High-frequency transport state is local, outside the editor/Score store. */
-export function PlaybackControls({ score, onPosition, stopSignal = 0 }: {
+export function PlaybackControls({ score, onPosition, stopSignal = 0, cursorTick = null }: {
   score: Score;
   onPosition: (position: PlaybackPosition) => void;
   stopSignal?: number;
+  /** Edit cursor (absolute tick) for "play from cursor" (MVP-012); null when there is no cursor. */
+  cursorTick?: number | null;
 }) {
   const [state, setState] = useState<PlaybackState>("stopped");
   const [position, setPosition] = useState<PlaybackPosition | null>(null);
@@ -88,9 +90,12 @@ export function PlaybackControls({ score, onPosition, stopSignal = 0 }: {
     try { handle.current?.setLoop(next); }
     catch { stop(); setError("반복 구간을 적용하지 못했습니다. 다시 Play를 눌러 주세요."); }
   }
-  async function play() {
+  async function play(fromTick = 0) {
     if (!metronomeRef.current && !score.parts[0].measures.some((measure) => measure.events.length)) {
       setError("빈 악보는 메트로놈을 켜고 재생해 주세요."); return;
+    }
+    if (fromTick > 0 && !activeLoop && !metronomeRef.current && fromTick >= playbackEndTick(score)) {
+      setError("커서 뒤에 재생할 음표가 없습니다. 커서를 옮기거나 처음부터 재생해 주세요."); return;
     }
     setError(""); setReady(false); setState("playing");
     const token = ++request.current;
@@ -102,6 +107,7 @@ export function PlaybackControls({ score, onPosition, stopSignal = 0 }: {
         metronome: metronomeRef.current,
         rate: requestedRate / 100,
         loop: requestedLoop,
+        fromTick,
         onState: (value) => { if (token === request.current) setState(value); },
         onPosition: (value) => {
           if (token !== request.current) return;
@@ -122,7 +128,10 @@ export function PlaybackControls({ score, onPosition, stopSignal = 0 }: {
   }
   return (
     <div role="group" aria-label="재생 제어" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <button type="button" style={button} onClick={state === "stopped" ? play : stop}>{state === "stopped" ? "Play" : "Stop"}</button>
+      <button type="button" style={button} onClick={state === "stopped" ? () => void play() : stop}>{state === "stopped" ? "Play" : "Stop"}</button>
+      <button type="button" style={button} disabled={state !== "stopped" || cursorTick === null}
+        title={cursorTick === null ? "편집 커서를 먼저 놓아 주세요." : undefined}
+        onClick={() => { if (cursorTick !== null) void play(cursorTick); }}>커서부터 재생</button>
       <button type="button" style={button} disabled={state === "stopped" || !ready} onClick={() => {
         try {
           if (state === "paused") handle.current?.resume(); else handle.current?.pause();

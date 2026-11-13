@@ -108,6 +108,8 @@ export interface AudioCaptureSession {
   stop(): Promise<AudioRecording>;
   /** Discards the recording and releases the device; `finished` rejects with ABORTED. */
   cancel(): void;
+  /** Copy of the last `seconds` of captured audio for display only (live pitch, P6-01); empty once the take ended. */
+  recent?(seconds: number): Float32Array;
 }
 
 /** Microphone capture for transcription (Phase 4, decision 8). Analysis itself is pure Domain code. */

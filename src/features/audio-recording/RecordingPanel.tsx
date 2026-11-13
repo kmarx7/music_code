@@ -7,7 +7,8 @@ import {
 } from "@/application";
 import { createMicrophoneCapture } from "@/adapters/web-audio";
 import { applyEditCommand, type EditCommand } from "@/domain/commands";
-import { letterName, type NoteLabelMode } from "@/domain/music-theory";
+import { letterName, spellMidiInKey, type NoteLabelMode } from "@/domain/music-theory";
+import { estimateLivePitch, LIVE_PITCH_WINDOW_SECONDS, type LivePitch } from "@/domain/transcription";
 import type { NoteEvent, Score } from "@/domain/score";
 import { StaffView } from "@/features/score-editor";
 import { formatRecordingTime, recordingProgress } from "./progress";
@@ -23,7 +24,7 @@ export const LOW_CONFIDENCE = 0.8;
 type PanelState =
   | { kind: "idle" }
   | { kind: "starting" }
-  | { kind: "recording"; plan: RecordingPlan; seconds: number; peak: number; metronomeStartSeconds?: number }
+  | { kind: "recording"; plan: RecordingPlan; seconds: number; peak: number; metronomeStartSeconds?: number; live?: LivePitch | null }
   | { kind: "analyzing" }
   | { kind: "result"; result: TranscribeResult }
   | { kind: "error"; message: string };
@@ -100,7 +101,11 @@ export function RecordingPanel({ score, cursorTick = null, labelMode = "none", p
           const now = Date.now();
           if (now - lastPaint.current < DISPLAY_INTERVAL_MS) return;
           lastPaint.current = now;
-          setState({ kind: "recording", plan: locked, seconds, peak, metronomeStartSeconds });
+          // Display only: the same detector on the last ~0.1 s. Candidates still come from the whole take.
+          const recent = session.current?.recent?.(LIVE_PITCH_WINDOW_SECONDS);
+          let live: LivePitch | null = null;
+          try { live = recent?.length ? estimateLivePitch(recent, session.current!.sampleRate) : null; } catch { live = null; }
+          setState({ kind: "recording", plan: locked, seconds, peak, metronomeStartSeconds, live });
         },
       });
       session.current = started;
@@ -178,6 +183,12 @@ export function RecordingPanel({ score, cursorTick = null, labelMode = "none", p
           <label style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>입력 레벨
             <meter data-testid="recording-level" min={0} max={1} low={0.05} high={0.9} optimum={0.5} value={state.peak} />
           </label>
+          <span data-testid="recording-live-pitch" data-midi={state.live?.midi ?? ""} aria-live="off"
+            style={{ fontSize: 13, minWidth: 140, fontVariantNumeric: "tabular-nums" }}>
+            추정 음높이 {state.live
+              ? `${letterName(spellMidiInKey(state.live.midi, part.keySignature))} ${state.live.cents >= 0 ? "+" : "−"}${Math.abs(state.live.cents)}센트`
+              : "—"}
+          </span>
           <button type="button" style={button} onClick={() => void session.current?.stop()}>녹음 정지</button>
           <button type="button" style={button} onClick={() => { session.current?.cancel(); }}>취소</button>
         </div>
