@@ -147,3 +147,13 @@ The final **MVP** includes all phases 0–6. Earlier milestones are independentl
 - Do not assume prior Codex conversation context is accurate; inspect repository files.
 - Never claim a microphone, export, data recovery or multi-browser feature was tested unless actual evidence exists.
 - Use licensed test audio or synthetic fixtures; do not embed copyrighted commercial recordings without permission.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

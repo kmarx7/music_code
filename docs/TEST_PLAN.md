@@ -1618,3 +1618,43 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - `npm audit` moderate 8건은 설치 전과 동일한 개발 도구(eslint 계열 `minimatch`) 문제로 axe와 무관하다. P6-06 라이선스·의존성 점검에서 다시 본다.
 - 전체: `npm run test` 68파일/993 PASS, lint PASS, **`npm run test:e2e` 94/94 PASS**.
 - 문서: [KEYBOARD_AND_ACCESSIBILITY](KEYBOARD_AND_ACCESSIBILITY.md), 수동 [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5C UAT-K(NOT RUN).
+
+## Phase 6 P6-05 — 오류·복구 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/storage-availability.test.ts` (3) | 목록이 되면 사용 가능, 저장소 자체 실패만 불가, 대체 저장소는 모든 읽기·쓰기 거부 | PASS |
+| `tests/e2e/recovery.spec.ts` (5) | IndexedDB 없음: 홈 안내·"저장 없이 편집기 열기" → 메모리 편집, "저장 실패"·"저장됨" 없음, PDF 비활성, JSON 백업·MIDI 정상 / 손상 기록은 기존처럼 열기 차단(메모리 모드로 가지 않음) / 없는 주소 404 화면 / 화면 오류(렌더 중 예외 모의) 후 오류 화면에서 편집 중 악보 JSON 백업 / 저장 공간 보호 요청 | PASS, `--repeat-each=3` 15/15 |
+
+- 회귀 1건 수정: 악보함 안내를 처음에 `role="status"`로 넣어 기존 `editor.spec`의 상태 메시지 찾기가 두 개를 찾았다. 안내를 `aria-live`로 바꿔 해결(기존 테스트 무변경).
+- 전체: `npm run test` 69파일/996 PASS, typecheck·lint·architecture PASS, **`npm run test:e2e` 99/99 PASS**.
+- 미검증: 실제 Safari 사생활 보호 모드·iPhone 저장 공간 보호 동작(수동 UAT).
+
+## Phase 6 P6-07 — 보안 헤더 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/security-headers.spec.ts` (2) | 홈·악보함·편집기·인쇄·404 응답의 CSP·권한 정책·nosniff·referrer·X-Frame-Options, 운영 빌드에 `unsafe-eval`·외부 URL 없음 / 입력·라벨(글꼴)·재생·녹음(AudioWorklet)·MusicXML·저장·인쇄 전 과정 `securitypolicyviolation` 0건 | PASS |
+
+- 검사의 유효성 확인: 정책에서 `blob:`을 일부러 빼면 녹음이 시작되지 않아 위반 검사 테스트가 실패했다(확인 후 원복).
+- 개발 서버(`npm run dev`) 편집기 로드·입력 콘솔 오류 0건.
+- 전체: **`npm run test:e2e` 101/101 PASS**(운영 빌드, CSP 적용 상태). Safari·iPhone에서의 CSP 동작은 수동 UAT.
+
+## Phase 6 P6-06(일부) — 오픈소스 라이선스 화면 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/licenses.test.ts` (2) | `package.json` 런타임 의존성이 모두 목록에 있고, 표시 버전이 설치 버전과 같다(의존성 변경 시 실패) | PASS |
+| `home.spec`·`a11y.spec`·`security-headers.spec` 추가 확인 | 홈 바닥글 링크 → `/licenses`, 14개 구성 요소 표, OFL 전문 / axe 위반 0건 / 보안 헤더 | PASS |
+
+- 조사: 브라우저로 가는 패키지(Next·React·scheduler·styled-jsx·@swc/helpers·Tone.js·standardized-audio-context·automation-events·@babel/runtime·tslib·VexFlow)와
+  VexFlow 5.0.0 기본 빌드에 내장된 글꼴 5종(Bravura·Academico·Petaluma·Petaluma Script = SIL OFL 1.1, Steinberg / Gonville = Simon Tatham, 사용 제한 없음).
+  글꼴 라이선스는 `@vexflow-fonts/*` npm 패키지의 LICENSE 파일에서 확인(VexFlow 내장본과 같은 글꼴로 판단, 내장본 자체의 메타데이터는 미확인).
+- 전문(MIT·Apache-2.0·0BSD·OFL·Gonville)은 원본 파일에서 그대로 생성(`src/app/licenses/texts.ts`). 법률 검토는 아니다.
+- 전체: `npm run test` 70파일/998 PASS, **E2E 101/101 PASS**.
+
+## Phase 6 P6-08 — 실제 허밍 평가 도구 (2026-11-14, Claude Code)
+
+- 도구 자체 검증(`tests/unit/humming-eval.test.ts`, 21개): WAV 16/24/32-bit·float·스테레오 평균·알 수 없는 청크 건너뛰기·비WAV/8-bit 거부, 정답 JSON 검증(템포·박자·음·downbeat·octaveShift), 합성 허밍 WAV F1 = 1(downbeat 지정·first-note 정렬·첫 음이 tick 0 뒤), 틀린 정답 TP 0, 무음 테이크는 정답 전체 FN, 짝 없는 파일 오류 행, 판정 PASS/FAIL/INSUFFICIENT 경계, 템플릿 20개(기존 파일 보존).
+- CLI 실행: 합성 22테이크 → 보고서 생성, PASS(F1 1.000). 저장소 안 폴더(`tests`) 거부.
+- 합성 신호 점수는 실제 허밍 품질을 말하지 않는다. 실제 결과(C-09, 결정 9): **NOT RUN**. 절차: `docs/HUMMING_EVAL.md`.

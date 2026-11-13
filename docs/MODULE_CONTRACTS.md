@@ -926,3 +926,22 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - 편집기 모바일(≤ 768px): `main.editor-main[data-mobile-tab]` + 블록별 `data-editor-tab="input|play|edit|file"`. CSS만으로 순서·숨김을 바꾸며
   컴포넌트는 항상 마운트된다(녹음·재생·폼 상태 유지). 상시 표시: 머리글·저장, Undo/Redo, 악보, 메시지. 탭 상태는 UI 상태이며 저장하지 않는다.
   악보 음표를 누르면 편집 탭으로 전환한다. 데스크톱 DOM·배치는 그대로.
+
+## Phase 6 P6-05 — 오류·복구 (2026-11-14, D-04 결정 6)
+
+- `probeScoreStorage(repository)`(application): `list()` 성공 여부. 손상 기록은 `list`가 건너뛰므로 **저장소 전체를 못 열 때만 false**.
+- `createUnavailableScoreRepository()`(adapters/indexeddb): 모든 호출을 거부하는 대체 저장소. 메모리 편집 중 자동 저장은 "저장 실패"로 남고 이탈 경고가 유지된다.
+- 편집기 열기: `openOrCreateScore`가 저장소 오류(`STORAGE_READ_ERROR` 또는 미분류 오류)로 실패하고 `probeScoreStorage`가 false이면
+  빈 악보를 메모리로 열고 "저장되지 않음" 경고·JSON 백업 버튼을 상시 표시, PDF(저장본 인쇄)는 끈다. 그 밖의 읽기 오류·충돌은 기존처럼 차단.
+- `app/error.tsx`(화면 오류: 다시 시도·홈·`scoreStore`에 편집 중 악보가 있으면 JSON 백업), `app/global-error.tsx`, `app/not-found.tsx`(404).
+- 악보함 `StoragePersistence`: `navigator.storage.persisted()` 표시, 사용자가 누를 때만 `persist()` 요청. 안내 문구는 `aria-live="polite"`(별도 status 역할 아님).
+- 홈: 새 악보 생성 실패 시 "저장 없이 편집기 열기" 링크, 권장 브라우저 안내.
+
+## Phase 6 P6-07 — 보안 헤더 (2026-11-14, D-04 결정 8)
+
+- `next.config.ts` `headers()`로 모든 경로에: CSP(`default-src 'self'`, 외부 출처 없음, `script-src 'self' 'unsafe-inline' blob:`,
+  `style-src 'self' 'unsafe-inline'`, `font-src 'self' data:`, `worker-src 'self' blob:`, `object-src 'none'`, `frame-ancestors 'none'` 등),
+  `Permissions-Policy: microphone=(self), camera=() …`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`.
+- 개발 모드에서만 `'unsafe-eval'`과 `ws:`를 더한다. 새 의존성 없음.
+- 근거 측정: 앱 전 과정에서 외부 호스트 요청 0건(악보 글꼴은 VexFlow 번들 내장, 녹음 모듈은 `blob:`).
+- 외부 출처(분석 도구, CDN, 글꼴 서비스 등)를 추가하려면 CSP 변경이 필요하며, 개인정보 화면 고지도 함께 바꾼다.
