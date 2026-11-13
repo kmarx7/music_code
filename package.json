@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "perf:browser": "playwright test --config playwright.perf.config.ts",
     "perf:pitch": "vitest run --config vitest.perf.config.ts",
+    "eval:humming": "node scripts/eval-humming.mjs",
     "check:architecture": "depcruise src --config .dependency-cruiser.cjs && node scripts/check-boundaries.mjs"
   },
   "dependencies": {
