@@ -1461,3 +1461,15 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 | WebKit iPhone 15 에뮬레이션 | 71 | 0 |
 
 - NOT RUN: 수동 UAT-S/A/T/R/C 전부, Firefox. 이 실행은 실제 Safari·실기기·청취의 대체가 아니다.
+
+## Phase 4 P4-01 — 합성 허밍 fixture와 채점기 (2026-11-13, Claude Code)
+정의는 [PHASE4_MASTER_PLAN](PHASE4_MASTER_PLAN.md) §5. 제품 코드 변경 없음.
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `transcription-score.test.ts` (10) | 완전 일치, 누락/추가, 옥타브·그 밖의 음높이 오류 분리, 시작 위치 허용 오차 경계(120/119), 일대일 대응, 길이 일치, 빈 입력, 입력 순서·불변, 잘못된 음표 거부, micro 평균 | PASS |
+| `humming-fixture.test.ts` (10) | A4=440Hz, 주기 수·길이·빠르기·표본화율, 쉼표·앞뒤·음 사이 무음, 전체 어긋남·비브라토·끌어올림, seed 결정성, 잘못된 입력 거부, 40개 사례 전부 30초 이내·범위 내 | PASS |
+
+- 전체: `npm run test` 54파일/861 PASS, typecheck·lint·architecture·build PASS.
+- 이후 P4-02~04는 이 fixture와 채점기로 수치를 보고한다. 합성음 수치는 실제 허밍 품질을 보증하지 않는다.
+- NOT RUN: 실제 허밍·마이크·Safari·실기기. E2E(UI 변경 없음).

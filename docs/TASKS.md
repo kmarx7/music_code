@@ -1116,3 +1116,30 @@
 - 반영: MODULE_CONTRACTS의 해당 7곳 표기를 "2026-11-13 사용자 확정"으로 바꿨다. 제품·테스트 코드 변경 없음, 자동 테스트 재실행 없음.
 - 확정은 동작 정책에 대한 것이다. 실제 청취·Safari·실기기에서의 동작 확인(수동 UAT)은 여전히 **NOT RUN**이다.
 - 다음: (1) 사용자의 수동 UAT, (2) 완성 후 공개 주소 정리 여부, (3) Phase 4 이후는 별도 승인.
+
+## 21. Phase 4 착수 — D-02 확정과 P4-01 (구현·자동 검증·커밋 완료, 2026-11-13)
+
+- 사용자 결정: "문서로 남기고 결정 1~8은 권고안대로 진행". Phase 4(PRD MVP-002/003) 계획을 문서화하고 D-02를 확정했다.
+  - 문서: [PHASE4_MASTER_PLAN](PHASE4_MASTER_PLAN.md)(범위·유지 계약·결정 8개·품질 측정 정의·위험), [PHASE4_BACKLOG](PHASE4_BACKLOG.md)(P4-01~08).
+  - 결정 요약: (1) 음높이 추정은 Domain 순수 TypeScript 직접 구현, 새 런타임 의존성 없음 (2) 녹음 종료 후 메인 스레드 분석,
+    Worker는 별도 구조 승인 (3) 1차는 입력 레벨만 (4) 녹음 상한 30초 (5) 확정은 붙여넣기와 같은 빈 대상 규칙
+    (6) note F1 ≥ 0.90은 목표 (7) 합성 fixture만 저장소, 실제 허밍은 사용자 본인 녹음·동의분만 (8) AudioWorklet + `AudioTranscriptionPort` + 녹음 기능 폴더.
+  - **미결**: 실제 허밍 녹음을 저장소에 넣을지. 결정 전까지 실제 녹음 파일은 커밋하지 않는다.
+    P4-01(합성 fixture·채점기)은 이 조건과 무관하므로 사용자 지시("P4-01 지금 커밋")로 커밋했다.
+  - MODULE_CONTRACTS의 C-09 행을 갱신했다.
+- P4-01 구현(테스트 쪽만, 제품 코드·UI·의존성 변경 없음):
+  - `tests/fixtures/transcription-score.ts`: `scoreTranscription`, `aggregateTranscriptionScores`(micro 평균), `assertMelodyNote`.
+    같은 MIDI·같은 시작 위치의 일대일 대응만 TP. 남은 것 중 시작 위치가 같은 쌍을 옥타브 오류/그 밖의 음높이 오류로 분류하되 둘 다 누락 1 + 추가 1로 센다.
+  - `tests/fixtures/humming.ts`: `synthesizeHumming`(배음·비브라토·음 시작 끌어올림·잡음(seed 고정)·전체 음정 어긋남·음 사이 간격·앞뒤 무음),
+    `HUMMING_MELODIES` 8개(음계·반복음·쉼표·도약·8분음표·낮은 음역·높은 음역·3/4) × `HUMMING_CONDITIONS` 5개 = 40개 사례. 음성 파일 없음.
+  - 테스트: `tests/unit/transcription-score.test.ts` 10개, `tests/unit/humming-fixture.test.ts` 10개. 구현 전 실패(모듈 없음)를 확인한 뒤 구현했다.
+- 구현 기본값(사용자 개별 질의 없음, 변경 가능): 시작 위치 허용 오차 기본 0 tick, 표본화 44.1kHz, 배음 비 1/0.5/0.3/0.15,
+  음 끝 30ms 간격, 사례 공통 앞 200ms·뒤 300ms 무음, 조건 수치(비브라토 ±40센트 5.5Hz, 끌어올림 150센트 80ms, 잡음 0.05, 전체 +30센트).
+- 작성 중 고친 것(새로 쓴 테스트 자체의 문제, 기존 테스트 변경 없음): 비브라토 확인을 50ms 창의 주기 수 비교로 썼으나 440Hz·50ms가
+  정수 주기로 맞아떨어져 변화를 못 잡았다. 영점 교차 간격의 폭 비교(일정음 ≤1표본, 비브라토 ≥4표본)로 바꿨다.
+  40개 전체 렌더링이 5초 제한을 넘어 합성 루프를 줄였고(현재 파일 전체 약 2.3초) 해당 테스트에 30초 제한을 명시했다.
+- 검증(2026-11-13): typecheck PASS, lint PASS, `npm run test` 54파일/861 PASS(이전 52/841 + 20), architecture 위반 0, build PASS, `git diff --check` 깨끗.
+  UI·제품 코드 변경이 없어 E2E는 재실행하지 않았다.
+- 한계: 합성음은 실제 목소리보다 훨씬 단순하다. 이 fixture의 수치는 실제 허밍 품질의 근거가 아니다. 아직 채보 코드가 없어 F1 실측값은 없다.
+- NOT RUN: 실제 허밍·마이크·Safari·실기기, Phase 3 수동 UAT 전부.
+- 다음: P4-02 음높이 추정(30초 입력 분석 시간 측정 포함).
