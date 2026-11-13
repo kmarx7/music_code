@@ -1522,3 +1522,15 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - 전체: `npm run test` 59파일/914 PASS, typecheck·lint·architecture·build PASS.
 - 가짜 장치 검증은 실제 마이크·브라우저의 대체가 아니다. NOT RUN: 실제 브라우저 AudioWorklet, 권한 창, Safari, 실기기. E2E(UI 변경 없음).
+
+## Phase 4 P4-06 — 녹음 UI (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `microphone-capture.test.ts` (+4, 총 16) | 캡처 시계 위 클릭 예약 시각·강박·녹음 기준 첫 클릭 위치(latency 포함), 녹음 중 메트로놈 끔, 메트로놈 없음, 잘못된 메트로놈 거부, 처리기의 chunk 시작 프레임 | PASS |
+| `transcription-usecase.test.ts` (+2) | `planRecording`(4/4·6/8), `recordingDownbeatSeconds` | PASS |
+| `recording-progress.test.ts` (4) | 대기·카운트인·마디/박·상한 고정, m:ss 표기 | PASS |
+| `tests/e2e/recording.spec.ts` (3, Chromium 가짜 마이크) | 동의 전 시작 불가, 카운트인 후 녹음 단계, 입력 레벨 > 0, 상한 표시, 8마디 자동 정지 후 분석 결과, 악보 불변·편집 계속; 정지→결과, 다시 녹음→취소→처음 상태; 권한 거부 안내·편집 계속 | PASS |
+
+- 전체: `npm run test` 60파일/924 PASS, typecheck·lint·architecture·build PASS, **`npm run test:e2e` 74/74 PASS**.
+- 가짜 마이크는 허밍이 아니다. NOT RUN: 실제 마이크·허밍·박 정렬·Safari·iPhone·Android(최종 수동 UAT).

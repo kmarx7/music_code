@@ -16,6 +16,7 @@ import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import { TransposeTool } from "@/features/transposition";
+import { RecordingPanel } from "@/features/audio-recording";
 import type { ClipboardPayload, PlaybackPosition, RangeSelection, Score } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
@@ -337,6 +338,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       <ScoreSettings score={score} onCommand={runCommand} />
       <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
       <PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} />
+      <RecordingPanel score={score} onStart={() => setPlaybackStopSignal((value) => value + 1)} />
 
       {/* Original playback highlights must never target the read-only preview. */}
       <div ref={rootRef} data-testid="editor-content">

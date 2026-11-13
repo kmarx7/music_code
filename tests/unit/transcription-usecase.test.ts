@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RECORDING_MAX_MEASURES, recordingLimitSeconds, transcribeRecording, type AudioRecording } from "@/application";
+import { planRecording, RECORDING_MAX_MEASURES, recordingDownbeatSeconds, recordingLimitSeconds, transcribeRecording, type AudioRecording } from "@/application";
 import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
 import type { NoteEvent } from "@/domain/score";
 import { HUMMING_MELODIES, synthesizeHumming } from "../fixtures/humming";
@@ -55,5 +55,23 @@ describe("transcribeRecording", () => {
     const noise = asRecording(synthesizeHumming([], { tempoBpm: 120, leadSilenceMs: 2000, noiseLevel: 0.3, seed: 5 }));
     expect(transcribeRecording(noise, { tempoBpm: 120, timeSignature: four, key: cMajor, nextId: ids() }))
       .toMatchObject({ ok: false, issue: "NO_NOTES" });
+  });
+});
+
+describe("planRecording", () => {
+  it("counts in one measure and clicks on the meter's beat unit, with room for the click lead", () => {
+    expect(planRecording(120, four)).toEqual({ beatSeconds: 0.5, beatsPerMeasure: 4, countInBeats: 4, recordingBeats: 32,
+      countInSeconds: 2, limitSeconds: 16, maxSeconds: 2 + 16 + 0.5 });
+    // 6/8 at a quarter-note tempo of 120: eighth-note clicks of 0.25 s, six per measure (same rule as playback).
+    expect(planRecording(120, { numerator: 6, denominator: 8 })).toMatchObject({ beatSeconds: 0.25, beatsPerMeasure: 6, countInBeats: 6,
+      recordingBeats: 48, countInSeconds: 1.5, limitSeconds: 12 });
+  });
+
+  it("places tick 0 one count-in after the first click", () => {
+    const plan = planRecording(120, four);
+    const recording: AudioRecording = { samples: new Float32Array(1), sampleRate: 48000, durationSeconds: 1, stoppedBy: "user",
+      metronomeStartSeconds: 0.3 };
+    expect(recordingDownbeatSeconds(recording, plan)).toBeCloseTo(2.3, 12);
+    expect(recordingDownbeatSeconds({ ...recording, metronomeStartSeconds: undefined }, plan)).toBeUndefined();
   });
 });

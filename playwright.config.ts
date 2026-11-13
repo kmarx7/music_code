@@ -15,7 +15,14 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{
+    name: "chromium",
+    use: {
+      ...devices["Desktop Chrome"],
+      // Recording tests: a fake microphone that is granted without a prompt (no real device or audio is used).
+      launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+    },
+  }],
   webServer: {
     command: "npm run build && npm run start",
     url: BASE_URL,

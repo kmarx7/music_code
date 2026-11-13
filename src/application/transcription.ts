@@ -23,6 +23,39 @@ export function recordingLimitSeconds(tempoBpm: number, timeSignature: TimeSigna
   return (measures * measureTicks(timeSignature) / TICKS_PER_QUARTER) * (60 / tempoBpm);
 }
 
+/** Allowance for the click lead and the first chunk before the count-in starts, seconds. */
+const RECORDING_START_ALLOWANCE_SECONDS = 0.5;
+
+/** Count-in, click grid and length limit of one take. Clicks fall on the meter's beat unit, as in playback. */
+export interface RecordingPlan {
+  beatSeconds: number;
+  beatsPerMeasure: number;
+  countInBeats: number;
+  recordingBeats: number;
+  countInSeconds: number;
+  /** The 8-measure limit of the take itself (decision 4). */
+  limitSeconds: number;
+  /** Capture length: start allowance + count-in + limit. */
+  maxSeconds: number;
+}
+
+/** One measure of count-in, then up to `measures` measures. */
+export function planRecording(tempoBpm: number, timeSignature: TimeSignature, measures = RECORDING_MAX_MEASURES): RecordingPlan {
+  const limitSeconds = recordingLimitSeconds(tempoBpm, timeSignature, measures);
+  const beatSeconds = (60 / tempoBpm) * (4 / timeSignature.denominator);
+  const countInBeats = timeSignature.numerator;
+  const countInSeconds = countInBeats * beatSeconds;
+  return {
+    beatSeconds, beatsPerMeasure: timeSignature.numerator, countInBeats, recordingBeats: measures * timeSignature.numerator,
+    countInSeconds, limitSeconds, maxSeconds: RECORDING_START_ALLOWANCE_SECONDS + countInSeconds + limitSeconds,
+  };
+}
+
+/** Recording time of tick 0: one count-in after the first click. Undefined when the take had no clicks. */
+export function recordingDownbeatSeconds(recording: AudioRecording, plan: RecordingPlan): number | undefined {
+  return recording.metronomeStartSeconds === undefined ? undefined : recording.metronomeStartSeconds + plan.countInSeconds;
+}
+
 export interface TranscribeSettings {
   tempoBpm: number;
   timeSignature: TimeSignature;

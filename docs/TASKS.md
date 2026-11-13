@@ -1274,3 +1274,33 @@
   iPhone Safari의 녹음·재생 동시 사용, 에코 제거가 허밍에 주는 영향은 실기기 UAT 대상이다.
 - NOT RUN: 실제 마이크·브라우저·Safari·실기기.
 - 다음: P4-06 녹음 UI(동의 문구, 시작/정지, 경과 시간, 입력 레벨, 템포·박자·메트로놈, 상태·오류 안내).
+
+## 27. P4-06 — 녹음 UI (완료, 2026-11-13)
+
+- 사용자 지시: "네"(P4-06 진행). ui-craft 탐색 결과 토큰 시스템·Tailwind 없이 인라인 스타일이며, 저장소 규칙상 화면 전면 개편 금지이므로
+  기존 편집기 패널·버튼·오류 색 양식을 그대로 따랐다(스타일 질문 생략).
+- **박 기준점(검토 지적 1번의 제품 쪽 해결)**: 카운트인·메트로놈 클릭을 기존 Tone 재생이 아니라 **녹음과 같은 AudioContext**에서 예약한다.
+  두 컨텍스트의 시계가 달라 16분 격자(120 BPM 125ms)에서 어긋날 수 있기 때문이다. 처리기는 chunk마다 시작 프레임(`currentFrame`)을 보내고,
+  adapter는 첫 chunk 뒤 200ms에 첫 클릭을 예약해 녹음 시간 기준 위치(`metronomeStartSeconds`, 브라우저가 알려 주는 output·base latency 포함)를 돌려준다.
+  P4-05 포트에 덧붙인 변경(`CaptureMetronome`, `CaptureProgress`, `AudioRecording.metronomeStartSeconds`)이며 기존 필드는 그대로다.
+  클릭은 짧은 OscillatorNode이며 새 재생 엔진·의존성이 아니다.
+- 신규:
+  - `application/transcription.ts`: `planRecording`(박 단위 = 박자 분모 음가, 기존 재생 메트로놈과 같은 규칙; 1마디 카운트인; 상한 8마디;
+    캡처 길이 = 시작 여유 0.5초 + 카운트인 + 상한), `recordingDownbeatSeconds`(첫 클릭 + 카운트인).
+  - `features/audio-recording/`(결정 8의 녹음 기능 폴더): `RecordingPanel`, 진행 계산 `recordingProgress`·`formatRecordingTime`.
+  - 편집기 연결: 재생 제어 아래에 패널. 녹음 시작 시 기존 `playbackStopSignal`로 재생 정지.
+- 패널 동작: 동의 체크 전 시작 불가 → 권한 요청 → 카운트인 "준비 n / N" → "녹음 중 · m마디 b박", 경과/상한 시간, 입력 레벨(`<meter>`), 정지·취소
+  → 분석 중 → 결과("음표 N개를 찾았습니다" 또는 SILENT/NO_NOTES 안내) → 다시 녹음. 오류는 포트의 한국어 안내문. 취소는 오류가 아니라 처음 상태.
+  녹음은 시작 시 악보 템포·박자로 고정한다. 녹음·후보는 컴포넌트 메모리에만 있고 Command·저장·업로드가 없다(E2E로 악보 불변 확인).
+- 구현 기본값(Claude 판단, 변경 가능): 카운트인 1마디(항상 소리), "녹음 중 메트로놈" 기본 켬, 클릭 1200/800Hz 30ms, 화면 갱신 50ms 간격,
+  동의는 세션 안 체크박스(저장하지 않음), 템포·박자는 기존 악보 설정에서 변경(패널에서 별도 선택 없음).
+- 확정(악보에 넣기)은 P4-07이다. 지금은 결과 요약만 보이고 `onTranscribed`로 후보를 넘길 수 있다.
+- TDD 기록: adapter·계획·진행 함수 테스트를 먼저 실패시킨 뒤 구현했다. 패널은 E2E로 검증했다(구현 후 작성).
+  React 규칙(렌더 중 ref 읽기 금지) lint 오류를 고쳤다. 전체 E2E에서 기존 `settings.spec.ts`가 실패했다:
+  패널 문구 "120 BPM · 4/4박자"가 기존 텍스트 찾기(`/120 BPM · 4\/4/`)와 겹쳤다. 기존 테스트는 그대로 두고 패널 문구를 "120 BPM, 4/4박자"로 바꿨다.
+- 검증: typecheck PASS, lint PASS, `npm run test` 60파일/924 PASS(이전 59/914 + 10), architecture 80모듈/252의존성·경계 73파일 위반 0, build PASS,
+  `git diff --check` 깨끗, **`npm run test:e2e` 74/74 PASS**(기존 71 + 녹음 3). Playwright Chromium에 가짜 마이크 플래그를 추가했다.
+  처음으로 실제 브라우저에서 AudioWorklet 로드·가짜 입력 레벨·8마디 자동 정지·페이지 내 분석이 끝까지 실행됐다.
+- 한계: 가짜 장치의 입력은 허밍이 아니다(결과 내용은 검사하지 않고 상태만 검사). 실제 마이크·허밍·카운트인 박 정렬·출력/입력 지연·
+  Safari·iPhone(녹음과 클릭 동시 사용)·에코 제거 영향은 최종 수동 UAT 대상이다.
+- 다음: P4-07 후보 검토와 원자 확정(빈 마디 확보, 붙여넣는 위치 정책 결정 필요).

@@ -65,13 +65,37 @@ export interface AudioRecording {
   sampleRate: number;
   durationSeconds: number;
   stoppedBy: "user" | "limit";
+  /** Recording time of the first count-in click, latency the browser reports included. Absent without a metronome. */
+  metronomeStartSeconds?: number;
+}
+
+/** Count-in (always audible) and optional metronome, scheduled on the capture clock so beats and samples share one time base. */
+export interface CaptureMetronome {
+  beatSeconds: number;
+  /** The first beat of every measure is accented. */
+  beatsPerMeasure: number;
+  countInBeats: number;
+  /** Beats after the count-in (the recording itself). */
+  recordingBeats: number;
+  audibleDuringRecording: boolean;
+}
+
+export interface CaptureProgress {
+  /** Level of the latest chunk, 0–1 full scale. */
+  rms: number;
+  peak: number;
+  /** Seconds captured so far. */
+  seconds: number;
+  /** Recording time of the first click, once it is scheduled. */
+  metronomeStartSeconds?: number;
 }
 
 export interface AudioCaptureOptions {
   /** Recording stops by itself after this many seconds (count-in plus the measure limit). */
   maxSeconds: number;
-  /** Input level of each captured chunk, 0–1 full scale. */
-  onLevel?: (level: { rms: number; peak: number }) => void;
+  /** Called for each captured chunk. */
+  onLevel?: (progress: CaptureProgress) => void;
+  metronome?: CaptureMetronome;
   signal?: AbortSignal;
 }
 
