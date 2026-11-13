@@ -36,6 +36,8 @@ PASS는 실행자·일시·증거 위치가 있을 때만 기록한다.
 | UAT-X (Mac Chrome) | | | | | | |
 | UAT-X (Mac Safari) | | | | | | |
 | UAT-X (iPhone Safari) | | | | | | |
+| UAT-K (Mac Safari + VoiceOver) | | | | | | |
+| UAT-K (iPhone + VoiceOver) | | | | | | |
 
 ## 1. UAT-S — Mac Safari
 
@@ -161,6 +163,18 @@ iPhone Safari와 Android Chrome을 각각 실행한다. 기종·OS·세로/가�
 | [ ] | X-09 Safari·iPhone | Mac Safari와 iPhone Safari에서 X-05 | 인쇄/공유 → PDF가 만들어진다. 페이지 번호가 안 나오면 기록만 한다(Safari 미확인 항목) |
 | [ ] | X-10 저장 불변 | 각 출력 전후 "저장됨" 표시와 Undo | 출력만으로 저장 표시·Undo 이력이 바뀌지 않는다 |
 | [ ] | X-11 저장 충돌 | 다른 탭에서 같은 악보를 바꾼 뒤 이 탭에서 출력 | PDF 버튼이 꺼지고 이유가 보인다. MIDI·MusicXML은 화면 내용으로 받아진다 |
+
+## 5C. UAT-K — 키보드·스크린리더 (Phase 6, 2026-11-14 추가)
+
+근거: [KEYBOARD_AND_ACCESSIBILITY](KEYBOARD_AND_ACCESSIBILITY.md), D-04 결정 5. 자동 검사(axe·Tab 흐름)로 확인되지 않는 실제 사용감을 본다.
+
+| 체크 | ID | 순서 | 통과 기준 |
+|---|---|---|---|
+| [ ] | K-01 키보드만 | 마우스 없이 홈 → 피아노로 시작 → A S D G 입력 → 목록에서 음 선택·반음 올리기 → Undo/Redo → 재생 | 모든 단계 가능, 포커스 테두리가 항상 보인다 |
+| [ ] | K-02 선택 상자 | "입력 위치"·"악보 라벨"·조옮김 목표 조성을 키보드로 바꾸기 | 목록을 열고 화살표·Enter로 고를 수 있다 |
+| [ ] | K-03 VoiceOver 맥 | Safari + VoiceOver로 K-01 | 버튼·입력란 이름이 뜻이 통하게 읽힌다. 저장됨·오류 알림이 읽힌다 |
+| [ ] | K-04 VoiceOver iPhone | 탭 4개 이동, 건반으로 음 넣기, 재생 | 탭 이름·선택 상태가 읽히고 조작 가능하다 |
+| [ ] | K-05 확대 | 브라우저 200% 확대에서 편집기 | 글자·버튼이 겹치거나 잘리지 않는다 |
 
 ## 6. 실패 기록 양식
 

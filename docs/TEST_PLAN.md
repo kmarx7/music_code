@@ -1571,3 +1571,50 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 시각 확인: 64마디 PDF를 이미지로 바꿔 3쪽 모두 줄이 페이지 사이에서 잘리지 않음을 눈으로 확인했다(Chromium).
 - 독립 도구: MIDI는 이 Mac에 외부 파서(mido·MuseScore·GarageBand)가 없어 테스트용 독립 파서만 썼다. 외부 프로그램 열기는 UAT-X.
 - 수동 절차: [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5B UAT-X. 상태 NOT RUN.
+
+## Phase 6 P6-01 — 커서부터 재생·구간 삭제·실시간 음높이 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/playback.test.ts` (+6) | `fromTick` 시작 위치·남은 길이·이후 음 간격, 반복 구간 안/밖, 잘못된 시작 위치 4종은 오디오 생성 전 거부 | PASS |
+| `tests/unit/delete-range.test.ts` (3) | Cut과 같은 Command·클립보드 없음, 1회 Undo/Redo·빈 자리 유지, 빈 구간·타이 체인 절단 거부 | PASS |
+| `tests/unit/live-pitch.test.ts` (3) | 440/261.63 Hz ±3센트, +20센트 표시, 44.1 kHz 110 Hz, 무음·잡음·너무 짧은 창은 null | PASS |
+| `tests/unit/microphone-capture.test.ts` (+1) | `recent()`가 여러 chunk에 걸친 꼬리를 사본으로 주고, 녹음 결과는 그대로, 종료 후 빈 배열 | PASS |
+| `tests/e2e/prd-gaps.spec.ts` (3) | 커서부터 재생(비활성→3마디부터·악보 불변·마지막 음 뒤 안내), 구간 삭제(클립보드 유지·Undo), 녹음 중 A4 표시·취소 후 악보 불변 | PASS, `--repeat-each=3` 9/9 |
+
+- 테스트 작성 중 바로잡은 것: 재생 시작 지연을 0.1초로 잘못 적음(실제 0.2초, 기존 테스트와 동일), 표시 음높이 기대값을 정확히 0센트로 둔 것(±3센트 표시 정밀도로 정함).
+- 전체: `npm run test` 68파일/993 PASS, typecheck·lint PASS, architecture 92 modules/298 deps·boundaries 85파일 위반 0, **`npm run test:e2e` 84/84 PASS**(build 포함).
+- 실제 목소리의 실시간 표시 안정성은 수동 UAT(UAT-H)에서만 확인된다.
+
+## Phase 6 P6-02 — 홈·시작 흐름 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/home.spec.ts` (4) | 첫 방문(시작 버튼·빈 최근 목록·로컬 저장 안내·고정 데모 링크와 "Phase 1" 문구 없음), 피아노로 시작(더블클릭에도 악보 1개·건반이 화면 안), 허밍으로 시작(녹음 패널이 화면 안·동의 체크 포커스·자동 녹음 없음), 최근 3개(최신순·열기·악보함 링크) | PASS |
+
+- 화면 확인: 1280×800·375×812 스크린샷 육안 확인(가로 스크롤 없음, 한글 단어 단위 줄바꿈).
+
+## Phase 6 P6-03 — 모바일 편집기 탭 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/mobile-editor.spec.ts` (2) | 390×844 터치: 악보가 첫 화면·탭 막대 위, 탭 4개, 입력 탭에서 건반·녹음, 재생 중 탭 전환 후에도 재생·50% 유지, 악보 음표 터치 → 편집 탭 자동 전환·선택 편집, 라벨, 파일 탭 MIDI, 모든 탭 가로 넘침 없음, Undo 상시 / 데스크톱 1280에는 탭 없음·모든 영역 표시 | PASS, `--repeat-each=3` |
+| 기존 모바일 터치 E2E 6개 | `ab-loop`, `copy-paste`, `cut`, `edit-cursor`, `practice-rate`, `range-selection`의 모바일 테스트에 **탭 누르기 단계만 추가**(기대값·검증 동작 변경 없음). 탭 구조로 숨겨진 컨트롤을 실제 사용자처럼 탭을 눌러 연다 | PASS |
+
+- 전체: `npm run test` 68파일/993 PASS, typecheck·lint PASS, architecture 위반 0, **`npm run test:e2e` 90/90 PASS**.
+- 화면 확인: iPhone 13 크기 4개 탭·1280 데스크톱 스크린샷 육안 확인. 데스크톱 배치는 이전과 같다.
+- 알려진 제한(P2): 휴대폰에서 악보는 한 줄 4마디 폭(900px)이라 상자 안 가로 스크롤로 약 1.5마디씩 보인다. 줄 위아래 여백도 크다.
+  화면 폭에 맞춘 축소는 음표가 너무 작아져 이번에 하지 않았다. 실기기 UAT에서 읽기 불편 정도를 기록한 뒤 결정한다.
+
+## Phase 6 P6-04 — 접근성 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/a11y.spec.ts` (3) | axe(`@axe-core/playwright` 4.14.0, 개발 의존성) WCAG 2.0/2.1/2.2 A·AA 태그로 홈·악보함·편집기·조옮김 미리보기·인쇄 화면·모바일 탭 4개 — **모든 영향도 위반 0건** | PASS |
+| `tests/e2e/keyboard-journey.spec.ts` (1) | 실제 Tab 키 이동만으로 홈 시작 → 컴퓨터 키보드 입력 → 목록 선택·반음 올리기 → Undo/Redo → 연습 속도(←)·A–B(Space)·Play/Stop(Enter) → 커서·구간 복사·붙여넣기 → 저장 → MIDI 출력, 포커스 표시 확인 | PASS |
+
+- 처음 측정에서 나온 위반과 수정: 검은 건반 16px → 24px(흰 건반 26 → 34px, WCAG 2.5.8 `target-size`, 편집기 36곳), 휴대폰에서 가로 스크롤되는 악보 영역을 포커스 가능 영역으로(`scrollable-region-focusable`).
+- 한계: 헤드리스 macOS Chromium은 기본 `<select>` 목록 창에 키를 전달하지 않아, 그 한 단계만 `selectOption`으로 값을 바꾼다(포커스 도달은 실제 Tab). 수동 UAT-K K-02.
+- `npm audit` moderate 8건은 설치 전과 동일한 개발 도구(eslint 계열 `minimatch`) 문제로 axe와 무관하다. P6-06 라이선스·의존성 점검에서 다시 본다.
+- 전체: `npm run test` 68파일/993 PASS, lint PASS, **`npm run test:e2e` 94/94 PASS**.
+- 문서: [KEYBOARD_AND_ACCESSIBILITY](KEYBOARD_AND_ACCESSIBILITY.md), 수동 [MANUAL_UAT_CHECKLIST](MANUAL_UAT_CHECKLIST.md) §5C UAT-K(NOT RUN).

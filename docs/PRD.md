@@ -166,8 +166,8 @@ The following **14 feature groups** are all MVP requirements. Phase 0–6 only d
 
 | Page | Essential elements |
 |---|---|
-| Home `/` | Product intro, new score, Hum / Piano entry, recent score access |
-| Recorder `/record` | Mic permission, device states, tempo/meter, level, pitch visualization, recording actions |
+| Home `/` | Product intro, new score, Hum / Piano entry, recent score access (P6-02: 3 most recent) |
+| Recorder (editor panel) | Mic permission, device states, tempo/meter, level, pitch visualization, recording actions. **2026-11-14 user-approved change (D-04 #2):** implemented as the recording panel inside `/editor/[scoreId]`; Home "Hum" creates a score and opens that panel. No separate `/record` route. |
 | Editor `/editor/[scoreId]` | Score/staff, main toolbar, note tool, piano/record panel, playback, transposition, practice controls, file export |
 | Library `/library` | Saved scores, rename/open/delete, backup/import |
 

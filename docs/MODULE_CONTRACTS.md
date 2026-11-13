@@ -908,3 +908,21 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - **Route** `/print/[scoreId]?labels=letter|fixed-do` — `repository.load`만 호출한다. 생성·저장·삭제·자동 저장 없음.
 - 연습 속도·A–B 반복·선택·후보·라벨은 Score에 없으므로 어떤 출력에도 들어가지 않는다. 라벨은 인쇄 화면에만 쿼리로 전달된다.
 - 새 런타임 의존성 없음. MusicXML XSD는 테스트 fixture로만 저장소에 있다(앱 번들 미포함).
+
+## Phase 6 P6-01 — PRD 빠진 기능 (2026-11-14, D-04 결정 1)
+
+- **커서부터 재생(MVP-012):** `playScore(score, { fromTick })`. `fromTick`은 0..`scoreLengthTicks` 안전 정수, 아니면 오디오를 만들기 전에 `RangeError`.
+  반복 구간 안이면 그 위치, 밖이면 A부터. 커서 아래에서 이미 시작된 음은 남은 길이만 울린다(연습 속도 재예약과 같은 규칙).
+  `PlaybackControls`의 `cursorTick` prop과 "커서부터 재생" 버튼. 마지막 음 뒤(반복·메트로놈 없음)는 재생하지 않고 안내한다(구현 기본값).
+- **선택 구간 삭제(MVP-006):** `planDeleteRange(score, range)` → Cut과 같은 `CutEvents` 단일 Command·타이 체인 보호·빈 자리 유지.
+  클립보드는 바꾸지 않는다. 빈 구간은 "삭제할 음표·쉼표가 없습니다."
+- **녹음 중 추정 음높이(MVP-002):** Domain `estimateLivePitch(samples, sampleRate) → { midi, cents } | null`(기존 YIN, 유성 프레임 중앙값),
+  `LIVE_PITCH_WINDOW_SECONDS = 0.12`. 포트 `AudioCaptureSession.recent?(seconds)`(선택적, 표시 전용 사본, 녹음 종료 후 빈 배열).
+  패널은 기존 50 ms 화면 갱신 때만 계산하고 조표에 맞춰 철자한다. 후보·저장·Score에는 쓰지 않는다. 스크린리더 낭독 대상 아님(`aria-live="off"`).
+
+## Phase 6 P6-02·03 — 홈과 모바일 편집기 (2026-11-14)
+
+- 홈 `/`(클라이언트): `createNewScore` 후 `/editor/<id>?start=hum|piano`, `listScores` 앞 3개. 편집기는 `start`로 화면 위치·포커스만 바꾼다(녹음 자동 시작 없음).
+- 편집기 모바일(≤ 768px): `main.editor-main[data-mobile-tab]` + 블록별 `data-editor-tab="input|play|edit|file"`. CSS만으로 순서·숨김을 바꾸며
+  컴포넌트는 항상 마운트된다(녹음·재생·폼 상태 유지). 상시 표시: 머리글·저장, Undo/Redo, 악보, 메시지. 탭 상태는 UI 상태이며 저장하지 않는다.
+  악보 음표를 누르면 편집 탭으로 전환한다. 데스크톱 DOM·배치는 그대로.
