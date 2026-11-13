@@ -1,4 +1,5 @@
 import type { Score } from "@/domain/score/types";
+import type { NotationIssue } from "@/domain/score/notation";
 
 export interface ScoreSummary {
   id: string;
@@ -112,4 +113,29 @@ export interface AudioCaptureSession {
 /** Microphone capture for transcription (Phase 4, decision 8). Analysis itself is pure Domain code. */
 export interface AudioTranscriptionPort {
   startCapture(options: AudioCaptureOptions): Promise<AudioCaptureSession>;
+}
+
+// ---- Phase 5 export (D-03, 2026-11-13) ----
+
+/** File formats a score can leave the app in. JSON is the backup; the others are standard outputs. */
+export type ExportFormat = "json" | "midi" | "musicxml" | "pdf";
+
+export interface ExportIssue {
+  readonly code: "INVALID_SCORE" | NotationIssue["code"];
+  readonly message: string;
+  readonly measureNumber?: number;
+  readonly eventId?: string;
+}
+
+export type ExportData = Uint8Array | string;
+
+export type ExportWriteResult =
+  | { readonly ok: true; readonly data: ExportData }
+  | { readonly ok: false; readonly issue: ExportIssue };
+
+/** A format writer (adapter). It reads the score and returns bytes or text; it never stores or edits anything. */
+export interface ExportPort {
+  readonly format: Exclude<ExportFormat, "json" | "pdf">;
+  readonly mimeType: string;
+  write(score: Readonly<Score>): ExportWriteResult;
 }

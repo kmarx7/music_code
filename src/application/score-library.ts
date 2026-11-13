@@ -2,15 +2,14 @@ import { ScoreConflictError, type ScoreRepository, type ScoreSummary } from "@/a
 import type { Score } from "@/domain/score/types";
 import { createEmptyScore } from "@/domain/score/create";
 import { deserializeScore, serializeScore } from "@/domain/score";
+import { exportFileName } from "@/application/export";
 
 /** 현재 Score를 표준 JSON으로 백업한다. 연습/UI 상태는 포함되지 않는다. */
 export function exportScoreBackup(score: Score): { json: string; filename: string } {
   const json = serializeScore(score);
   const validated = deserializeScore(json);
   if (!validated.ok) throw new Error(validated.message);
-  // NFC first: a decomposed (NFD) Hangul title would otherwise be cut mid-syllable by the 80-unit limit.
-  const name = score.title.normalize("NFC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim().slice(0, 80) || "score";
-  return { json, filename: `${name}.json` };
+  return { json, filename: exportFileName(score.title, "json") };
 }
 
 /** 가져오기는 항상 새 악보로 저장한다. 원본 ID/음표/타이 관계는 덮어쓰지 않는다. */
