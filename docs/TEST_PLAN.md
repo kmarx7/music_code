@@ -1512,3 +1512,13 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 하한(구현 전 고정): note F1 ≥ 0.95, 옥타브 오류 0, 길이 일치 ≥ 0.9, 붙여넣기·검증 실패 0. 실측 F1 1.000, 길이 일치 370/370, 실패 0(TASKS §25).
 - 전체: `npm run test` 57파일/897 PASS, typecheck·lint·architecture·build PASS.
 - NOT RUN: 실제 허밍·마이크·브라우저. E2E(UI 변경 없음).
+
+## Phase 4 P4-05 — 마이크 캡처 포트·adapter·유스케이스 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `microphone-capture.test.ts` (12) | 가짜 getUserMedia·AudioContext·worklet 노드로 녹음 수명, 상한 자동 정지, 레벨, 오류 코드 매핑, UNSUPPORTED, 설정 실패 해제, DEVICE_LOST, 취소, 반복 stop, 네트워크·저장소 미호출, 상한 검증, 처리기 코드 실행 | PASS |
+| `transcription-usecase.test.ts` (5) | 8마디 초 계산과 거부, 합성 음계 후보, SILENT, NO_NOTES | PASS |
+
+- 전체: `npm run test` 59파일/914 PASS, typecheck·lint·architecture·build PASS.
+- 가짜 장치 검증은 실제 마이크·브라우저의 대체가 아니다. NOT RUN: 실제 브라우저 AudioWorklet, 권한 창, Safari, 실기기. E2E(UI 변경 없음).

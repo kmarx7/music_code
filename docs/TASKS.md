@@ -1249,3 +1249,28 @@
   build PASS, `git diff --check` 깨끗. UI 변경이 없어 E2E 미실행.
 - NOT RUN: 실제 허밍·마이크·브라우저.
 - 다음: P4-05 마이크 캡처 adapter와 포트(선행 권고: Phase 3 수동 UAT-S/UAT-A).
+
+## 26. P4-05 — 마이크 캡처 adapter와 포트 (완료, 2026-11-13)
+
+- 사용자 결정: "UAT는 나중에 다른 것들 마치고 마지막에 할께. 다음 진행해줘". P4-05의 선행 권고(Phase 3 수동 UAT)를 건너뛰고,
+  수동 UAT 전체를 최종 인수 단계로 미뤘다(마스터 플랜 위험 표·백로그에 기록).
+- 기존 재사용: 포트는 기존 `application/ports.ts`(ScoreRepository와 같은 위치·양식), 분석은 P4-02~04 Domain 함수.
+  ARCHITECTURE의 목표 위치 `adapters/web-audio/`를 처음 만들었다. 녹음 기능 폴더(`features/audio-recording/`)는 UI가 생기는 P4-06에서 만든다.
+- 신규:
+  - `AudioTranscriptionPort`·`AudioCaptureSession`·`AudioRecording`·`AudioCaptureError`(7개 코드) — `src/application/ports.ts`.
+  - `src/application/transcription.ts`: `RECORDING_MAX_MEASURES`, `recordingLimitSeconds`, `transcribeRecording`(SILENT/NO_NOTES).
+  - `src/adapters/web-audio/microphoneCapture.ts`: `createMicrophoneCapture(environment?)`. getUserMedia·AudioContext·AudioWorklet을 주입받는다.
+- 구현 기본값(Claude 판단, 변경 가능): 녹음마다 AudioContext 생성·종료 시 close, 512프레임 chunk(정지 시 남은 약 11ms 버림),
+  noiseSuppression·autoGainControl 끔, 에코 제거는 브라우저 기본, 무음 판정 최고 표본 0.01, 장치 끊김 시 녹음 버림.
+- TDD 기록: 두 테스트 파일을 먼저 실패(모듈·export 없음)시킨 뒤 구현했다. 첫 구현에서 17개 모두 통과.
+  humming-fixture 테스트의 지역 8마디 상수를 공개 상수 `RECORDING_MAX_MEASURES`로 바꿨다(기대값 동일).
+- 테스트(가짜 장치): 녹음·정지·순서·자원 해제, 상한 자동 정지(정확한 표본 수), 레벨 보고, getUserMedia 오류 7종 매핑과 컨텍스트 미생성,
+  getUserMedia 없음·Node 기본 환경 UNSUPPORTED, 권한 후 설정 실패 시 마이크 해제, 장치 끊김 DEVICE_LOST, abort·cancel·사전 abort,
+  정지 후 입력 무시·반복 stop 같은 결과, fetch·localStorage·indexedDB 미호출, 잘못된 상한 거부, 처리기 mono 혼합·512프레임 chunk(가짜 전역에서 실제 실행).
+  유스케이스: 8마디 초 계산(4/4·3/4·6/8, 20/60/120 BPM), 잘못된 값 거부, 합성 음계 → 철자된 후보, SILENT, NO_NOTES, 녹음 불변.
+- 검증: typecheck PASS, lint PASS, `npm run test` 59파일/914 PASS(이전 57/897 + 17), architecture 77모듈/243의존성·경계 70파일 위반 0,
+  build PASS, `git diff --check` 깨끗. UI 변경이 없어 E2E 미실행.
+- 한계: 실제 브라우저에서 AudioWorklet 로드·권한 창·장치 끊김을 실행하지 않았다(Node 가짜 장치만). P4-06 E2E에서 Chromium 가짜 마이크로 처음 확인한다.
+  iPhone Safari의 녹음·재생 동시 사용, 에코 제거가 허밍에 주는 영향은 실기기 UAT 대상이다.
+- NOT RUN: 실제 마이크·브라우저·Safari·실기기.
+- 다음: P4-06 녹음 UI(동의 문구, 시작/정지, 경과 시간, 입력 레벨, 템포·박자·메트로놈, 상태·오류 안내).

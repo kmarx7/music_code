@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { RECORDING_MAX_MEASURES } from "@/application";
 import { HUMMING_CONDITIONS, HUMMING_MELODIES, hummingCases, midiToHz, synthesizeHumming } from "../fixtures/humming";
 import type { MelodyNote } from "../fixtures/transcription-score";
 
@@ -134,7 +135,6 @@ describe("hummingCases", () => {
 
   it("every case fits the 8-measure recording limit and renders in range", () => {
     // Recording limit is measured in measures, not seconds (PHASE4_MASTER_PLAN decision 4).
-    const RECORDING_MAX_MEASURES = 8;
     for (const item of hummingCases()) {
       const { numerator, denominator } = item.melody.timeSignature;
       const measureTicks = numerator * Q * 4 / denominator;

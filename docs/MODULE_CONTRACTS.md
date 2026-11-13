@@ -161,7 +161,7 @@ interface EditSessionState { current: Score; past: readonly Score[]; future: rea
 | 포트 | 상태 | 비고 |
 |---|---|---|
 | `ScoreRepository` | 인터페이스만 정의 (`src/application/ports.ts`) | IndexedDB adapter는 Phase 1 |
-| `AudioTranscriptionPort` | 미정의 | Phase 4에서 계약화 |
+| `AudioTranscriptionPort` | **정의(2026-11-13, P4-05)** | 아래 "Phase 4 — 마이크 캡처 포트" 절 |
 | `PlaybackPort`, `ExportPort` | 미정의 | Phase 1/5에서 계약화 |
 
 어댑터는 App(조립 지점)에서만 구체 구현을 연결한다. Application은 포트만 참조한다.
@@ -853,3 +853,22 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - `transcriptionToClipboard(result, { key, timeSignature, nextId }): ClipboardPayload`.
   - 음표는 `provenance: { source: "transcription", confidence }`, 빈 곳은 쉼표(마디 시작 기준으로 마디마다 분할). `ties`는 비어 있다.
   - ID는 호출 측이 새로 발급한다. 확정은 기존 `PasteEvents` 1회(결정 5)이며 그 검증·분할·타이 규칙을 그대로 따른다.
+
+## Phase 4 — 마이크 캡처 포트와 녹음 유스케이스 (P4-05, 2026-11-13)
+
+- 포트 `AudioTranscriptionPort.startCapture(options): Promise<AudioCaptureSession>` (`@/application/ports`).
+  - `options`: `maxSeconds`(> 0, 카운트인 + 8마디 길이; 아니면 RangeError), `onLevel({ rms, peak })`(chunk마다), `signal`(AbortSignal).
+  - 세션: `sampleRate`, `finished`(종료 시 `AudioRecording` 또는 `AudioCaptureError`), `stop()`(같은 결과 반환, 반복 호출 안전), `cancel()`.
+  - `AudioRecording`: `{ samples: Float32Array(mono), sampleRate, durationSeconds, stoppedBy: "user" | "limit" }`. 메모리 전용이며
+    Score·JSON·이력·IndexedDB에 넣지 않고 업로드하지 않는다.
+  - `AudioCaptureError.code`: `UNSUPPORTED` | `PERMISSION_DENIED`(NotAllowed·Security) | `NO_DEVICE`(NotFound·Overconstrained) |
+    `DEVICE_BUSY`(NotReadable·Abort) | `DEVICE_LOST`(트랙 ended) | `ABORTED` | `FAILED`. 메시지는 한국어 안내문이다.
+  - 종료(정지·상한·오류·취소) 시 트랙 정지, 노드 해제, `onmessage` 해제, AudioContext close를 한 번만 수행한다.
+- 구현 `createMicrophoneCapture(environment?)` (`@/adapters/web-audio`). 녹음마다 AudioContext를 만들고 종료 시 닫는다(Tone 재생 컨텍스트와 별개).
+  AudioWorklet 처리기(`PCM_CAPTURE_PROCESSOR_SOURCE`, Blob URL로 로드)는 첫 입력을 mono로 섞어 512프레임마다 보낸다.
+  정지 시 처리기 안에 남은 512프레임 미만(48kHz 약 11ms)은 버린다. 제약: `noiseSuppression`·`autoGainControl` 끔, 에코 제거는 브라우저 기본값.
+- 유스케이스 (`@/application`):
+  - `RECORDING_MAX_MEASURES = 8`, `recordingLimitSeconds(tempoBpm, timeSignature, measures = 8)`: 카운트인 제외 초. 잘못된 값은 RangeError.
+  - `transcribeRecording(recording, { tempoBpm, timeSignature, key, downbeatSeconds?, nextId })` →
+    `{ ok: true, notes, clipboard }` | `{ ok: false, issue: "SILENT" | "NO_NOTES", message }`. 최고 표본 < 0.01이면 SILENT.
+    Domain 파이프라인(음높이 → 분할 → 격자 → 후보)을 메인 스레드에서 실행하며 녹음을 수정하지 않는다.

@@ -41,3 +41,51 @@ export class ScoreReadError extends Error {
     this.name = "ScoreReadError";
   }
 }
+
+/** Why a microphone capture could not start or did not finish. */
+export type AudioCaptureErrorCode =
+  | "UNSUPPORTED"        // no getUserMedia / AudioWorklet in this browser or context
+  | "PERMISSION_DENIED"  // the user or the page context refused the microphone
+  | "NO_DEVICE"          // no input device matches
+  | "DEVICE_BUSY"        // the device exists but could not be opened
+  | "DEVICE_LOST"        // the input went away while recording
+  | "ABORTED"            // cancelled by the caller
+  | "FAILED";            // anything else while setting up audio
+
+export class AudioCaptureError extends Error {
+  constructor(public readonly code: AudioCaptureErrorCode, message: string) {
+    super(message);
+    this.name = "AudioCaptureError";
+  }
+}
+
+/** Mono PCM held in memory only. Never stored in a Score, JSON, history or IndexedDB, and never uploaded. */
+export interface AudioRecording {
+  samples: Float32Array;
+  sampleRate: number;
+  durationSeconds: number;
+  stoppedBy: "user" | "limit";
+}
+
+export interface AudioCaptureOptions {
+  /** Recording stops by itself after this many seconds (count-in plus the measure limit). */
+  maxSeconds: number;
+  /** Input level of each captured chunk, 0–1 full scale. */
+  onLevel?: (level: { rms: number; peak: number }) => void;
+  signal?: AbortSignal;
+}
+
+export interface AudioCaptureSession {
+  readonly sampleRate: number;
+  /** Settles when recording ends: by `stop()`, by the limit, or with an AudioCaptureError. */
+  readonly finished: Promise<AudioRecording>;
+  /** Ends the recording and releases the device. Calling it again returns the same result. */
+  stop(): Promise<AudioRecording>;
+  /** Discards the recording and releases the device; `finished` rejects with ABORTED. */
+  cancel(): void;
+}
+
+/** Microphone capture for transcription (Phase 4, decision 8). Analysis itself is pure Domain code. */
+export interface AudioTranscriptionPort {
+  startCapture(options: AudioCaptureOptions): Promise<AudioCaptureSession>;
+}
