@@ -52,6 +52,41 @@ const buttonActive: React.CSSProperties = {
   color: "#ffffff",
 };
 
+type EditorTab = "input" | "play" | "edit" | "file";
+const EDITOR_TABS: readonly { id: EditorTab; label: string }[] = [
+  { id: "input", label: "입력" }, { id: "play", label: "재생·연습" }, { id: "edit", label: "편집" }, { id: "file", label: "파일" },
+];
+/**
+ * Phone layout (P6-03, D-04 #4). Desktop keeps the document order. At ≤ 768px the page becomes one column:
+ * header → Undo/Redo → staff → message → tab bar → the active tab's panels. Inactive panels are only hidden,
+ * never unmounted, so recording, playback and form state survive a tab switch.
+ */
+const EDITOR_CSS = `
+.editor-tabs { display: none; }
+@media (max-width: 768px) {
+  .editor-main { display: flex; flex-direction: column; padding: 12px !important; }
+  .editor-main > *, .editor-content > * { order: 5; }
+  .editor-content { display: contents; }
+  .editor-main > .editor-header { order: 0; }
+  .editor-content > .editor-toolbar { order: 1; }
+  /* The staff panel dissolves: the staff stays on top, its tab tools go under the tab bar with the other panels. */
+  .editor-content > .editor-staff { display: contents; }
+  .editor-staff > * { order: 5; }
+  .editor-staff > .editor-staff-view { order: 2; margin-bottom: 12px; }
+  .editor-staff > [data-editor-tab] { background: #ffffff; border: 1px solid #d9dee8; border-radius: 10px; padding: 12px; margin-bottom: 16px; }
+  .editor-content > .editor-message { order: 3; }
+  .editor-main > .editor-tabs { order: 4; display: flex; gap: 4px; position: sticky; top: 0; z-index: 5;
+    margin: 0 -12px 12px; padding: 6px 12px; background: #f6f7fb; border-bottom: 1px solid #d9dee8; }
+  .editor-tabs [role="tab"] { flex: 1 1 0; min-height: 44px; border: 1px solid #c8cfdb; border-radius: 8px;
+    background: #ffffff; color: #1c1f26; font-size: 14px; }
+  .editor-tabs [role="tab"][aria-selected="true"] { background: #1b2a4a; border-color: #1b2a4a; color: #ffffff; font-weight: 600; }
+  .editor-main[data-mobile-tab="input"] [data-editor-tab]:not([data-editor-tab="input"]),
+  .editor-main[data-mobile-tab="play"] [data-editor-tab]:not([data-editor-tab="play"]),
+  .editor-main[data-mobile-tab="edit"] [data-editor-tab]:not([data-editor-tab="edit"]),
+  .editor-main[data-mobile-tab="file"] [data-editor-tab]:not([data-editor-tab="file"]) { display: none !important; }
+}
+`;
+
 const panel: React.CSSProperties = {
   background: "#ffffff",
   border: "1px solid #d9dee8",
@@ -108,6 +143,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
     cursorRef.current = tick; setCursorTick(tick);
   }, []);
   const [labelMode, setLabelMode] = useState<NoteLabelMode>("none");
+  // Phone-only tab (UI state, never stored). Desktop shows every panel.
+  const [mobileTab, setMobileTab] = useState<EditorTab>("input");
   const [message, setMessage] = useState("");
   const [playbackStopSignal, setPlaybackStopSignal] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -125,6 +162,19 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const autosave = useRef<AutosaveHandle | null>(null);
   const navigationPending = useRef(false);
   const saveStatus = useAutosave(repository, 400, autosave, true, initialRevision);
+
+  // Home entry (P6-02): "?start=hum" brings the recording panel into view with its consent box focused,
+  // "?start=piano" brings the keyboard into view. Nothing starts recording by itself.
+  useEffect(() => {
+    const start = new URLSearchParams(window.location.search).get("start");
+    if (start === "hum") {
+      const panel = document.querySelector<HTMLElement>('[data-testid="recording-panel"]');
+      panel?.scrollIntoView({ block: "start" });
+      panel?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus({ preventScroll: true });
+    } else if (start === "piano") {
+      document.getElementById("piano-input")?.scrollIntoView({ block: "center" });
+    }
+  }, []);
 
   async function leaveEditor(href: string) {
     if (navigationPending.current) return;
@@ -274,8 +324,9 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const labelOf = (pitch: Pitch): string => formatNoteLabel(pitch, labelMode) ?? letterName(pitch);
 
   return (
-    <main style={page}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
+    <main style={page} className="editor-main" data-mobile-tab={mobileTab}>
+      <style>{EDITOR_CSS}</style>
+      <div className="editor-header" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Link href="/" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/"); }} style={{ fontSize: 13, color: "#1b2a4a" }}>
           ← 홈
         </Link>
@@ -311,7 +362,14 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
 
       </div>
 
-      <form
+      <div role="tablist" aria-label="편집기 영역" className="editor-tabs">
+        {EDITOR_TABS.map((tab) => (
+          <button key={tab.id} type="button" role="tab" aria-selected={mobileTab === tab.id}
+            onClick={() => setMobileTab(tab.id)}>{tab.label}</button>
+        ))}
+      </div>
+
+      <form data-editor-tab="file"
         style={{ ...panel, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
         onSubmit={(event) => {
           event.preventDefault();
@@ -336,27 +394,28 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         <Link href="/library" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/library"); }} style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
       </form>
 
-      <div style={panel}>
+      <div data-editor-tab="file" style={panel}>
         <ExportControls score={score} labelMode={labelMode} storageBlocked={storageBlocked}
           flush={async () => (await autosave.current?.flush()) ?? false} />
       </div>
 
-      <ScoreSettings score={score} onCommand={runCommand} />
-      <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
-      <PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} />
-      <RecordingPanel score={score} cursorTick={cursorTick} labelMode={labelMode} onCommand={clipboardCommand}
-        onStart={() => setPlaybackStopSignal((value) => value + 1)} />
+      <div data-editor-tab="edit"><ScoreSettings score={score} onCommand={runCommand} /></div>
+      <div data-editor-tab="edit"><TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} /></div>
+      <div data-editor-tab="play"><PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} cursorTick={cursorTick} /></div>
+      <div data-editor-tab="input"><RecordingPanel score={score} cursorTick={cursorTick} labelMode={labelMode} onCommand={clipboardCommand}
+        onStart={() => setPlaybackStopSignal((value) => value + 1)} /></div>
 
       {/* Original playback highlights must never target the read-only preview. */}
-      <div ref={rootRef} data-testid="editor-content">
+      <div ref={rootRef} data-testid="editor-content" className="editor-content">
 
-      <div style={{ ...panel, display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div className="editor-toolbar" style={{ ...panel, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" style={button} onClick={() => scoreStore.undo()}>
           Undo
         </button>
         <button type="button" style={button} onClick={() => scoreStore.redo()}>
           Redo
         </button>
+        <span data-editor-tab="input" style={{ display: "contents" }}>
         <button
           type="button"
           style={button}
@@ -386,21 +445,30 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         </button>
         <span style={{ fontSize: 12, color: "#5f6773" }}>{cursorTick === null
           ? "선택한 길이로 악보 끝에 삽입" : "음표: 편집 커서에 삽입 · 쉼표: 악보 끝에 삽입"}</span>
+        </span>
+        <span data-editor-tab="edit" style={{ display: "contents" }}>
         <span style={{ width: 1, background: "#d9dee8", margin: "0 4px" }} />
         <NoteLabelsControl mode={labelMode} onChange={setLabelMode} />
+        </span>
       </div>
 
-      <div style={panel}>
-        <EditCursor part={part} tick={cursorTick} onChange={moveCursor} />
-        <RangeSelect score={score} selection={rangeSelection}
-          onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
-        <ClipboardControls score={score} selection={rangeSelection} cursorTick={cursorTick} clipboard={clipboard}
-          onCopy={setClipboard} onCommand={clipboardCommand} onPasted={moveCursor} />
-        <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode} onSelectEvent={setSelectedEventId}
-          rangeEventIds={rangeSelection?.eventIds} />
+      <div className="editor-staff" style={panel}>
+        <div data-editor-tab="input"><EditCursor part={part} tick={cursorTick} onChange={moveCursor} /></div>
+        <div data-editor-tab="edit">
+          <RangeSelect score={score} selection={rangeSelection}
+            onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
+          <ClipboardControls score={score} selection={rangeSelection} cursorTick={cursorTick} clipboard={clipboard}
+            onCopy={setClipboard} onCommand={clipboardCommand} onPasted={moveCursor} />
+        </div>
+        <div className="editor-staff-view">
+          {/* Tapping a glyph opens its editor; on a phone that lives in the "편집" tab. */}
+          <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode}
+            onSelectEvent={(id) => { setSelectedEventId(id); setMobileTab("edit"); }}
+            rangeEventIds={rangeSelection?.eventIds} />
+        </div>
       </div>
 
-      <div style={panel}>
+      <div id="piano-input" data-editor-tab="input" style={panel}>
         <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5f6773" }}>
           건반을 클릭하거나 컴퓨터 키보드 A W S E D F T G Y H U J 로 입력하세요.
         </p>
@@ -408,10 +476,10 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       </div>
 
       {message ? (
-        <p role="status" style={{ color: "#b91c1c", fontSize: 13 }}>{message}</p>
+        <p role="status" className="editor-message" style={{ color: "#b91c1c", fontSize: 13 }}>{message}</p>
       ) : null}
 
-      <div style={panel}>
+      <div data-editor-tab="edit" style={panel}>
         <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5f6773" }}>
           음표·쉼표 목록 (선택해서 편집)
         </p>
@@ -448,7 +516,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       </div>
 
       {selectedEvent ? (
-        <div style={panel}>
+        <div data-editor-tab="edit" style={panel}>
           <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5f6773" }}>
             {selectedEvent.kind === "rest" ? "선택한 쉼표 편집" : "선택한 음표 편집"}
           </p>

@@ -82,7 +82,9 @@ test("연습 속도: 모바일 터치로 프리셋을 선택하고 재생한다"
   try {
     await page.goto("/editor/e2e-practice-rate-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "재생·연습", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByRole("button", { name: "50%", exact: true }).tap();
     await expect(page.getByTestId("practice-rate")).toHaveAttribute("data-rate", "50");
     await page.getByRole("button", { name: "Play", exact: true }).tap();

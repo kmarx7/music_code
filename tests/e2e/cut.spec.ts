@@ -112,12 +112,15 @@ test("잘라내기: 모바일 터치로 잘라내고 붙여넣는다", async ({ 
     const id = "e2e-cut-touch";
     await page.goto(`/editor/${id}`);
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
     await cutButton(page).tap();
     await expect(page.getByTestId("editor-content").locator("button[data-event-id]")).toHaveCount(0);
+    await page.getByRole("tab", { name: "입력", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
     await moveCursor(page, 2, 1);
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByRole("button", { name: "커서에 붙여넣기", exact: true }).tap();
     await expect.poll(async () => shape(await storedPart(page, id))).toEqual([["note", 3840, 960, 60]]);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

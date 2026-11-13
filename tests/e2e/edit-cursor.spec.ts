@@ -81,8 +81,10 @@ test.describe("모바일 편집 커서", () => {
   test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
   test("6/8 박 위치를 선택해 터치 입력하고 마지막 tick을 안전하게 처리한다", async ({ page }) => {
     const id = "e2e-edit-cursor-touch"; await page.goto(`/editor/${id}`);
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByLabel("박자", { exact: true }).selectOption("6/8");
     await page.getByRole("button", { name: "박자 적용", exact: true }).click();
+    await page.getByRole("tab", { name: "입력", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
     await move(page, 8, 6);
     await page.getByRole("button", { name: "8분음표", exact: true }).tap();

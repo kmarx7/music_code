@@ -112,7 +112,9 @@ test("A–B 반복: 모바일 터치로 켜고 반복 재생·정지한다", asy
   try {
     await page.goto("/editor/e2e-ab-loop-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "재생·연습", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByLabel("A–B 반복", { exact: true }).tap();
     await expect(page.getByTestId("practice-loop")).toHaveAttribute("data-loop", "on");
     await page.getByLabel("연습 속도", { exact: true }).fill("150");

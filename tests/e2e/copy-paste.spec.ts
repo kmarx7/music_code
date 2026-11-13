@@ -232,12 +232,15 @@ test("복사·붙여넣기: 모바일 터치로 복사하고 붙여넣는다", a
     const id = "e2e-copy-paste-touch";
     await page.goto(`/editor/${id}`);
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
     await copyButton(page).tap();
     await expect(page.getByTestId("clipboard-status")).toContainText("음표 1개 · 쉼표 0개 · 1마디 길이");
+    await page.getByRole("tab", { name: "입력", exact: true }).tap(); // phone layout: P6-03 tabs
     await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
     await moveCursor(page, 3, 1);
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await pasteButton(page).tap();
     await expect(page.getByTestId("editor-content").locator("button[data-event-id]")).toHaveCount(2);
     await expect.poll(async () => shape(await storedPart(page, id)))

@@ -150,6 +150,7 @@ test("구간 선택: 모바일 터치로 구간을 선택하고 해제한다", a
   try {
     await page.goto("/editor/e2e-range-selection-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
+    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await page.getByLabel("구간 마지막 마디", { exact: true }).fill("2");
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
