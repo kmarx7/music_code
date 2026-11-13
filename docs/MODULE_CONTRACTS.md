@@ -831,3 +831,12 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
   - 분석 창보다 짧은 입력은 빈 배열.
 - `smoothPitchContour(midi: readonly number[]): number[]`: 한 유성 구간의 옥타브 튐 보정과 중앙값 평활화.
 - 초 단위 시각과 tick 변환은 이 모듈의 책임이 아니다(P4-04). 녹음 시각은 tick과 별도로 보존한다(ARCHITECTURE §6).
+
+## Phase 4 — 음 분할 (P4-03, 2026-11-13)
+
+- `segmentNotes(frames: readonly PitchFrame[], options?: NoteSegmentOptions): NoteSegment[]` (`@/domain/transcription`).
+  - 입력은 `estimatePitchTrack`의 프레임(시간 오름차순). 순서가 아니면 RangeError. 입력을 수정하지 않는다.
+  - `NoteSegment`: `startSeconds`/`endSeconds`(입력과 같은 초 기준), `midi`(정수), `pitchMidi`(중앙값, 소수), `confidence`(평균 0–1), `frameCount`.
+    결과는 시간순이며 겹치지 않는다. 쉼표는 별도 객체 없이 음 사이 빈 구간이다.
+  - 옵션: `minNoteSeconds`(기본 0.06, 0 이상), `levelDipRatio`(기본 0.5, 0 초과 1 미만).
+- 초 → tick 변환·표기 가능 길이 맞춤은 P4-04의 책임이다.

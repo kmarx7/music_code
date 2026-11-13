@@ -1490,3 +1490,15 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 분석 시간은 `npm run perf:pitch`로 따로 측정하며 통과 기준이 아니다. 수치는 TASKS §23.
 - 전체: `npm run test` 55파일/873 PASS, typecheck·lint·architecture·build PASS.
 - NOT RUN: 실제 허밍·마이크·브라우저 측정·저사양 기기. E2E(UI 변경 없음).
+
+## Phase 4 P4-03 — 음 분할 (2026-11-13, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `note-segmentation.test.ts` (11) | 단일 음 음높이·경계, 음높이 변화 분리, 반복음 dip 분리(실제 신호·유성 유지 프레임), 쉼표 빈 구간, 끌어올림·비브라토·음정 어긋남(겹침 포함) 유지, 짧은 튐 병합·짧은 조각 제거, 레가토 미끄러짐·음 끝 떨어짐 병합과 짧은 안정음 유지, 빈 입력, 시간 역순·잘못된 옵션 거부·입력 불변, 합성 40사례 하한 | PASS |
+
+- 하한(구현 전 고정): 같은 MIDI·시작 50ms 이내 precision·recall ≥ 0.95, 시작 오차 중앙값 ≤ 30ms, 끝 오차 중앙값 ≤ 50ms, 반복음 멜로디 개수 일치.
+  실측: 370/370, 시작 8ms(최대 18), 끝 7ms(최대 24), 개수 불일치 0(TASKS §24).
+- 미끄러짐 규칙을 끄면(최대 길이 0) 해당 단위 테스트와 fixture 테스트가 실패함을 확인했다.
+- 전체: `npm run test` 56파일/884 PASS, typecheck·lint·architecture·build PASS.
+- NOT RUN: 실제 허밍·마이크·브라우저. E2E(UI 변경 없음).
