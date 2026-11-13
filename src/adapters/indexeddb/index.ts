@@ -12,3 +12,4 @@ export function getScoreRepository(): ScoreRepository {
 }
 
 export * from "./scoreRepository";
+export * from "./unavailable";

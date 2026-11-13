@@ -62,7 +62,7 @@ export function ExportControls({ score, labelMode, flush, storageBlocked }: Expo
       <button type="button" style={button} onClick={() => download(midiExport, "MIDI")}>MIDI</button>
       <button type="button" style={button} onClick={() => download(musicXmlExport, "MusicXML")}>MusicXML</button>
       {storageBlocked ? <span style={{ fontSize: 12, color: "#5f6773" }}>
-        저장 충돌·삭제 상태에서는 인쇄 화면을 열 수 없습니다. MIDI·MusicXML·JSON은 화면의 현재 내용으로 받을 수 있습니다.
+        저장 충돌·삭제 상태이거나 저장소를 쓸 수 없을 때는 인쇄 화면을 열 수 없습니다. MIDI·MusicXML·JSON은 화면의 현재 내용으로 받을 수 있습니다.
       </span> : null}
       {notice ? <p role={notice.error ? "alert" : "status"} data-testid="export-notice"
         style={{ width: "100%", margin: 0, fontSize: 12, color: notice.error ? "#b91c1c" : "#5f6773" }}>

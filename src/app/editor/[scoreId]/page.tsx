@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { formatNoteLabel, koreanFixedDo, letterName, type NoteLabelMode } from "@/domain/music-theory";
-import { ScoreConflictError, ScoreReadError, importScoreBackup, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt } from "@/application";
-import { measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
+import { ScoreConflictError, ScoreReadError, importScoreBackup, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt, probeScoreStorage } from "@/application";
+import { createEmptyScore, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
-import { getScoreRepository } from "@/adapters/indexeddb";
+import { createUnavailableScoreRepository, getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { ClipboardControls, EditCursor, NoteLabelsControl, RangeSelect, ScoreSettings, StaffView } from "@/features/score-editor";
@@ -103,7 +103,7 @@ export default function EditorPage() {
 
 /** The editing workspace and autosave only mount after a successful validated read. */
 function EditorLoader({ scoreId }: { scoreId: string }) {
-  const [load, setLoad] = useState<{ ready: boolean; revision?: number; error?: { code: string; message: string } }>({ ready: false });
+  const [load, setLoad] = useState<{ ready: boolean; revision?: number; memoryOnly?: boolean; error?: { code: string; message: string } }>({ ready: false });
   const repository = getScoreRepository();
   useEffect(() => {
     let active = true;
@@ -113,8 +113,18 @@ function EditorLoader({ scoreId }: { scoreId: string }) {
         scoreStore.init(score);
         setLoad({ ready: true, revision });
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (!active) return;
+        // Storage that cannot be opened at all (P6-05): edit in memory, never claim a save. A single unreadable
+        // record is different — the library still lists — and stays blocked below so it is never overwritten.
+        const storageDown = !(error instanceof ScoreConflictError) &&
+          (!(error instanceof ScoreReadError) || error.code === "STORAGE_READ_ERROR") && !(await probeScoreStorage(repository));
+        if (!active) return;
+        if (storageDown) {
+          scoreStore.init(createEmptyScore({ id: scoreId, title: "새 악보", measureCount: 8, createdAt: new Date().toISOString() }));
+          setLoad({ ready: true, revision: 0, memoryOnly: true });
+          return;
+        }
         setLoad({ ready: false, error: error instanceof ScoreReadError || error instanceof ScoreConflictError
           ? { code: error.code, message: error.message }
           : { code: "OPEN_FAILED", message: "악보를 열지 못했습니다." } });
@@ -130,10 +140,10 @@ function EditorLoader({ scoreId }: { scoreId: string }) {
     </main>
   );
   if (!load.ready) return <main style={page}><p>준비 중…</p></main>;
-  return <EditorWorkspace key={scoreId} initialRevision={load.revision!} />;
+  return <EditorWorkspace key={scoreId} initialRevision={load.revision!} memoryOnly={load.memoryOnly ?? false} />;
 }
 
-function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
+function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: number; memoryOnly: boolean }) {
   const router = useRouter();
   const session = useScoreState();
   const [durationTicks, setDurationTicks] = useState(960);
@@ -158,7 +168,8 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
   const showPosition = useCallback((position: PlaybackPosition) => {
     if (rootRef.current) highlightPlayback(rootRef.current, position.activeNoteIds);
   }, []);
-  const repository = getScoreRepository();
+  const [unavailable] = useState(() => (memoryOnly ? createUnavailableScoreRepository() : null));
+  const repository = unavailable ?? getScoreRepository();
   const autosave = useRef<AutosaveHandle | null>(null);
   const navigationPending = useRef(false);
   const saveStatus = useAutosave(repository, 400, autosave, true, initialRevision);
@@ -353,6 +364,13 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
                 : ""}
         </span>
         <SaveButton autosave={autosave} status={saveStatus} />
+        {memoryOnly && <section data-testid="storage-unavailable" aria-label="저장되지 않음" style={{ ...panel, width: "100%", borderColor: "#e0a100", marginBottom: 0 }}>
+          <p role="alert" style={{ margin: "0 0 8px" }}>
+            이 브라우저에서는 저장소(IndexedDB)를 쓸 수 없어 <strong>편집 내용이 저장되지 않습니다.</strong> 사생활 보호 모드이거나 사이트 데이터 저장이 막혀 있을 수 있습니다.
+            창을 닫기 전에 JSON 백업을 받아 두세요.
+          </p>
+          <button type="button" style={button} onClick={() => downloadScoreJson(exportScoreBackup(score))}>현재 내용 JSON 백업</button>
+        </section>}
         {storageBlocked && <section data-testid="storage-conflict" aria-label="저장 충돌" style={panel}>
           <p role="alert">{saveStatus === "deleted" ? "다른 탭에서 삭제된 악보입니다." : "다른 탭에서 악보가 변경되었습니다."} 자동·수동 저장을 중단했습니다. 현재 편집과 Undo 이력은 유지됩니다.</p>
           <button type="button" style={button} onClick={() => downloadScoreJson(exportScoreBackup(score))}>현재 내용 JSON 백업</button>{" "}
@@ -395,7 +413,7 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
       </form>
 
       <div data-editor-tab="file" style={panel}>
-        <ExportControls score={score} labelMode={labelMode} storageBlocked={storageBlocked}
+        <ExportControls score={score} labelMode={labelMode} storageBlocked={storageBlocked || memoryOnly}
           flush={async () => (await autosave.current?.flush()) ?? false} />
       </div>
 

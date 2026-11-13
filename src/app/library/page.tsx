@@ -8,6 +8,7 @@ import { createNewScore, exportScoreBackup, importScoreBackup, listScores } from
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { formatDate } from "@/shared";
+import { StoragePersistence } from "@/features/score-library";
 
 const page: React.CSSProperties = {
   maxWidth: 820,
@@ -211,6 +212,7 @@ export default function LibraryPage() {
       <p style={{ marginTop: 16, fontSize: 12, color: "#5f6773" }}>
         악보는 이 브라우저(IndexedDB)에만 저장됩니다. 브라우저 데이터를 삭제하면 악보도 사라집니다.
       </p>
+      <StoragePersistence />
     </main>
   );
 }

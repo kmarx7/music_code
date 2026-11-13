@@ -24,6 +24,10 @@ test("홈 첫 방문: 소개·시작 버튼·로컬 저장 안내, 최근 악보
   await expect(page.getByText("이 브라우저에만 저장")).toBeVisible();
   await expect(page.locator('a[href="/editor/demo-score"]')).toHaveCount(0);
   await expect(page.getByText("Phase 1")).toHaveCount(0);
+  await page.getByRole("link", { name: "오픈소스 라이선스" }).click();
+  await expect(page.getByRole("heading", { name: "오픈소스 라이선스", exact: true })).toBeVisible();
+  await expect(page.locator("#ofl")).toContainText("SIL OPEN FONT LICENSE Version 1.1");
+  await expect(page.getByRole("row")).toHaveCount(15); // header + 14 components
 });
 
 test("피아노로 시작: 새 악보를 한 번만 만들고 편집기의 건반으로 간다", async ({ page }) => {

@@ -27,7 +27,7 @@ export default function HomePage() {
   const router = useRouter();
   const [recent, setRecent] = useState<Recent>({ kind: "loading" });
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ text: string; fallback: string } | null>(null);
   const pending = useRef(false);
 
   useEffect(() => {
@@ -42,14 +42,16 @@ export default function HomePage() {
   async function start(mode: "hum" | "piano") {
     // One score per intent, even on a double click.
     if (pending.current) return;
-    pending.current = true; setCreating(true); setError("");
+    pending.current = true; setCreating(true); setError(null);
     try {
       const id = crypto.randomUUID();
       await createNewScore(getScoreRepository(), { id, createdAt: new Date().toISOString() });
       router.push(`/editor/${id}?start=${mode}`);
     } catch {
       pending.current = false; setCreating(false);
-      setError("새 악보를 만들지 못했습니다. 브라우저가 사이트 데이터 저장을 막고 있지 않은지 확인해 주세요.");
+      // Storage refused (P6-05): the editor still works in memory-only mode with a clear "not saved" notice.
+      setError({ text: "이 브라우저에 악보를 저장할 수 없습니다(사생활 보호 모드 또는 사이트 데이터 차단). 저장 없이 편집은 할 수 있으며, 내용은 JSON 백업으로 보관해야 합니다.",
+        fallback: `/editor/${crypto.randomUUID()}?start=${mode}` });
     }
   }
 
@@ -67,7 +69,9 @@ export default function HomePage() {
         <button type="button" style={secondary} disabled={creating} onClick={() => void start("piano")}>피아노로 시작</button>
       </div>
       <p style={muted}>허밍은 마이크 동의 후에만 녹음하며, 녹음은 이 기기 안에서 분석하고 저장하거나 보내지 않습니다.</p>
-      {error ? <p role="alert" style={{ color: "#b91c1c", fontSize: 14 }}>{error}</p> : null}
+      {error ? <p role="alert" style={{ color: "#b91c1c", fontSize: 14 }}>
+        {error.text} <Link href={error.fallback}>저장 없이 편집기 열기</Link>
+      </p> : null}
 
       <section aria-labelledby="recent-heading" data-testid="home-recent" style={{ marginTop: 40 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -93,8 +97,14 @@ export default function HomePage() {
       </section>
 
       <p style={{ ...muted, marginTop: 40 }}>
+        권장 환경: 최신 Chrome·Safari(컴퓨터·휴대폰). 허밍 녹음은 마이크와 AudioWorklet을 지원하는 브라우저에서만 됩니다.
+      </p>
+      <p style={muted}>
         악보는 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 악보도 사라지니, 중요한 악보는 악보함에서 JSON으로 백업해 두세요.
       </p>
+      <nav aria-label="사이트 정보" style={{ ...muted, display: "flex", gap: 16, marginTop: 24 }}>
+        <Link href="/licenses" style={{ color: "#5f6773" }}>오픈소스 라이선스</Link>
+      </nav>
     </main>
   );
 }

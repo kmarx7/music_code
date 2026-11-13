@@ -85,3 +85,12 @@ export async function createNewScore(
 export function listScores(repository: ScoreRepository): Promise<ScoreSummary[]> {
   return repository.list();
 }
+
+/**
+ * True when the score storage can be used at all (P6-05). Listing skips unreadable records, so only a storage
+ * that cannot be opened (private modes, blocked site data, missing IndexedDB) reports false. A single corrupt
+ * record keeps its own protective read error instead.
+ */
+export async function probeScoreStorage(repository: ScoreRepository): Promise<boolean> {
+  try { await repository.list(); return true; } catch { return false; }
+}
