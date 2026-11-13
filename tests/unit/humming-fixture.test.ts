@@ -125,10 +125,15 @@ describe("hummingCases", () => {
     }
   });
 
-  it("every case renders within the 30 second recording limit and in range", () => {
+  it("every case fits the 8-measure recording limit and renders in range", () => {
+    // Recording limit is measured in measures, not seconds (PHASE4_MASTER_PLAN decision 4).
+    const RECORDING_MAX_MEASURES = 8;
     for (const item of hummingCases()) {
+      const { numerator, denominator } = item.melody.timeSignature;
+      const measureTicks = numerator * Q * 4 / denominator;
+      const last = item.melody.notes.at(-1)!;
+      expect(last.startTick + last.durationTicks).toBeLessThanOrEqual(RECORDING_MAX_MEASURES * measureTicks);
       const { samples, sampleRate } = item.render();
-      expect(samples.length / sampleRate).toBeLessThanOrEqual(30);
       expect(samples.length).toBeGreaterThan(sampleRate / 2);
       expect(peak(samples)).toBeLessThanOrEqual(1);
     }

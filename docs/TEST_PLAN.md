@@ -1473,3 +1473,8 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 전체: `npm run test` 54파일/861 PASS, typecheck·lint·architecture·build PASS.
 - 이후 P4-02~04는 이 fixture와 채점기로 수치를 보고한다. 합성음 수치는 실제 허밍 품질을 보증하지 않는다.
 - NOT RUN: 실제 허밍·마이크·Safari·실기기. E2E(UI 변경 없음).
+
+### 결정 4 변경 — 녹음 상한 30초 → 8마디 (2026-11-13)
+- `humming-fixture.test.ts`의 마지막 사례 검사를 "30초 이내"에서 "각 멜로디가 자기 박자 기준 8마디 이내"로 바꿨다(정책 변경에 따른 기대값 교체, 개수 그대로 10).
+- 실행: 대상 파일 10/10 PASS, `npm run test` 54파일/861 PASS, typecheck·lint·architecture(69모듈/221의존성, 경계 62파일 위반 0)·build PASS.
+- 현재 사례는 2–4마디뿐이라 이 검사는 상한 근처를 시험하지 않는다. 8마디·느린 템포 사례는 P4-02에서 추가한다.
