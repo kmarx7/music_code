@@ -36,7 +36,10 @@ const KEY_SPEC_BY_FIFTHS: Record<number, string> = {
 const MEASURES_PER_ROW = 4;
 const MEASURE_WIDTH = 220;
 const ROW_HEIGHT = 130;
+const LABELLED_ROW_HEIGHT = 180;
 const STAVE_TOP = 40;
+/** Row geometry shared with the print layout (P5-06). */
+export const STAFF_ROW_LAYOUT = { rowHeight: ROW_HEIGHT, labelledRowHeight: LABELLED_ROW_HEIGHT, staveTop: STAVE_TOP } as const;
 
 function keySpecOf(part: Part): string {
   return KEY_SPEC_BY_FIFTHS[part.keySignature.fifths] ?? "C";
@@ -120,7 +123,7 @@ export async function renderScoreInto(
   }
   if (!liveCache(element)) {
     const plannedRows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
-    reserveHeight(element, plannedRows * ((options?.labelMode ?? "none") !== "none" ? 180 : ROW_HEIGHT) + STAVE_TOP);
+    reserveHeight(element, plannedRows * ((options?.labelMode ?? "none") !== "none" ? LABELLED_ROW_HEIGHT : ROW_HEIGHT) + STAVE_TOP);
   }
   const vexflow = await import("vexflow");
   if (options?.signal?.aborted || renderRequests.get(element) !== request) return;
@@ -145,7 +148,7 @@ export async function renderScoreInto(
     let expandedLayout = labelled;
     const continuation = new Set(part.ties.map((tie) => tie.to));
     const annotations = new Map<InstanceType<typeof StaveNote>, InstanceType<typeof Annotation>>();
-    const rowHeight = labelled ? 180 : ROW_HEIGHT;
+    const rowHeight = labelled ? LABELLED_ROW_HEIGHT : ROW_HEIGHT;
     let rowX = 10;
     let rowY = STAVE_TOP;
     let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + 20;

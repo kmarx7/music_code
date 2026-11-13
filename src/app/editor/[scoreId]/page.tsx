@@ -17,6 +17,7 @@ import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-l
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
 import { TransposeTool } from "@/features/transposition";
 import { RecordingPanel } from "@/features/audio-recording";
+import { ExportControls } from "@/features/export";
 import type { ClipboardPayload, PlaybackPosition, RangeSelection, Score } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
 
@@ -334,6 +335,11 @@ function EditorWorkspace({ initialRevision }: { initialRevision: number }) {
         }}>JSON 백업</button>
         <Link href="/library" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/library"); }} style={{ fontSize: 13 }}>악보함 / JSON 가져오기</Link>
       </form>
+
+      <div style={panel}>
+        <ExportControls score={score} labelMode={labelMode} storageBlocked={storageBlocked}
+          flush={async () => (await autosave.current?.flush()) ?? false} />
+      </div>
 
       <ScoreSettings score={score} onCommand={runCommand} />
       <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
