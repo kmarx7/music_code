@@ -26,7 +26,11 @@ export type HummingOptions = {
   leadSilenceMs?: number; tailSilenceMs?: number;
 };
 
-export type HummingClip = { samples: Float32Array; sampleRate: number };
+export type HummingClip = {
+  samples: Float32Array; sampleRate: number;
+  /** Clip time of tick 0 (the end of the lead-in silence). Stands in for the count-in a real recording would have. */
+  downbeatSeconds: number;
+};
 
 export const midiToHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 
@@ -102,7 +106,7 @@ export function synthesizeHumming(notes: readonly MelodyNote[], options: Humming
       samples[index] = Math.max(-1, Math.min(1, samples[index]! + noiseLevel * (2 * next() - 1)));
     }
   }
-  return { samples, sampleRate };
+  return { samples, sampleRate, downbeatSeconds: lead };
 }
 
 export type HummingMelody = {

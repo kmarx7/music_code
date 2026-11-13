@@ -818,3 +818,16 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - Score·JSON·저장 이력에는 아무것도 쓰지 않는다. 실제 `SVGContext`가 아니면(단위 테스트 double) 캐시 없이 전부 그린다.
 - 내부 모듈 `domain/score/transpose-core.ts`: `transposeScore`(공개, 입력 검증 포함)와 `transposeValidatedScore`
   (비공개, 이미 검증된 같은 Score 객체에만 사용). 추천 엔진만 후자를 쓰며 후보별 결과 검증은 생략하지 않는다.
+
+## Phase 4 — 음높이 추정 (P4-02, 2026-11-13)
+
+- 공개 진입점 `@/domain/transcription`. Domain 순수 함수이며 브라우저·오디오·런타임 의존성이 없다(결정 1).
+- `estimatePitchTrack(samples: Float32Array, sampleRate: number, options?: PitchTrackOptions): PitchFrame[]`
+  - 입력 PCM은 mono, 메모리에만 있다. 입력을 수정하지 않고, 같은 입력에 같은 결과를 낸다.
+  - `PitchFrame`: `timeSeconds`(분석 창 중심, 첫 표본 기준 초), `voiced`, `frequencyHz`/`midi`(무성이면 null, midi는 소수),
+    `confidence`(1 − aperiodicity, 0–1), `rms`.
+  - 옵션 기본값: `minHz` 70, `maxHz` 1100, `hopSeconds` 0.01, `minRms` 0.01, `maxAperiodicity` 0.2.
+  - 거부(RangeError): 양수가 아닌 표본화율·hop·주파수, `minHz ≥ maxHz`, 분석 Nyquist 이상인 `maxHz`, 유한하지 않은 표본.
+  - 분석 창보다 짧은 입력은 빈 배열.
+- `smoothPitchContour(midi: readonly number[]): number[]`: 한 유성 구간의 옥타브 튐 보정과 중앙값 평활화.
+- 초 단위 시각과 tick 변환은 이 모듈의 책임이 아니다(P4-04). 녹음 시각은 tick과 별도로 보존한다(ARCHITECTURE §6).

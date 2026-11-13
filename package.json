@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "perf:browser": "playwright test --config playwright.perf.config.ts",
+    "perf:pitch": "vitest run --config vitest.perf.config.ts",
     "check:architecture": "depcruise src --config .dependency-cruiser.cjs && node scripts/check-boundaries.mjs"
   },
   "dependencies": {

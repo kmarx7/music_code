@@ -67,6 +67,13 @@ describe("synthesizeHumming", () => {
     expect(peak(samples, lead + beat, lead + 2 * beat)).toBeGreaterThan(0.3);
   });
 
+  it("reports where tick 0 falls in the clip, so a transcriber and a scorer share the same grid", () => {
+    expect(synthesizeHumming(one(69), { tempoBpm: 120 }).downbeatSeconds).toBe(0);
+    expect(synthesizeHumming(one(69), { tempoBpm: 120, leadSilenceMs: 250 }).downbeatSeconds).toBe(0.25);
+    // Every case shares the same 200 ms lead-in, so rendering one of them is enough.
+    expect(hummingCases()[0].render().downbeatSeconds).toBe(0.2);
+  });
+
   it("detune shifts the pitch by cents and vibrato keeps the average pitch", () => {
     const sharp = synthesizeHumming(one(69), { tempoBpm: 120, harmonics: [1], articulationGapMs: 0, tailSilenceMs: 0, detuneCents: 100 });
     expect(Math.abs(cycles(sharp.samples, 0, RATE) - midiToHz(70))).toBeLessThanOrEqual(1.5);
