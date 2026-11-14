@@ -14,7 +14,7 @@ export const MAX_ALTER = 2;
 export const SUPPORTED_CLEFS = ["treble", "bass"] as const;
 
 /** Instruments a part can be written for (v3, Phase 7 decision 6). Profiles live in `instruments.ts`. */
-export const INSTRUMENT_IDS = ["piano", "hyang-piri", "gayageum-25"] as const;
+export const INSTRUMENT_IDS = ["piano", "hyang-piri", "gayageum-25", "gayageum-12-sanjo"] as const;
 export type InstrumentId = (typeof INSTRUMENT_IDS)[number];
 
 export const SUPPORTED_MODES = ["major", "minor"] as const;

@@ -29,5 +29,7 @@ describe("parseScoreSetup (Phase 7 /new, /record step 1)", () => {
 
   it("offers only the piano until Track B confirms the instrument values", () => {
     expect(SETUP_INSTRUMENTS.filter((instrument) => instrument.available).map((instrument) => instrument.id)).toEqual(["piano"]);
+    // Every listed instrument is one a Score can carry; the Korean ones wait for B-3–B-6 (향피리 on hold).
+    expect(SETUP_INSTRUMENTS.map((instrument) => instrument.id)).toEqual(["piano", "gayageum-25", "gayageum-12-sanjo", "hyang-piri"]);
   });
 });

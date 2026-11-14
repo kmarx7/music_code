@@ -61,7 +61,7 @@ interface TimeSignature { numerator: number; denominator: number }  // 분모 1|
 
 interface Part {
   id: string; name: string; clef: Clef;
-  instrument?: "piano" | "hyang-piri" | "gayageum-25";  // v3 신규. 없으면 피아노
+  instrument?: "piano" | "hyang-piri" | "gayageum-25" | "gayageum-12-sanjo";  // v3 신규. 없으면 피아노
   keySignature: KeySignature; timeSignature: TimeSignature;
   measures: Measure[];
   ties: TieLink[];            // v2 신규
@@ -124,7 +124,7 @@ interface TieLink { from: string; to: string }
 | `EMPTY_PARTS` / `EMPTY_MEASURES` | part 또는 measures 비어 있음 |
 | `MEASURE_INDEX_MISMATCH` | `measure.index !== 배열 위치` |
 | `INVALID_CLEF` | treble/bass 아님 |
-| `INVALID_INSTRUMENT` | `instrument`가 있으면서 piano/hyang-piri/gayageum-25가 아님 |
+| `INVALID_INSTRUMENT` | `instrument`가 있으면서 piano/hyang-piri/gayageum-25/gayageum-12-sanjo가 아님 |
 | `INVALID_TIME_SIGNATURE` | 분자 < 1 또는 분모 비지원 |
 | `INVALID_KEY_SIGNATURE` | tonic/mode/fifths(−7..7) 위반 |
 | `INVALID_POSITION` | `startTick` < 0 또는 정수 아님 |

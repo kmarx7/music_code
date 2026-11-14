@@ -9,8 +9,9 @@ export const SETUP_DEFAULTS = { title: "새 악보", meter: "4/4", tempoBpm: 90,
 /** Target instruments. Only the piano is selectable until Track B confirms the Korean instrument values (B-1). */
 export const SETUP_INSTRUMENTS: readonly { id: string; label: string; available: boolean }[] = [
   { id: "piano", label: "피아노", available: true },
-  { id: "hyang-piri", label: "향피리 (준비 중)", available: false },
   { id: "gayageum-25", label: "25현 가야금 (준비 중)", available: false },
+  { id: "gayageum-12-sanjo", label: "12현 산조가야금 (준비 중)", available: false },
+  { id: "hyang-piri", label: "향피리 (준비 중)", available: false },
 ];
 
 export interface ScoreSetup {

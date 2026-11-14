@@ -97,15 +97,39 @@ describe("Phase 7 B-2: Part.instrument and schemaVersion 3 (decision 6)", () => 
       .toMatchObject({ ok: false, error: { code: "INVALID_CLEF" } });
   });
 
-  it("profiles: the piano is known; 향피리·25현 values wait for B-1 and are not filled with unverified numbers", () => {
+  it("profiles: the piano is known; 향피리 stays on hold (B-1) with no unverified numbers", () => {
     expect(getInstrumentProfile("piano")).toMatchObject({ name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108 } });
-    for (const id of ["hyang-piri", "gayageum-25"] as const) {
-      const profile = getInstrumentProfile(id);
-      expect(profile.verified).toBe(false);
-      expect(profile.range).toBeNull();
-      expect(profile.tunings).toEqual([]);
+    const piri = getInstrumentProfile("hyang-piri");
+    expect(piri).toMatchObject({ name: "향피리", verified: false, range: null, tunings: [] });
+  });
+
+  it("25현 가야금 carries the expert-confirmed values (B-1, 2026-11-15): Eb2–Ab5, Eb조 and Ab조, sounding pitch", () => {
+    const gayageum = getInstrumentProfile("gayageum-25");
+    expect(gayageum).toMatchObject({ name: "25현 가야금", verified: true, range: { lowMidi: 39, highMidi: 80 } });
+    // Strings 1–25, lowest first: the E-flat major scale from Eb2 up to Ab5.
+    const eb = [39, 41, 43, 44, 46, 48, 50, 51, 53, 55, 56, 58, 60, 62, 63, 65, 67, 68, 70, 72, 74, 75, 77, 79, 80];
+    expect(gayageum.tunings.map((tuning) => [tuning.id, tuning.name, tuning.stringMidis])).toEqual([
+      ["eb", "Eb조", eb],
+      // Ab조: the three D strings lowered to D-flat, everything else as in Eb조.
+      ["ab", "Ab조", eb.map((midi) => (midi % 12 === 2 ? midi - 1 : midi))],
+    ]);
+    for (const tuning of gayageum.tunings) {
+      expect(tuning.stringMidis).toHaveLength(25);
+      expect(tuning.stringMidis[0]).toBe(gayageum.range!.lowMidi);
+      expect(tuning.stringMidis[24]).toBe(gayageum.range!.highMidi);
+      expect([...tuning.stringMidis].sort((a, b) => a - b)).toEqual(tuning.stringMidis);
     }
-    expect(getInstrumentProfile("hyang-piri").name).toBe("향피리");
-    expect(getInstrumentProfile("gayageum-25").name).toBe("25현 가야금");
+    expect(gayageum.tunings[1].stringMidis.filter((midi, index) => midi !== eb[index])).toEqual([49, 61, 73]);
+  });
+
+  it("12현 산조가야금 carries the 국립국악원 국악사전 open-string tuning at sounding pitch (2026-11-15)", () => {
+    const sanjo = getInstrumentProfile("gayageum-12-sanjo");
+    // Strings 1–12, lowest first: G2 C3 D3 G3 A3 C4 D4 E4 G4 A4 C5 D5 (실음).
+    const open = [43, 48, 50, 55, 57, 60, 62, 64, 67, 69, 72, 74];
+    expect(sanjo).toMatchObject({ name: "12현 산조가야금", verified: true, range: { lowMidi: 43, highMidi: 74 } });
+    expect(sanjo.tunings.map((tuning) => [tuning.id, tuning.name, tuning.stringMidis])).toEqual([["sanjo", "산조 조율", open]]);
+    expect(INSTRUMENT_IDS).toContain("gayageum-12-sanjo");
+    // 정악(풍류)가야금 is not offered for now (user decision 2026-11-15).
+    expect(INSTRUMENT_IDS).toHaveLength(4);
   });
 });
