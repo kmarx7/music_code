@@ -953,5 +953,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - `createTranscribedScore(repository, input)`: 위 결과를 `repository.create`로 한 번 저장한다. 후보가 비었거나 검증 실패면 아무것도 쓰지 않는다.
 - `features/score-setup`: `parseScoreSetup(form values)` → `{ title, tempoBpm, timeSignature, keySignature }` 또는 오류 문구(기본값 4/4·90·C장조·"새 악보", 박자 2/4·3/4·4/4·6/8, 템포 20–400 정수). `ScoreSetupFields`는 `/new`와 `/record` ①이 같이 쓰는 비제어 입력(목표 악기는 트랙 B 전까지 피아노만 선택 가능).
 - `features/audio-recording/HummingFlow`: `/record` 4단계. 녹음·PCM은 컴포넌트 메모리에만 있고, ④ "악보 만들기"에서 `onCreate(setup, clipboard)`를 한 번만 부른다(연속 클릭 차단). 화면을 떠나면 캡처를 취소한다.
+- `features/audio-recording/RecordingPanel`(A-5 "허밍 추가"): 같은 4단계를 열린 악보에. 접힌 상태 → ②부터(① = 악보 템포·박자·조성 고정). ④ `planTranscriptionCommit` 미리보기, "악보에 넣기"에서 `onCommand(PasteEvents)` 1회. `openSignal`이 바뀌면 ②를 열고 동의 체크에 포커스(옛 `?start=hum`). 화면을 떠나면 캡처를 취소한다.
+- `features/audio-recording/take.tsx`: `useHummingTake(port?)` → `{ state: idle|starting|recording|analyzing|done|failed, start(settings, metronome), stop, cancel, reset }`. 설정은 녹음 시작 때 고정, 취소는 `failed`(메시지 없음). 두 흐름이 공유하는 단계 목록·마이크 준비·녹음 표시·후보 칩.
 - 편집기 작업 모드: `입력/다듬기/연습/내보내기` 한 개만 보인다(숨김일 뿐 마운트 유지 → 녹음·재생·입력 상태 보존). 모드는 화면 상태이며 Score·JSON·저장 이력에 들어가지 않는다. 미리보기 악보가 있는 도구(녹음 패널, 조옮김)와 재생·내보내기 도구는 이전과 같이 `editor-content` 밖에 두어 재생 하이라이트가 미리보기에 닿지 않는다.
 - 진입 주소: 홈 "피아노로 시작" → `/new` → `/editor/<id>?start=piano`(입력 모드, 건반 위치). 홈 "허밍으로 시작" → `/record` → `/editor/<id>`. 옛 `?start=hum`은 입력 모드의 녹음 패널에 포커스(녹음 자동 시작 없음).

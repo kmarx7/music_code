@@ -1692,3 +1692,15 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 | 기존 E2E 26파일 | 조작에 모드 전환(`openMode`)·제목 변경(`renameScore`)만 추가, 기대값 변경 없음 | PASS |
 
 - 전체: unit 73파일/1033, **E2E 107/107 PASS**, axe 0건. 실제 마이크·Safari·실기기 미검증.
+
+## Phase 7 A-5 — 편집기 "허밍 추가" 단계 흐름 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/e2e/recording.spec.ts` 새 1 | 접힌 패널 → "허밍 추가" → 단계 목록 "1 설정 ✓"·②에 aria-current, 제목 포커스, 악보 템포·박자 표시·입력란 없음, 동의 전 녹음 시작 비활성, 닫기 후 악보 불변 | PASS |
+| `recording.spec.ts` 기존 4 | 조작에 "허밍 추가" 열기 추가. 취소 → ② 마이크(안내 없음, 다시 녹음 가능) → 닫기 → 처음 상태로 기대값 변경 | PASS |
+| `phase4-integration`, `prd-gaps`, `security-headers` | "허밍 추가" 열기 단계만 추가. prd-gaps 취소 후 상태 `idle` → `mic` | PASS |
+| `home.spec.ts` 옛 `?start=hum` | 입력 모드, 패널 화면 안, 동의 체크 포커스, `data-state="mic"`, 녹음 표시 없음 | PASS |
+| `record-flow.spec.ts`, `a11y.spec.ts` | 공통 모듈로 바꾼 `/record` 회귀, axe 0건 | PASS |
+
+- 전체: unit 73파일/1033, **E2E 108/108 PASS**. 실제 마이크·Safari·실기기 미검증.

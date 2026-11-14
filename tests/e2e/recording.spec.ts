@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openHummingAdd, openMode } from "./editor-modes";
 import { storedScore } from "./storage";
 
 async function fastScore(page: Page, id: string) {
@@ -21,6 +21,7 @@ test("허밍 녹음: 동의 후 카운트인·녹음·레벨·8마디 자동 정
   await openMode(page, "입력");
   const panel = page.getByTestId("recording-panel");
   await expect(panel).toContainText("400 BPM, 4/4박자");
+  await openHummingAdd(page);
   const start = panel.getByRole("button", { name: "녹음 시작", exact: true });
   await expect(start).toBeDisabled();
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
@@ -38,11 +39,12 @@ test("허밍 녹음: 동의 후 카운트인·녹음·레벨·8마디 자동 정
   await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures.flatMap((m: { events: unknown[] }) => m.events).length).toBe(2);
 });
 
-test("허밍 녹음: 정지하면 분석하고, 취소하면 처음 상태로 돌아간다", async ({ page }) => {
+test("허밍 녹음: 정지하면 분석하고, 취소하면 마이크 단계로, 닫으면 처음 상태로 돌아간다", async ({ page }) => {
   const id = "e2e-recording-stop";
   await fastScore(page, id);
   await openMode(page, "입력");
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   await expect(page.getByTestId("recording-progress")).toBeVisible();
@@ -50,9 +52,15 @@ test("허밍 녹음: 정지하면 분석하고, 취소하면 처음 상태로 �
   await expect(panel).toHaveAttribute("data-state", "result");
   await panel.getByRole("button", { name: "다시 녹음", exact: true }).click();
   await expect(page.getByTestId("recording-progress")).toBeVisible();
+  // Cancelling is the user's own choice: back to ② 마이크 with consent kept, ready to record again, no message.
   await panel.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(panel).toHaveAttribute("data-state", "idle");
+  await expect(panel).toHaveAttribute("data-state", "mic");
+  await expect(panel.getByRole("alert")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "녹음 시작", exact: true })).toBeEnabled();
+  // "닫기" folds the steps back to the single "허밍 추가" button.
+  await panel.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "idle");
+  await expect(panel.getByRole("button", { name: "허밍 추가", exact: true })).toBeVisible();
 });
 
 test("허밍 녹음: 마이크 권한이 거부되면 안내하고 편집은 계속된다", async ({ page }) => {
@@ -62,6 +70,7 @@ test("허밍 녹음: 마이크 권한이 거부되면 안내하고 편집은 계
   const id = "e2e-recording-denied";
   await page.goto(`/editor/${id}`);
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("마이크 사용이 허용되지 않았습니다");
@@ -88,6 +97,7 @@ test("허밍 녹음 확정: 후보 미리보기 후 악보 끝에 Command 한 �
   const before = await storedScore(page, id);
   await openMode(page, "입력");
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   await expect(page.getByTestId("recording-result")).toHaveAttribute("data-ok", "true", { timeout: 20_000 });
@@ -118,4 +128,26 @@ test("허밍 녹음 확정: 후보 미리보기 후 악보 끝에 Command 한 �
 
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect.poll(async () => storedScore(page, id)).toEqual(before);
+});
+
+test("허밍 추가(A-5): 입력 모드의 단계 흐름은 ① 설정을 악보 값으로 고정하고 ②부터 시작하며, 열고 닫아도 악보는 그대로다", async ({ page }) => {
+  const id = "e2e-humming-add-steps";
+  await fastScore(page, id);
+  const before = await storedScore(page, id);
+  await openMode(page, "입력");
+  const panel = page.getByTestId("recording-panel");
+  await expect(panel).toHaveAttribute("data-state", "idle");
+  await expect(panel.getByRole("button", { name: "녹음 시작", exact: true })).toHaveCount(0);
+  await openHummingAdd(page);
+  const steps = panel.getByRole("list", { name: "진행 단계" }).getByRole("listitem");
+  await expect(steps).toHaveText(["1 설정 ✓", "2 마이크", "3 녹음", "4 확인"]);
+  await expect(steps.nth(1)).toHaveAttribute("aria-current", "step");
+  await expect(panel.getByRole("heading", { name: "마이크 준비" })).toBeFocused();
+  // Step ① is the score itself: its tempo and meter, not editable here.
+  await expect(panel).toContainText("400 BPM · 4/4박자");
+  await expect(panel.getByLabel("기본 템포 (BPM)")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "녹음 시작", exact: true })).toBeDisabled();
+  await panel.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "idle");
+  expect(await storedScore(page, id)).toEqual(before);
 });

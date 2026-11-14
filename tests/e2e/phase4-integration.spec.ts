@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openHummingAdd, openMode } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number; durationTicks: number; pitch?: { midi: number }; provenance?: { source: string } }
@@ -43,6 +43,7 @@ test("Phase 4 통합: 녹음→후보 검토→커서 마디에 확정→편집�
 
   // 1. Record and review: two candidate pitches in order, nothing stored yet.
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   await expect(page.getByTestId("recording-result")).toHaveAttribute("data-ok", "true", { timeout: 20_000 });

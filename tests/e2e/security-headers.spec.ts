@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openHummingAdd, openMode } from "./editor-modes";
 
 test("보안 헤더(P6-07): CSP·권한 정책·nosniff·referrer·프레임 금지가 모든 화면 응답에 있다", async ({ request }) => {
   for (const path of ["/", "/new", "/record", "/library", "/licenses", "/editor/e2e-headers", "/print/e2e-headers", "/no-such-page"]) {
@@ -42,6 +42,7 @@ test("CSP 위반 0건: 입력·재생·녹음(AudioWorklet)·악보 글꼴·인�
   await expect.poll(async () => Number(await page.getByTestId("playback-position").getAttribute("data-tick"))).toBeGreaterThan(0);
   await openMode(page, "입력");
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   await expect(panel).toHaveAttribute("data-state", "recording");

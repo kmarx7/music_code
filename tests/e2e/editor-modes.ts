@@ -15,3 +15,10 @@ export async function renameScore(page: Page, title: string): Promise<void> {
   await page.getByLabel("악보 제목", { exact: true }).fill(title);
   await page.getByRole("button", { name: "제목 변경", exact: true }).click();
 }
+
+/** Opens the input mode's "허밍 추가" steps (A-5): the score's own settings are step ①, so it lands on ② 마이크. */
+export async function openHummingAdd(page: Page): Promise<void> {
+  const panel = page.getByTestId("recording-panel");
+  await panel.getByRole("button", { name: "허밍 추가", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "mic");
+}

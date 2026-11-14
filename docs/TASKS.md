@@ -1462,4 +1462,14 @@
 - 구현 기본값: 입력 레벨은 ③에서 표시(마이크는 녹음 시작 때 한 번만 연다). `/new`에서 저장소를 못 쓸 때의 "저장 없이 편집기 열기"는 기본 설정의 메모리 악보로 열린다(선택한 설정은 넘기지 않음).
 - A-6: 기존 E2E 26개 파일에 모드 전환 단계(`openMode`)·`renameScore`만 추가, 기대값 유지. 바뀐 계약 3개는 새 테스트로 대체(데스크톱 "탭 없음" → 4모드·키보드·무저장, 홈 "허밍으로 시작" → `/record` 3개, 모바일 탭 이름). 새 E2E: `record-flow.spec.ts` 3, home `/new` 2·옛 `?start=hum` 1, a11y `/new`·`/record`·편집기 4모드.
 - 검증: unit 73파일/1033 PASS, typecheck·lint PASS, architecture 위반 0, build PASS, **E2E 107/107 PASS**(최종 코드). axe 0건(`/new`, `/record` ①②, 편집기 4모드 데스크톱·휴대폰).
-- 미검증: 실제 마이크·실제 청취, Safari·휴대폰 실기기. 남은 일: A-5(편집기 "허밍 추가"를 단계 화면으로), 휴대폰 다듬기 모드가 긴 문제(P2).
+- 미검증: 실제 마이크·실제 청취, Safari·휴대폰 실기기. 남은 일: A-5(→ §45 완료), 휴대폰 다듬기 모드가 긴 문제(P2).
+
+## 45. Phase 7 A-5 "허밍 추가" 단계 흐름 (2026-11-14, 커밋 전)
+
+- 사용자 지시 "A-5 진행해줘". 편집기 입력 모드의 녹음 패널을 `/record`와 같은 4단계로 바꿨다. ① 설정은 악보 값으로 고정(완료 표시), ②부터 시작. ④에서 악보 끝/커서 마디를 고르고 "악보에 넣기" = PasteEvents 1회(Undo 1회) 그대로.
+- 리팩터: `features/audio-recording/take.tsx`(`useHummingTake`, `TakeStepList`, `MicrophoneFields`, `TakeProgressView`, `CandidateChips`, `LOW_CONFIDENCE`)를 `HummingFlow`와 `RecordingPanel`이 같이 쓴다. 녹음·PCM은 계속 메모리에만 있다.
+- 옛 `?start=hum`: 편집기가 주소를 `useSyncExternalStore`로 읽어 "허밍 추가"를 ②로 열고 동의 체크에 포커스(녹음은 시작하지 않음).
+- 바뀐 동작(테스트 기대값 변경 3곳, 의도된 계약 변경): 녹음 중 "취소" → 이전의 "처음 상태(idle)" 대신 ② 마이크(동의 유지, 안내 없음). "닫기"를 누르면 처음 상태. `?start=hum`은 ②가 열린 상태(`data-state="mic"`).
+- E2E: 녹음을 쓰는 5개 파일에 "허밍 추가" 열기 단계(`openHummingAdd`)만 추가. 새 테스트 1개(단계 목록·① 고정·포커스·닫기 무저장).
+- 검증: unit 73파일/1033 PASS, typecheck·lint PASS, architecture 위반 0, build PASS, **E2E 108/108 PASS**. 화면 확인(데스크톱·390px, 접힘·② 단계).
+- 미검증: 실제 마이크·실제 청취, Safari·휴대폰 실기기.

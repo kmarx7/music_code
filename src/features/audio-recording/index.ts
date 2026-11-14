@@ -1,3 +1,4 @@
 export * from "./progress";
-export { RecordingPanel } from "./RecordingPanel";
+export { LOW_CONFIDENCE, useHummingTake, type HummingTake, type TakeSettings, type TakeState } from "./take";
+export { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
 export { HummingFlow, type HummingFlowProps } from "./HummingFlow";

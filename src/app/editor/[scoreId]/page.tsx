@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
@@ -20,6 +20,9 @@ import { RecordingPanel } from "@/features/audio-recording";
 import { ExportControls } from "@/features/export";
 import type { ClipboardPayload, PlaybackPosition, RangeSelection, Score } from "@/domain/score";
 import type { EditCommand } from "@/domain/commands";
+
+const noSubscription = () => () => {};
+const readStartParam = () => new URLSearchParams(window.location.search).get("start");
 
 const DURATIONS = [
   { label: "온음표", ticks: 3840 },
@@ -172,18 +175,13 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
   const navigationPending = useRef(false);
   const saveStatus = useAutosave(repository, 400, autosave, true, initialRevision);
 
-  // Entry links: "?start=piano" (from /new) brings the keyboard into view; the old "?start=hum" brings the
-  // recording panel into view with its consent box focused. Both open the input mode. Nothing records by itself.
+  // Entry links: "?start=piano" (from /new) brings the keyboard into view; the old "?start=hum" opens "허밍 추가"
+  // at ② 마이크 with its consent box focused. Both open the input mode. Nothing records by itself.
+  // The server renders without the query; the client reads it once after hydration.
+  const start = useSyncExternalStore(noSubscription, readStartParam, () => null);
   useEffect(() => {
-    const start = new URLSearchParams(window.location.search).get("start");
-    if (start === "hum") {
-      const panel = document.querySelector<HTMLElement>('[data-testid="recording-panel"]');
-      panel?.scrollIntoView({ block: "start" });
-      panel?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus({ preventScroll: true });
-    } else if (start === "piano") {
-      document.getElementById("piano-input")?.scrollIntoView({ block: "center" });
-    }
-  }, []);
+    if (start === "piano") document.getElementById("piano-input")?.scrollIntoView({ block: "center" });
+  }, [start]);
 
   async function leaveEditor(href: string) {
     if (navigationPending.current) return;
@@ -552,7 +550,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
           so playback highlights never reach a preview. */}
       <div role="tabpanel" id="mode-panel-input-more" aria-labelledby="mode-tab-input" hidden={mode !== "input"}>
         <RecordingPanel score={score} cursorTick={cursorTick} labelMode={labelMode} onCommand={clipboardCommand}
-          onStart={() => setPlaybackStopSignal((value) => value + 1)} />
+          onStart={() => setPlaybackStopSignal((value) => value + 1)} openSignal={start === "hum" ? 1 : 0} />
       </div>
       <div role="tabpanel" id="mode-panel-edit-more" aria-labelledby="mode-tab-edit" hidden={mode !== "edit"}>
         <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />

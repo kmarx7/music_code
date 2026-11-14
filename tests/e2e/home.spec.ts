@@ -88,13 +88,14 @@ test("피아노로 시작(/new): 만들기 전에 나가면 악보를 만들지 
   expect(await scoreCount(page)).toBe(before);
 });
 
-test("옛 주소 ?start=hum은 편집기 입력 모드의 녹음 패널을 열고 동의 체크에 포커스, 녹음은 시작하지 않는다", async ({ page }) => {
+test("옛 주소 ?start=hum은 편집기 입력 모드의 '허밍 추가'를 ② 마이크 단계로 열고 동의 체크에 포커스, 녹음은 시작하지 않는다", async ({ page }) => {
   await page.goto("/editor/e2e-old-start-hum?start=hum");
   const panel = page.getByTestId("recording-panel");
   await expect(page.getByRole("tab", { name: "입력", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(panel).toBeInViewport();
   await expect(panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다")).toBeFocused();
-  await expect(panel).toHaveAttribute("data-state", "idle");
+  await expect(panel).toHaveAttribute("data-state", "mic");
+  await expect(page.getByTestId("recording-progress")).toHaveCount(0);
 });
 
 test("홈 최근 악보: 최근 수정한 3개를 보여 주고 열 수 있으며 전체 목록 링크가 있다", async ({ page }) => {

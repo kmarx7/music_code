@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openHummingAdd, openMode } from "./editor-modes";
 import { storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number }
@@ -93,6 +93,7 @@ test("녹음 중 추정 음높이(MVP-002): 들어오는 음을 실시간으로 
   await page.getByRole("button", { name: "템포 적용", exact: true }).click();
   await openMode(page, "입력");
   const panel = page.getByTestId("recording-panel");
+  await openHummingAdd(page);
   await panel.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await panel.getByRole("button", { name: "녹음 시작", exact: true }).click();
   const live = panel.getByTestId("recording-live-pitch");
@@ -100,7 +101,7 @@ test("녹음 중 추정 음높이(MVP-002): 들어오는 음을 실시간으로 
   await expect(live).toContainText("A4");
   const score = await storedScore(page, id);
   await panel.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(panel).toHaveAttribute("data-state", "idle");
+  await expect(panel).toHaveAttribute("data-state", "mic");
   await expect(live).toHaveCount(0);
   expect(await storedScore(page, id)).toEqual(score);
 });
