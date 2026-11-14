@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { EditSessionState } from "@/application/edit-session";
 import { KEY_SIGNATURE_OPTIONS, isSupportedKeySignature, type TransposeDirection, type NoteLabelMode } from "@/domain/music-theory";
-import { analyzeScoreRange, planPartNotation, transposeScore, type RangeRecommendation, type TransposeSpec } from "@/domain/score";
+import { analyzeScoreRange, planPartNotation, transposeScore, type RangeRecommendation, type TargetMidiRange, type TransposeSpec } from "@/domain/score";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { StaffView } from "@/features/score-editor";
 import { RangeRecommendations, RangeSummary } from "./RangeRecommendations";
+import { InstrumentFitPanel } from "./InstrumentFitPanel";
 import type { AutosaveHandle, SaveStatus } from "@/features/score-library";
 
 const button = { padding: "8px 14px", minHeight: 44, border: "1px solid #c8cfdb", borderRadius: 8, background: "#fff", cursor: "pointer" };
@@ -34,6 +35,8 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
   const [error, setError] = useState("");
   const [recommended, setRecommended] = useState<RangeRecommendation | null>(null);
   const recommendedRef = useRef<RangeRecommendation | null>(null);
+  /** A target handed over by 악기에 맞추기; `key` remounts the recommender so it starts from that target. */
+  const [preset, setPreset] = useState<{ target: TargetMidiRange; label: string; key: number } | null>(null);
   const currentScore = session?.current;
   const range = useMemo(() => currentScore ? analyzeScoreRange(currentScore) : null, [currentScore]);
   const submitted = useRef(false);
@@ -53,7 +56,7 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
     option.id === `${sourceKey.mode}:${sourceKey.fifths}`);
 
   function clearRecommendation() { recommendedRef.current = null; setRecommended(null); }
-  function close() { setBase(null); setError(""); clearRecommendation(); trigger.current?.focus(); }
+  function close() { setBase(null); setError(""); clearRecommendation(); setPreset(null); trigger.current?.focus(); }
   function chooseRecommendation(value: RangeRecommendation) {
     const current = scoreStore.getState(); const state = autosave.current?.getSnapshot?.();
     if (!base || current !== base.session || !state || state.revision !== base.revision || blocked(status) || blocked(state.status)) {
@@ -68,13 +71,24 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
     if (!recommendedRef.current) return;
     clearRecommendation(); setTarget(""); setError("목표 음역이 변경되었습니다. 추천을 다시 계산하고 후보를 선택해 주세요.");
   }
-  function open() {
-    if (base) { panel.current?.focus(); return; }
+  function open(): boolean {
+    if (base) { panel.current?.focus(); return true; }
+    const current = scoreStore.getState(); const state = autosave.current?.getSnapshot?.();
+    if (!current || !state) { setError("저장 상태를 준비 중입니다. 잠시 후 다시 시도해 주세요."); return false; }
+    const key = current.current.parts[0].keySignature;
+    clearRecommendation(); setPreset(null); submitted.current = false; setError(""); setTarget(`${key.mode}:${key.fifths}`); setDirection("nearest");
+    setBase({ session: current, revision: state.revision }); onOpen?.();
+    return true;
+  }
+  function recommendForInstrument(range: TargetMidiRange, label: string) {
     const current = scoreStore.getState(); const state = autosave.current?.getSnapshot?.();
     if (!current || !state) { setError("저장 상태를 준비 중입니다. 잠시 후 다시 시도해 주세요."); return; }
     const key = current.current.parts[0].keySignature;
     clearRecommendation(); submitted.current = false; setError(""); setTarget(`${key.mode}:${key.fifths}`); setDirection("nearest");
-    setBase({ session: current, revision: state.revision }); onOpen?.();
+    // A preview opened before the instrument changed is stale: start again from the current score.
+    if (!base || base.session !== current || base.revision !== state.revision) { setBase({ session: current, revision: state.revision }); onOpen?.(); }
+    else panel.current?.focus();
+    setPreset((previous) => ({ target: range, label, key: (previous?.key ?? 0) + 1 }));
   }
   function confirm() {
     if (submitted.current) return;
@@ -96,7 +110,8 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
     }
   }
   return <div style={{ marginBottom: 16 }}>
-    <button ref={trigger} type="button" style={button} aria-expanded={!!base} disabled={!session || status === "conflict" || status === "deleted"} onClick={open}>조옮김</button>
+    {session ? <InstrumentFitPanel score={session.current} disabled={status === "conflict" || status === "deleted"} onRecommend={recommendForInstrument} /> : null}
+    <button ref={trigger} type="button" style={button} aria-expanded={!!base} disabled={!session || status === "conflict" || status === "deleted"} onClick={() => { open(); }}>조옮김</button>
     {range ? <RangeSummary analysis={range} /> : null}
     {!base && error ? <p aria-live="polite">{error}</p> : null}
     {base && <section ref={panel} tabIndex={-1} role="region" aria-label="조옮김 미리보기" data-testid="transpose-preview"
@@ -113,7 +128,7 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
           <option value="nearest">가까운 방향</option><option value="up">상행</option><option value="down">하행</option>
         </select></label>
       </div>
-      <RangeRecommendations score={base.session.current} disabled={stale || unavailable} onPreview={chooseRecommendation} onInvalidate={invalidateRecommendation} />
+      <RangeRecommendations key={preset?.key ?? 0} initialTarget={preset?.target} targetLabel={preset?.label} score={base.session.current} disabled={stale || unavailable} onPreview={chooseRecommendation} onInvalidate={invalidateRecommendation} />
       {recommended ? <p data-testid="selected-range-recommendation">{`추천 이동 ${recommended.interval.deltaSemitones > 0 ? "+" : ""}${recommended.interval.deltaSemitones}반음 · ${recommended.fits ? "전체 적합" : "부분 적합(목표 범위 초과)"} 적용 중입니다. 조성/방향을 바꾸면 수동 설정으로 전환합니다.`}</p> : null}
       {stale ? <p role="alert">원본 또는 저장 버전이 변경되었습니다. 취소한 뒤 다시 미리보기를 열어 주세요.</p>
         : unavailable ? <p role="alert">저장 충돌·삭제 또는 오류 상태에서는 확정할 수 없습니다. 저장 상태를 확인해 주세요.</p> : null}

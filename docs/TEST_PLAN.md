@@ -1746,3 +1746,8 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 단위: `grand-staff.test.ts`(악기별 큰보표 여부, C4 기준 위·아래, 쉼표 규칙, 붙임줄 같은 보표), `grand-staff-rendering.test.ts`(한 voice·음표별 보표, 보표 간격, 시작 x 일치, 괄호·마디선 연결, 피아노·12현 한 줄, 행 높이), `musicxml-export.test.ts`(staves·clef 번호·staff, XSD).
 - E2E `grand-staff.spec.ts` 4개. 마지막 테스트는 피아노와 25현 모두 첫 로드에서 기둥과 머리 간격 < 3px(글꼴 대기 회귀 방지).
 - 결과: unit 1064, E2E 115/115(Chromium).
+
+## 악기에 맞추기 B-3 (2026-11-15, Claude Code)
+
+- 단위 `instrument-fit.test.ts`: 선택 가능 악기(확인된 것만), 범위 밖 수(붙임줄 한 번), 악기 음역 → 기존 추천기의 full/partial 일치·원본 불변, 음자리표 제안(중앙값·큰보표·빈 악보), 미확인 악기는 음역 없음.
+- E2E `instrument-fit.spec.ts` 2개: 악기 선택·저장·음 불변, 추천 미리보기 목표 43–74, 확정과 Undo 단위, 음자리표 제안 적용·Undo. 결과 unit 1069, E2E 117/117(Chromium).

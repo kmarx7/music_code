@@ -977,3 +977,8 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - Domain `@/domain/score`: `InstrumentProfile.grandStaff`, `usesGrandStaff(part)`, `assignGrandStaves(measures): (1|2)[][]`, `GRAND_STAFF_SPLIT_MIDI = 60`. 순수 함수, Score 불변.
 - VexFlow 어댑터: `staffRowGeometry(part, labelMode) → { rowHeight, bassOffset }`(큰보표가 아니면 bassOffset 0). `renderScoreInto`는 그리기 전에 Bravura 글꼴 로드를 기다린다(브라우저만).
 - MusicXML writer: 큰보표 파트는 `<staves>2</staves>`, 번호 붙은 clef 2개, 모든 note에 `<staff>`.
+
+## 악기에 맞추기 (2026-11-15, B-3)
+
+- Domain: `selectableInstruments(): InstrumentProfile[]`(verified이고 range가 있는 것, `INSTRUMENT_IDS` 순), `analyzeInstrumentFit(score, instrument) → { instrument, range: TargetMidiRange | null, outside: {below, above, total}, logicalNoteCount, suggestedClef: Clef | null }`. 읽기 전용. `InstrumentProfile.range`에 표시용 `label` 추가.
+- UI: `InstrumentFitPanel({ score, disabled, onRecommend(target, label) })`. 변경은 `SetInstrument`·`SetClef` Command만. `RangeRecommendations`에 선택 `initialTarget`·`targetLabel`(다시 마운트해서 바꾼다).

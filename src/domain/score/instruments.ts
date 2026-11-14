@@ -18,8 +18,8 @@ export interface InstrumentProfile {
    * profiles carry no range or tunings: researched-but-unconfirmed numbers are deliberately not shipped (decision 5).
    */
   verified: boolean;
-  /** Sounding range, inclusive. */
-  range: { lowMidi: number; highMidi: number } | null;
+  /** Sounding range, inclusive. `label` spells the ends as the instrument's own scores do (Eb2, not D#2). */
+  range: { lowMidi: number; highMidi: number; label: string } | null;
   clefs: readonly Clef[];
   tunings: readonly InstrumentTuning[];
   /** Written on a grand staff (treble and bass together). Display and export only; the Score stays one melody. */
@@ -41,16 +41,16 @@ const GAYAGEUM_25_AB: readonly number[] = GAYAGEUM_25_EB.map((midi) => (midi % 1
 const GAYAGEUM_12_SANJO: readonly number[] = [43, 48, 50, 55, 57, 60, 62, 64, 67, 69, 72, 74];
 
 const PROFILES: Record<InstrumentId, InstrumentProfile> = {
-  piano: { id: "piano", name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108 }, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
+  piano: { id: "piano", name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108, label: "A0–C8" }, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
   "hyang-piri": { id: "hyang-piri", name: "향피리", verified: false, range: null, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
   "gayageum-25": {
-    id: "gayageum-25", name: "25현 가야금", verified: true, range: { lowMidi: 39, highMidi: 80 }, clefs: SUPPORTED_CLEFS,
+    id: "gayageum-25", name: "25현 가야금", verified: true, range: { lowMidi: 39, highMidi: 80, label: "Eb2–Ab5" }, clefs: SUPPORTED_CLEFS,
     tunings: [{ id: "eb", name: "Eb조", stringMidis: GAYAGEUM_25_EB }, { id: "ab", name: "Ab조", stringMidis: GAYAGEUM_25_AB }],
     // B-1 second answer: 25현 scores use the grand staff.
     grandStaff: true,
   },
   "gayageum-12-sanjo": {
-    id: "gayageum-12-sanjo", name: "12현 산조가야금", verified: true, range: { lowMidi: 43, highMidi: 74 }, clefs: SUPPORTED_CLEFS,
+    id: "gayageum-12-sanjo", name: "12현 산조가야금", verified: true, range: { lowMidi: 43, highMidi: 74, label: "G2–D5" }, clefs: SUPPORTED_CLEFS,
     tunings: [{ id: "sanjo", name: "산조 조율", stringMidis: GAYAGEUM_12_SANJO }],
     grandStaff: false,
   },

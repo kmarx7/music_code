@@ -18,21 +18,24 @@ function targetName(text: string) {
 }
 
 /** Component-lifetime request only: no store/command/repository access. */
-export function RangeRecommendations({ score, disabled, onPreview, onInvalidate }: {
+export function RangeRecommendations({ score, disabled, onPreview, onInvalidate, initialTarget, targetLabel }: {
   score: Score; disabled: boolean; onPreview: (candidate: RangeRecommendation) => void; onInvalidate: () => void;
+  /** Starts with this target already calculated (악기에 맞추기, B-3). Remount the component to change it. */
+  initialTarget?: TargetMidiRange; targetLabel?: string;
 }) {
   const analysis = useMemo(() => analyzeScoreRange(score), [score]);
-  const [low, setLow] = useState(String(analysis.minMidi ?? 0));
-  const [high, setHigh] = useState(String(analysis.maxMidi ?? 127));
-  const [target, setTarget] = useState<TargetMidiRange | null>(null);
+  const [low, setLow] = useState(String(initialTarget?.minMidi ?? analysis.minMidi ?? 0));
+  const [high, setHigh] = useState(String(initialTarget?.maxMidi ?? analysis.maxMidi ?? 127));
+  const [target, setTarget] = useState<TargetMidiRange | null>(initialTarget ?? null);
   const [error, setError] = useState("");
-  const activeTarget = useRef<TargetMidiRange | null>(null);
+  const activeTarget = useRef<TargetMidiRange | null>(initialTarget ?? null);
   const result = useMemo(() => target ? recommendTranspositions(score, target) : null, [score, target]);
   const fits = result?.ok ? result.candidates.filter((candidate) => candidate.fits) : [];
   const shown = result?.ok ? (fits.length ? fits.slice(0, 8) : result.candidates.slice(0, 5)) : [];
   function invalidate() { activeTarget.current = null; setTarget(null); setError(""); onInvalidate(); }
   return <section aria-label="음역 기반 조옮김 추천" style={{ padding: 12, border: "1px solid #d9dee8", borderRadius: 8, marginTop: 12 }}>
     <h3 style={{ fontSize: 16 }}>목표 음역과 조옮김 추천</h3>
+    {targetLabel && target === initialTarget ? <p data-testid="range-target-source">{targetLabel}</p> : null}
     <form onSubmit={(event) => {
       event.preventDefault(); if (disabled) return;
       if (!low.trim() || !high.trim()) { setError("목표 최저·최고 MIDI를 모두 입력해 주세요."); return; }

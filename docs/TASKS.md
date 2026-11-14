@@ -1537,3 +1537,12 @@
   2. 줄 첫 마디는 음자리표·조표·박자표가 자리를 차지하는데 음표 배치 폭에 반영되지 않아, 첫 마디 마지막 음이 마디선 밖으로 밀려났다. 시작 장식 폭을 빼고 배치한다.
 - 테스트: 단위 `grand-staff.test.ts` 4, `grand-staff-rendering.test.ts` 3, MusicXML 2, E2E `grand-staff.spec.ts` 4(위·아래 배치와 피아노 대비 간격, 음 선택·저장 불변, 인쇄 한 행에 두 보표, 커서 길이, 첫 화면부터 기둥이 머리에 붙음). `transpose-consistency` 통합 테스트의 Stave 대역에 `getNoteStartX`를 추가(렌더러가 새로 읽는 API, 기대값 불변).
 - 검증: typecheck, lint, unit 78 files/1064, architecture 위반 0, build, E2E 115/115. 화면은 Chromium 스크린샷으로 확인. 25현을 고르는 화면은 아직 없다(B-3·B-6). 연주자의 실제 악보 확인(UAT-G)·Safari·실기기 미검증.
+
+## 54. Phase 7 B-3 — 악기에 맞추기 (2026-11-15, 사용자 "다음으로 진행해줘")
+
+- Domain `instrument-fit.ts`: `selectableInstruments()`(확인된 프로필만 — 피아노·25현·12현 산조, 향피리 제외), `analyzeInstrumentFit(score, instrument)`(악기 음역, 범위 밖 논리 발음 수 아래/위 — 붙임줄 이어짐은 한 번, 한 줄 보표 악기의 음자리표 제안: 아래쪽 중앙값이 C4 미만이면 낮은음자리표, 큰보표·음표 없음이면 제안 없음). 읽기 전용, 음을 바꾸지 않는다. `InstrumentProfile.range.label`(악기 악보식 철자 A0–C8, Eb2–Ab5, G2–D5) 추가.
+- UI `InstrumentFitPanel`(다듬기 모드, `TransposeTool` 안, 휴대폰에서는 "악기에 맞추기" 접힘 행): 악기 선택 = `SetInstrument` 1회(Undo 1번), 향피리는 "(준비 중)" 선택 불가. 범위 밖 음 수 표시, 제안 음자리표 "적용" = `SetClef` 1회. "이 악기 음역으로 조옮김 추천"은 기존 조옮김 미리보기를 악기 음역이 계산된 상태로 연다(`RangeRecommendations.initialTarget`). 확정은 기존 `TransposeScore` 1회. 악기를 바꾼 뒤 추천하면 오래된 미리보기 대신 현재 악보로 다시 연다.
+- 새 의존성·저장 형식·Command 변화 없음.
+- 테스트: 단위 `instrument-fit.test.ts` 5(먼저 작성해 실패 확인), E2E `instrument-fit.spec.ts` 2(구현 후 작성: 선택이 음을 바꾸지 않음·저장, 범위 밖 2개, 추천 목표 43–74, 후보 full/partial, 확정 후 0개, Undo 2번으로 조옮김→악기 순 복원; 음자리표 제안·적용·Undo).
+- 검증: typecheck, lint, unit 79 files/1069(3회 연속 통과 — 그 전 1회 실행에서 1건 실패가 있었으나 재현되지 않아 원인 미상), architecture 위반 0, build, E2E 117/117(Chromium). Safari·실기기 미검증, 국악기 실제 연주 가능성은 연주자 확인(UAT-G) 전.
+- 남은 것: B-4 조율 추천·누름 표시, B-5 출력, B-6 `/new`·`/record` 악기 선택과 "준비 중" 해제.
