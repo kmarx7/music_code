@@ -40,7 +40,7 @@ describe("TransposeScore command", () => {
     expect(run).toHaveBeenCalledExactlyOnceWith(source, spec);
     expect(changed).toEqual({ ...expected.value.score, updatedAt: timestamp });
     expect(changed.parts[0].keySignature).toEqual(key(name)); expect(validateScore(changed)).toEqual([]);
-    expect(changed.schemaVersion).toBe(2); expect(source.updatedAt).not.toBe(timestamp);
+    expect(changed.schemaVersion).toBe(3); expect(source.updatedAt).not.toBe(timestamp);
   });
   it.each(["nearest", "up", "down"] as const)("forwards the approved direction %s unchanged", (direction) => {
     const source = fourNoteScore(); const spec: engine.TransposeSpec = { kind: "targetKey", targetKey: key("B"), direction };
@@ -83,7 +83,7 @@ describe("TransposeScore command", () => {
     expect(pitches(changed.current)).toHaveLength(500); expect(pitches(changed.current).every((pitch) => pitch.midi === 62)).toBe(true);
     store.undo(); expect(store.getState()!.current).toBe(source); store.redo(); expect(store.getState()!.current).toBe(changed.current);
   });
-  it("keeps JSON serialization envelope-free and compatible with schemaVersion 2", () => {
+  it("keeps JSON serialization envelope-free and compatible with the current schemaVersion", () => {
     const changed = successful(tiedScore()); const json = serializeScore(changed);
     expect(JSON.parse(json)).toEqual(changed); expect(JSON.parse(json)).not.toHaveProperty("revision");
     expect(deserializeScore(json)).toEqual({ ok: true, score: changed, migrated: false });

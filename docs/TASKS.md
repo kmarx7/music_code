@@ -1473,3 +1473,14 @@
 - E2E: 녹음을 쓰는 5개 파일에 "허밍 추가" 열기 단계(`openHummingAdd`)만 추가. 새 테스트 1개(단계 목록·① 고정·포커스·닫기 무저장).
 - 검증: unit 73파일/1033 PASS, typecheck·lint PASS, architecture 위반 0, build PASS, **E2E 108/108 PASS**. 화면 확인(데스크톱·390px, 접힘·② 단계).
 - 미검증: 실제 마이크·실제 청취, Safari·휴대폰 실기기.
+
+## 46. Phase 7 B-2 악기 정보·schemaVersion 3 — 구조 (2026-11-14, 커밋 전)
+
+- 사용자 지시 "커밋하고 진행해줘": A-5를 로컬 커밋(`626149b`, push 안 함) 후 승인된 순서(D-05 결정 1: A 다음 B)대로 B-2를 진행. B-1(전문가 확인)이 아직이라 **구조만** 구현하고 국악기 값은 넣지 않았다(결정 5).
+- Domain: `Part.instrument?`(piano/hyang-piri/gayageum-25), `SCORE_SCHEMA_VERSION` 2 → **3**, v1/v2 읽기 이동(`"piano"`), 검증 `INVALID_INSTRUMENT`, 악기 프로필(`instruments.ts`, 피아노만 확정 값). Command `SetInstrument`·`SetClef`(각 Undo 1회).
+- 악보함 가져오기 안내 "v1 악보를 v2로 변환하여" → "이전 형식 악보를 현재 형식으로 변환하여".
+- 승인된 계약 변경에 따른 테스트 기대값 변경: 저장·백업의 `schemaVersion` 2 → 3(단위·통합 9곳, E2E 8곳). 바꾸지 않은 기대값: 음표·붙임줄·원본 보존·쓰기 0회. 열기 보존 테스트에 실제 v2 저장본(악기 없음) 경우를 추가하고 v3 경우를 새로 둠.
+- 새 테스트: `tests/unit/instrument.test.ts` 9, score-backup +1(악기·음자리표 Command·Undo·JSON 왕복), score-open-preservation 통합 +1(v2 원본 보존·피아노), E2E 열기 보존 v3 +1.
+- 검증: unit 74파일/1044 PASS, typecheck·lint PASS, architecture 위반 0(순환 1건 발견 후 `InstrumentId`를 constants로 옮겨 해소), build PASS, **E2E 109/109 PASS**.
+- 사용자 지시로 CLAUDE.md의 schemaVersion 문구를 3으로 고쳤다(CLAUDE_HANDOFF DB 설명도 함께).
+- 남은 것: B-1 값 확인 → 프로필 채우기, B-3(악기에 맞추기 화면).

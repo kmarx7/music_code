@@ -58,10 +58,12 @@ D-05 승인
 - 확정할 것: 향피리 음역 상한·실음/이조 기보, 25현 줄별 음높이(옥타브)·표준 조율 목록·누름 가능 범위·음자리표 관행.
 - 산출: `docs/INSTRUMENTS.md`(값, 출처, 확인자, 일자). 확인 전에는 B-3 이후 화면을 공개하지 않는다.
 
-#### B-2 — 악기 정보와 schemaVersion 3 (결정 6)
+#### B-2 — 악기 정보와 schemaVersion 3 (결정 6) — 구조 Done (2026-11-14, 커밋 전), 값은 B-1 대기
 - Domain: 악기 프로필(순수 데이터: 이름, 음역, 조율 목록, 기보 음자리표 규칙). `Part.instrument` 선택 필드, v2 → v3 읽기 이동.
 - Command: 악기 변경, 음자리표 변경(각 1회 Undo). JSON 가져오기·내보내기 왕복.
 - 수용: v2 악보·백업이 그대로 열림(피아노), v3 왕복, 손상본 보호, DATA_MODEL·MODULE_CONTRACTS 갱신.
+- 구현: `INSTRUMENT_IDS`·`InstrumentId`(constants), `domain/score/instruments.ts`(프로필·`instrumentOf`·`isInstrumentId`), `Part.instrument?`, v1/v2 → v3 이동(`"piano"`), `INVALID_INSTRUMENT` 검증, Command `SetInstrument`·`SetClef`. 새 악보는 `"piano"`.
+- 남은 것: 향피리·25현 프로필 값(음역·조율·음자리표 규칙)은 B-1 확인 전이라 비워 두었다(`verified: false`). 화면에서 악기를 고르는 곳은 아직 없다(`/new`의 국악기는 계속 "준비 중", B-3·B-6에서 연다).
 
 #### B-3 — 악기에 맞추기 (결정 7)
 - 다듬기 모드: 악기 선택 → 음역 밖 음 수 → 기존 `recommendTranspositions`에 악기 음역을 목표로 → 후보 확정은 기존 조옮김 Command. 음자리표 제안.

@@ -5,6 +5,8 @@ import type {
   ScoreEvent,
 } from "@/domain/score/types";
 import { validateScore } from "@/domain/score/validate";
+import { isInstrumentId } from "@/domain/score/instruments";
+import { SUPPORTED_CLEFS } from "@/domain/score/constants";
 import { transposeScore } from "@/domain/score/transpose";
 import { isSupportedKeySignature } from "@/domain/music-theory";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
@@ -621,6 +623,26 @@ export function applyEditCommand(
       }
       return finalize({
         ...replacePart(score, part.id, (current) => ({ ...current, timeSignature: { ...command.timeSignature } })),
+        updatedAt: command.updatedAt,
+      });
+    }
+
+    case "SetInstrument": {
+      const part = partOf(score, command.partId);
+      if (!part) return fail("PART_NOT_FOUND", "파트를 찾을 수 없습니다.");
+      if (!isInstrumentId(command.instrument)) return fail("INVALID_INSTRUMENT", "지원하는 악기를 선택해 주세요.");
+      return finalize({
+        ...replacePart(score, part.id, (current) => ({ ...current, instrument: command.instrument })),
+        updatedAt: command.updatedAt,
+      });
+    }
+
+    case "SetClef": {
+      const part = partOf(score, command.partId);
+      if (!part) return fail("PART_NOT_FOUND", "파트를 찾을 수 없습니다.");
+      if (!(SUPPORTED_CLEFS as readonly string[]).includes(command.clef)) return fail("INVALID_CLEF", "높은음자리표나 낮은음자리표를 선택해 주세요.");
+      return finalize({
+        ...replacePart(score, part.id, (current) => ({ ...current, clef: command.clef })),
         updatedAt: command.updatedAt,
       });
     }

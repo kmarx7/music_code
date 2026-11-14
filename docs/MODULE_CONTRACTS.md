@@ -957,3 +957,10 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - `features/audio-recording/take.tsx`: `useHummingTake(port?)` → `{ state: idle|starting|recording|analyzing|done|failed, start(settings, metronome), stop, cancel, reset }`. 설정은 녹음 시작 때 고정, 취소는 `failed`(메시지 없음). 두 흐름이 공유하는 단계 목록·마이크 준비·녹음 표시·후보 칩.
 - 편집기 작업 모드: `입력/다듬기/연습/내보내기` 한 개만 보인다(숨김일 뿐 마운트 유지 → 녹음·재생·입력 상태 보존). 모드는 화면 상태이며 Score·JSON·저장 이력에 들어가지 않는다. 미리보기 악보가 있는 도구(녹음 패널, 조옮김)와 재생·내보내기 도구는 이전과 같이 `editor-content` 밖에 두어 재생 하이라이트가 미리보기에 닿지 않는다.
 - 진입 주소: 홈 "피아노로 시작" → `/new` → `/editor/<id>?start=piano`(입력 모드, 건반 위치). 홈 "허밍으로 시작" → `/record` → `/editor/<id>`. 옛 `?start=hum`은 입력 모드의 녹음 패널에 포커스(녹음 자동 시작 없음).
+
+## Phase 7 B-2 — 악기 정보와 schemaVersion 3 (2026-11-14, 결정 6)
+
+- `domain/score/constants`: `SCORE_SCHEMA_VERSION = 3`, `MIGRATABLE_SCHEMA_VERSIONS = [1, 2]`, `INSTRUMENT_IDS = ["piano", "hyang-piri", "gayageum-25"]`, `InstrumentId`.
+- `Part.instrument?: InstrumentId`(없으면 피아노). `deserializeScore`는 v1/v2를 메모리에서 v3로 옮기며 `instrument: "piano"`를 넣는다(`migrated: true`). 읽기만 한 저장본은 다시 쓰지 않는다. 문자열이 아닌 `instrument`는 `INVALID_SHAPE`, 모르는 값은 `INVALID_SCORE`(`INVALID_INSTRUMENT`).
+- `domain/score/instruments`: `getInstrumentProfile(id)` → `{ id, name, verified, range: {lowMidi, highMidi} | null, clefs, tunings }`, `instrumentOf(part)`, `isInstrumentId(value)`, `DEFAULT_INSTRUMENT`. 피아노만 `verified: true`(21–108). 향피리·25현은 B-1 전이라 `range: null`, `tunings: []`.
+- Command: `SetInstrument { partId, instrument, updatedAt }`(오류 `PART_NOT_FOUND`·`INVALID_INSTRUMENT`), `SetClef { partId, clef, updatedAt }`(오류 `PART_NOT_FOUND`·`INVALID_CLEF`). 각각 Undo 1회, 음높이·위치·조표 불변.

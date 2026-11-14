@@ -76,7 +76,7 @@ test("음표·쉼표 혼합 악보에서 쉼표 편집 후 붙임줄과 음표 �
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
   await expect(page.getByTestId("staff").locator("svg .vf-stavenote")).toHaveCount(6);
   const after = await storedScore(page, id);
-  expect(after.schemaVersion).toBe(2);
+  expect(after.schemaVersion).toBe(3);
   expect(after.parts[0].ties).toEqual(before.parts[0].ties);
   const notes = (score: typeof after) => score.parts[0].measures.flatMap((m: { events: { kind: string }[] }) => m.events).filter((e: { kind: string }) => e.kind === "note");
   expect(notes(after)).toEqual(notes(before));

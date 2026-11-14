@@ -48,6 +48,7 @@ export function createEmptyScore(input: CreateScoreInput): Score {
       {
         id: `${input.id}:part:1`,
         name: "Melody",
+        instrument: "piano",
         clef: "treble",
         keySignature: input.keySignature ?? {
           tonic: "C",

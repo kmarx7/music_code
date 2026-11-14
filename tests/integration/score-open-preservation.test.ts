@@ -68,9 +68,21 @@ it("migrates a supported v1 in memory while preserving its original record on re
   const opened = await openOrCreateScore(repository, { id: current.id, createdAt: FIXTURE_CREATED_AT });
   expect(opened.score).toEqual(current); expect(opened.created).toBe(false);
   expect(await raw(dbName, current.id)).toEqual(original);
-  // A subsequent normal edit/save may persist the supported, validated v2 representation.
+  // A subsequent normal edit/save may persist the supported, validated current (v3) representation.
   await persist(repository, { ...opened.score, title: "edited" });
-  expect((await repository.load(current.id))!.schemaVersion).toBe(2);
+  expect((await repository.load(current.id))!.schemaVersion).toBe(3);
+});
+it("migrates a stored v2 (no instrument) to the piano in memory while preserving its original record on read", async () => {
+  const { dbName, repository } = setup();
+  const current = tiedScore();
+  const v2 = { ...current, schemaVersion: 2, parts: current.parts.map((part) => Object.fromEntries(Object.entries(part).filter(([key]) => key !== "instrument"))) };
+  const original = { id: current.id, updatedAt: current.updatedAt, json: JSON.stringify(v2) };
+  await raw(dbName, current.id, original);
+  const opened = await openOrCreateScore(repository, { id: current.id, createdAt: FIXTURE_CREATED_AT });
+  expect(opened.score).toEqual(current); expect(opened.score.parts[0].instrument).toBe("piano");
+  expect(await raw(dbName, current.id)).toEqual(original);
+  await persist(repository, { ...opened.score, title: "edited" });
+  expect((await repository.load(current.id))!.schemaVersion).toBe(3);
 });
 it("read errors are distinct from missing and cannot cause a create", async () => {
   const { dbName, repository } = setup(); const initial = tiedScore(); await persist(repository, initial);

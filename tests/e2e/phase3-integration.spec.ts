@@ -78,7 +78,7 @@ test("Phase 3 통합: 조옮김→라벨→구간 선택→복사·잘라내기�
   const finalScore = await storedScore(page, id);
   expect(finalScore.parts[0].ties).toHaveLength(2);
   expect(finalScore.parts[0].keySignature.fifths).toBe(2);
-  expect(finalScore.schemaVersion).toBe(2);
+  expect(finalScore.schemaVersion).toBe(3);
   expect(new Set(finalScore.parts[0].measures.flatMap((m: { events: StoredEvent[] }) => m.events).map((e: StoredEvent) => e.id)).size).toBe(5);
   await openMode(page, "다듬기");
   await expect(staff.locator("[data-event-id]")).toHaveCount(5);

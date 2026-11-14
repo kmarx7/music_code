@@ -1,3 +1,5 @@
+import type { InstrumentId } from "@/domain/score/constants";
+
 export type DiatonicStep = "C" | "D" | "E" | "F" | "G" | "A" | "B";
 
 export type Clef = "treble" | "bass";
@@ -67,6 +69,8 @@ export interface Measure {
 export interface Part {
   id: string;
   name: string;
+  /** v3 (Phase 7 decision 6). Absent means the piano; v1/v2 documents get "piano" when read. */
+  instrument?: InstrumentId;
   clef: Clef;
   keySignature: KeySignature;
   timeSignature: TimeSignature;

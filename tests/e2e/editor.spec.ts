@@ -197,7 +197,7 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   const backup = JSON.parse(buffer.toString("utf8"));
   expect(backup.id).toBe(scoreId);
   expect(backup.title).toBe("백업 연습곡");
-  expect(backup.schemaVersion).toBe(2);
+  expect(backup.schemaVersion).toBe(3);
   expect(backup.parts[0].ties).toHaveLength(1);
 
   // JSON 다운로드는 저장 완료 신호가 아니다. 실제 저장본과 다운로드 내용을 비교한다.

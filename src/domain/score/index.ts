@@ -1,5 +1,6 @@
 export * from "@/domain/score/constants";
 export * from "@/domain/score/types";
+export * from "@/domain/score/instruments";
 export * from "@/domain/score/create";
 export * from "@/domain/score/tie";
 export * from "@/domain/score/validate";

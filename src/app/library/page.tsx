@@ -115,7 +115,7 @@ export default function LibraryPage() {
         id: crypto.randomUUID(), importedAt: new Date().toISOString(),
       });
       await refresh();
-      setMessage(`${result.migrated ? "v1 악보를 v2로 변환하여 " : ""}새 악보로 가져왔습니다. 기존 악보는 유지됩니다.`);
+      setMessage(`${result.migrated ? "이전 형식 악보를 현재 형식으로 변환하여 " : ""}새 악보로 가져왔습니다. 기존 악보는 유지됩니다.`);
     } catch (error) {
       setMessage(`가져오기 실패: ${error instanceof Error ? error.message : "파일을 읽거나 저장하지 못했습니다."}`);
     } finally {

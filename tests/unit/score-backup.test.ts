@@ -74,7 +74,7 @@ describe("JSON backup and import", () => {
     expect(long.filename).toBe(`${"가".repeat(80)}.json`);
   });
 
-  it("imports a v1 score using the existing v2 migration", async () => {
+  it("imports a v1 score using the migration to the current version", async () => {
     const legacy = JSON.parse(serializeScore(tiedScore()));
     legacy.schemaVersion = 1;
     delete legacy.parts[0].ties;
@@ -82,8 +82,22 @@ describe("JSON backup and import", () => {
       id: "legacy-copy", importedAt: now,
     });
     expect(result.migrated).toBe(true);
-    expect(result.score.schemaVersion).toBe(2);
+    expect(result.score.schemaVersion).toBe(3);
     expect(result.score.parts[0].ties).toEqual([]);
+  });
+
+  it("keeps the instrument through SetInstrument/SetClef (one Undo each), JSON backup and import (B-2)", async () => {
+    const initial = tiedScore();
+    const partId = initial.parts[0].id;
+    const first = applyCommand(createEditSession(initial), { type: "SetInstrument", partId, instrument: "hyang-piri", updatedAt: now });
+    const second = applyCommand(first.session, { type: "SetClef", partId, clef: "bass", updatedAt: now });
+    expect(second.session.current.parts[0]).toMatchObject({ instrument: "hyang-piri", clef: "bass" });
+    expect(undo(second.session).current.parts[0]).toMatchObject({ instrument: "hyang-piri", clef: "treble" });
+    expect(undo(undo(second.session)).current).toBe(initial);
+    const backup = exportScoreBackup(second.session.current);
+    const imported = await importScoreBackup(new MemoryScoreRepository(), backup.json, { id: "instrument-copy", importedAt: now });
+    expect(imported.migrated).toBe(false);
+    expect(imported.score.parts[0]).toMatchObject({ instrument: "hyang-piri", clef: "bass" });
   });
 
   it.each(["", "score-tie", "occupied"])("rejects conflicting/invalid destination ID %j", async (id) => {

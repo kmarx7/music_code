@@ -33,7 +33,7 @@ test("수동 저장은 디바운스를 기다리지 않고 최신 Score·Undo/Re
   await save.click();
   await expect(page.getByTestId("manual-save-feedback")).toContainText("저장이 완료");
   const edited = await storedScore(page, id);
-  expect(edited).toMatchObject({ id, title: "수동 저장 연습곡", schemaVersion: 2 });
+  expect(edited).toMatchObject({ id, title: "수동 저장 연습곡", schemaVersion: 3 });
   expect(edited.parts[0].measures[0].events[0].pitch.midi).toBe(60);
   await page.getByRole("button", { name: "Undo", exact: true }).click(); await save.click();
   await expect(page.getByTestId("manual-save-feedback")).toContainText("저장이 완료");

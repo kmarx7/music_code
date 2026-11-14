@@ -2,7 +2,7 @@
 
 - 작성일: 2026-11-07
 - 작업 ID: P0-01 / **P1-D (타이 확장)**
-- 상태: Phase 1-D 갱신 (**schemaVersion = 2**)
+- 상태: Phase 1-D 갱신, **Phase 7 B-2(2026-11-14): schemaVersion = 3** (`Part.instrument`, 결정 6)
 - 근거: `docs/ARCHITECTURE.md` §6, ADR-002, **ADR-009**, `docs/PHASE_0_PLAN.md` C-02·C-03·C-07
 
 > 이 문서는 **하나의 정본 Score 모델**을 정의한다. 다른 레이어는 이 타입을 import 하며,
@@ -44,7 +44,7 @@ Score
 ```ts
 interface Score {
   id: string;
-  schemaVersion: number;      // 현재 2
+  schemaVersion: number;      // 현재 3 (Phase 7 B-2)
   title: string;
   tempoBpm: number;           // 20..400 정수
   parts: Part[];
@@ -61,6 +61,7 @@ interface TimeSignature { numerator: number; denominator: number }  // 분모 1|
 
 interface Part {
   id: string; name: string; clef: Clef;
+  instrument?: "piano" | "hyang-piri" | "gayageum-25";  // v3 신규. 없으면 피아노
   keySignature: KeySignature; timeSignature: TimeSignature;
   measures: Measure[];
   ties: TieLink[];            // v2 신규
@@ -116,13 +117,14 @@ interface TieLink { from: string; to: string }
 
 | code | 규칙 |
 |---|---|
-| `UNSUPPORTED_SCHEMA` | `schemaVersion !== 2` |
+| `UNSUPPORTED_SCHEMA` | `schemaVersion !== 3` |
 | `INVALID_ID` | ID가 비어 있음 |
 | `DUPLICATE_ID` | part/measure/event ID가 Score 전체에서 중복 |
 | `INVALID_TEMPO` | `tempoBpm`이 20..400 정수 아님 |
 | `EMPTY_PARTS` / `EMPTY_MEASURES` | part 또는 measures 비어 있음 |
 | `MEASURE_INDEX_MISMATCH` | `measure.index !== 배열 위치` |
 | `INVALID_CLEF` | treble/bass 아님 |
+| `INVALID_INSTRUMENT` | `instrument`가 있으면서 piano/hyang-piri/gayageum-25가 아님 |
 | `INVALID_TIME_SIGNATURE` | 분자 < 1 또는 분모 비지원 |
 | `INVALID_KEY_SIGNATURE` | tonic/mode/fifths(−7..7) 위반 |
 | `INVALID_POSITION` | `startTick` < 0 또는 정수 아님 |
@@ -141,7 +143,7 @@ interface TieLink { from: string; to: string }
 | `TIE_BRANCHING` | 하나의 음표에서 나가거나 들어오는 링크가 2개 이상 |
 | `TIE_CYCLE` | 링크 체인이 순환함 |
 
-## 5. 예시 JSON (v2, 4/4 마지막 박에서 시작하는 2박 음)
+## 5. 예시 JSON (v2 형식 예, 4/4 마지막 박에서 시작하는 2박 음 — v3는 part에 `"instrument": "piano"`가 더해진다)
 
 ```json
 {
@@ -201,10 +203,14 @@ interface TieLink { from: string; to: string }
 
 ## 6. 버전 및 마이그레이션 정책 (C-07)
 
-- 현재 버전은 **2**다. `Part.ties` 추가가 v1 → v2 변경 사유다.
+- 현재 버전은 **3**이다. `Part.ties` 추가가 v1 → v2, `Part.instrument` 추가가 v2 → v3 변경 사유다(Phase 7 결정 6).
 - **v1 → v2 마이그레이션**: 각 `part`에 `ties: []`를 추가하고 `schemaVersion`을 2로 올린다.
   `deserializeScore`는 v1 문서를 메모리에서 v2로 변환한 뒤 검증한다. 읽기만 한 저장본은 다시 쓰지 않으며,
   정상 편집 후 기존 저장 흐름으로 v2를 영속화한다(2026-11-08 원본 보존 요구 반영).
+- **v2 → v3 마이그레이션**(v1도 같은 경로): 각 `part`에 `instrument: "piano"`를 넣고 `schemaVersion`을 3으로 올린다.
+  v2까지는 피아노 악보뿐이라 정보 손실이 없다. 읽기만 한 v1/v2 저장본은 그대로 두고, 정상 편집 후 v3로 영속화한다.
+- 악기 변경(`SetInstrument`)과 음자리표 변경(`SetClef`)은 각각 Command 하나, Undo 1회이며 음높이·위치를 바꾸지 않는다.
+- 악기 프로필(`domain/score/instruments.ts`)은 순수 데이터다. 향피리·25현은 B-1 확인 전이라 `verified: false`, 음역·조율 값 없음.
 - 그 외 버전은 **거부하고 원본을 보존**한다(자동 변환·덮어쓰기 금지).
 - 손상 데이터는 검증 실패로 처리하고 사용자에게 오류를 알린다. 미존재와 구분하며,
   실패한 저장본을 빈 악보로 대체하거나 자동 저장·자동 수정·삭제·마이그레이션하지 않는다.

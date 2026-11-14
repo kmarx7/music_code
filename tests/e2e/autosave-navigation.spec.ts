@@ -19,7 +19,7 @@ test("연속 편집·제목 Undo/Redo 직후 이동해도 최신 ID·제목·음
   const source = page.getByRole("link", { name: "이동 직전 연습곡", exact: true });
   await expect(source).toHaveAttribute("href", `/editor/${id}`);
   const saved = await storedScore(page, id);
-  expect(saved).toMatchObject({ id, title: "이동 직전 연습곡", schemaVersion: 2 });
+  expect(saved).toMatchObject({ id, title: "이동 직전 연습곡", schemaVersion: 3 });
   expect(saved.parts[0].measures.flatMap((m: { events: { pitch: { midi: number } }[] }) => m.events)
     .map((event: { pitch: { midi: number } }) => event.pitch.midi)).toEqual([60, 62]);
   await page.reload();

@@ -83,12 +83,15 @@ for (const failure of failures) {
   });
 }
 
-for (const version of [1, 2]) {
+// v1 has no ties and no instrument, v2 has ties but no instrument, v3 is current (Phase 7 decision 6).
+const withoutKeys = (part: object, keys: string[]) => Object.fromEntries(Object.entries(part).filter(([key]) => !keys.includes(key)));
+for (const version of [1, 2, 3]) {
   test(`정상 v${version} 직접 열기: 읽기 원본 보존 및 정상 편집 저장`, async ({ page }) => {
     await page.goto("/library");
     const score = tiedScore();
     if (version === 1) score.parts[0].ties = [];
-    const source = version === 1 ? { ...score, schemaVersion: 1, parts: score.parts.map((part) => Object.fromEntries(Object.entries(part).filter(([key]) => key !== "ties"))) } : score;
+    const source = version === 1 ? { ...score, schemaVersion: 1, parts: score.parts.map((part) => withoutKeys(part, ["ties", "instrument"])) }
+      : version === 2 ? { ...score, schemaVersion: 2, parts: score.parts.map((part) => withoutKeys(part, ["instrument"])) } : score;
     const original = { id: score.id, updatedAt: score.updatedAt, json: JSON.stringify(source), extra: "keep-on-read" };
     await rawRecord(page, score.id, original);
     await auditWrites(page);
@@ -107,8 +110,9 @@ for (const version of [1, 2]) {
     await renameScore(page, "검증된 편집");
     await page.clock.runFor(500);
     await expect(page.getByText("저장됨", { exact: true })).toBeVisible();
-    expect(await storedScore(page, score.id)).toMatchObject({ id: score.id, title: "검증된 편집", schemaVersion: 2 });
+    expect(await storedScore(page, score.id)).toMatchObject({ id: score.id, title: "검증된 편집", schemaVersion: 3 });
     expect((await storedScore(page, score.id)).parts[0].ties).toEqual(score.parts[0].ties);
+    expect((await storedScore(page, score.id)).parts[0].instrument).toBe("piano");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await page.clock.runFor(500);
     await expect.poll(async () => (await storedScore(page, score.id))?.title).toBe(score.title);

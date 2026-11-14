@@ -42,7 +42,8 @@ function hasNestedScoreShape(score: Score): boolean {
     if (!isRecord(part) || typeof part.id !== "string" ||
         typeof part.name !== "string" || typeof part.clef !== "string" ||
         !isRecord(part.timeSignature) || !isRecord(part.keySignature) ||
-        !Array.isArray(part.measures) || !Array.isArray(part.ties)) return false;
+        !Array.isArray(part.measures) || !Array.isArray(part.ties) ||
+        (part.instrument !== undefined && typeof part.instrument !== "string")) return false;
     const time = part.timeSignature;
     const key = part.keySignature;
     return typeof time.numerator === "number" && typeof time.denominator === "number" &&
@@ -77,6 +78,7 @@ function hasEventShape(event: unknown): boolean {
 /**
  * v1 → v2: 각 part에 `ties: []`를 추가한다.
  * v1에는 연결 정보가 존재하지 않으므로 빈 배열이 정보 손실 없는 정확한 변환이다(ADR-009).
+ * v2 → v3: 각 part에 `instrument: "piano"`를 넣는다. v2까지는 피아노 악보뿐이었다(Phase 7 결정 6).
  */
 function migrateToCurrentVersion(
   score: Record<string, unknown>,
@@ -84,7 +86,7 @@ function migrateToCurrentVersion(
   const parts = Array.isArray(score.parts)
     ? score.parts.map((part) => {
         if (!isRecord(part)) return part;
-        return { ...part, ties: Array.isArray(part.ties) ? part.ties : [] };
+        return { ...part, ties: Array.isArray(part.ties) ? part.ties : [], instrument: part.instrument ?? "piano" };
       })
     : score.parts;
 

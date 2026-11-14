@@ -60,5 +60,5 @@ it("persists a tied paste with undo/redo, reopen and JSON backup, and keeps a re
   expect(backup.json).not.toMatch(/clipboard|selection|lengthTicks/);
   const imported = await importScoreBackup(reopened, backup.json, { id: "paste-imported", importedAt: pasted.updatedAt });
   expect(imported.score.parts).toEqual(pasted.parts);
-  expect(pasted.schemaVersion).toBe(2);
+  expect(pasted.schemaVersion).toBe(3);
 });

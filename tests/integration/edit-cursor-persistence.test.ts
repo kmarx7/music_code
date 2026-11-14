@@ -21,7 +21,7 @@ it("persists middle-gap insertion, undo/redo and failed collisions without chang
   const reopened = createIndexedDbScoreRepository({ dbName: "edit-cursor-persistence" });
   expect(await reopened.load(initial.id)).toEqual(edited);
   expect(edited.parts[0].ties).toEqual(initial.parts[0].ties);
-  expect(edited.schemaVersion).toBe(2);
+  expect(edited.schemaVersion).toBe(3);
   const state = store.getState();
   expect(store.dispatch(plan.command)?.ok).toBe(false);
   expect(store.getState()).toBe(state);

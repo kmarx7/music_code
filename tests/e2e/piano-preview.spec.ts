@@ -51,7 +51,7 @@ test("피아노 미리듣기·빠른 컴퓨터 키 입력·음소거와 정상 �
   await page.getByRole("button", { name: "MIDI 69", exact: true }).click();
   await heard(page, 69);
   await expect.poll(() => pitches(page, id)).toEqual([60, 62, 64, 65, 67, 71, 69]);
-  expect(await storedScore(page, id)).toMatchObject({ schemaVersion: 2, parts: [{ ties: [] }] });
+  expect(await storedScore(page, id)).toMatchObject({ schemaVersion: 3, parts: [{ ties: [], instrument: "piano" }] });
   await page.reload();
   await expect(scoreNoteCount(page, 7)).toBeVisible();
 });
@@ -94,7 +94,7 @@ test("오디오 실패 중 동일 음 반복 입력도 Undo/Redo·저장·복원
   await expect(page.getByTestId("piano-preview-message")).not.toContainText("시작하지 못했습니다");
   await expect.poll(() => pitches(page, id)).toEqual([60, 60, 60, 60]);
   const after = await storedScore(page, id);
-  expect(after.schemaVersion).toBe(2);
+  expect(after.schemaVersion).toBe(3);
   expect(after.parts[0].ties).toEqual([]);
   const events = after.parts[0].measures.flatMap((measure: { events: { id: string }[] }) => measure.events);
   expect(new Set(events.map((event: { id: string }) => event.id)).size).toBe(4);

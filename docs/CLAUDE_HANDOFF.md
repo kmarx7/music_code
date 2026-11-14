@@ -137,7 +137,7 @@ MVP에서 제외된 인증/클라우드 동기화, 다성 채보, MP3/WAV 입력
 
 ### 저장 안전성 — 반드시 유지
 
-- DB `music-score-platform`, version 2, object store `scores`. 음악 schemaVersion 2와 독립이다.
+- DB `music-score-platform`, version 2, object store `scores`. 음악 schemaVersion(현재 3)과 독립이다.
 - `read(id)` → `{score,revision}|null`; null은 실제 부재만 의미한다. `load`는 읽기 전용 호환 투영.
 - `create(score)`는 absent ID에 revision1. `save(score,expectedRevision)`/`delete(id,expectedRevision)`는 CAS 필수.
 - 검증·revision 비교·쓰기 모두 같은 readwrite transaction. 성공은 request 성공이 아니라 transaction.oncomplete다.

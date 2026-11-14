@@ -114,7 +114,7 @@ it("ties/rests/tempo survive command, undo/redo, DB reopen and JSON backup/impor
   expect(reopened).toMatchObject({ score: changed, revision: 2, created: false });
   expect(await project(reopened.score)).toEqual(expected); expect(await schedule(reopened.score)).toEqual(played);
   const backup = exportScoreBackup(reopened.score); expect(JSON.parse(backup.json)).toEqual(changed);
-  expect(JSON.parse(backup.json)).not.toHaveProperty("revision"); expect(changed.schemaVersion).toBe(2);
+  expect(JSON.parse(backup.json)).not.toHaveProperty("revision"); expect(changed.schemaVersion).toBe(3);
   const imported = await importScoreBackup(repository, backup.json, { id: "imported-transpose", importedAt: "2026-11-08T07:00:00.000Z" });
   expect(imported.score.parts).toEqual(changed.parts); expect(await project(imported.score)).toEqual(expected); expect(await schedule(imported.score)).toEqual(played);
 });
@@ -175,7 +175,7 @@ it("preserves all 63360 ticks through JSON import, transpose, undo/redo and Inde
   const opened = await openOrCreateScore(repository, { id: imported.score.id, createdAt: "unused" });
   expect(opened).toEqual({ score: imported.score, revision: 1, created: false });
   const baseline = await raw(name, imported.score.id);
-  expect(baseline.version).toBe(2); expect(opened.score.schemaVersion).toBe(2);
+  expect(baseline.version).toBe(2); expect(opened.score.schemaVersion).toBe(3);
   const beforeAudio = await schedule(opened.score);
   expect(beforeAudio.frequency).toEqual([[60, "midi"]]);
   expect(beforeAudio.attacks).toEqual([["midi:60", 33, 10.6]]);

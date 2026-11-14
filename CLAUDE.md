@@ -20,7 +20,7 @@
 - 작업 전 `git status`와 기존 구현을 확인하고 사용자 변경을 보존한다.
 - Next.js App Router + React + TypeScript, 단일 canonical Score, 기존 Command/Undo/Redo 흐름을 유지한다.
 - Domain은 브라우저·React·Tone·VexFlow·IndexedDB에 의존하지 않는다.
-- Score schemaVersion 2, `Part.ties`, IndexedDB DB2, ADR-010 revision/CAS/Tombstone 보호를 유지한다.
+- Score schemaVersion 3(v1·v2는 읽을 때 이동, Phase 7 결정 6), `Part.ties`, `Part.instrument`, IndexedDB DB2, ADR-010 revision/CAS/Tombstone 보호를 유지한다.
 - 연습 rate/loop와 UI 선택은 Score·JSON·저장 이력에 넣지 않는다.
 - 기존 공개 진입점과 모듈을 재사용한다. 새 런타임 의존성·저장 엔진·상태 시스템·비호환 계약·구조 변경은 승인 대상이다.
 - Phase 3의 C-08/재생 중 rate 변경/loop 경계는 아직 제안이다. 승인된 정책처럼 구현하지 않는다.

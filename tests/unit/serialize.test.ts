@@ -42,7 +42,7 @@ describe("score serialization", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.migrated).toBe(true);
-      expect(result.score.schemaVersion).toBe(2);
+      expect(result.score.schemaVersion).toBe(3);
       expect(result.score.parts[0].ties).toEqual([]);
     }
   });

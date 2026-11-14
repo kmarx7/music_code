@@ -9,12 +9,14 @@ import {
   MIDI_MAX,
   MIDI_MIN,
   SCORE_SCHEMA_VERSION,
+  INSTRUMENT_IDS,
   SUPPORTED_CLEFS,
   SUPPORTED_DENOMINATORS,
   SUPPORTED_MODES,
 } from "@/domain/score/constants";
 import { measureStartTick, measureTicks } from "@/domain/score/create";
 import { findTieIssues } from "@/domain/score/tie";
+import { isInstrumentId } from "@/domain/score/instruments";
 import {
   isAlterInRange,
   isDiatonicStep,
@@ -262,6 +264,13 @@ export function validateScore(score: Score): ValidationIssue[] {
         path: `${partPath}.clef`,
         code: "INVALID_CLEF",
         message: `음자리표는 ${SUPPORTED_CLEFS.join("/")} 여야 합니다 (${part.clef}).`,
+      });
+    }
+    if (part.instrument !== undefined && !isInstrumentId(part.instrument)) {
+      issues.push({
+        path: `${partPath}.instrument`,
+        code: "INVALID_INSTRUMENT",
+        message: `악기는 ${INSTRUMENT_IDS.join("/")} 중 하나여야 합니다 (${String(part.instrument)}).`,
       });
     }
     validateTimeSignature(part.timeSignature, `${partPath}.timeSignature`, issues);

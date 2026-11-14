@@ -47,7 +47,7 @@ describe("score settings commands", () => {
       const changed = outcome.session.current;
       expect(measureTicks(changed.parts[0].timeSignature)).toBe(ticks);
       expect(changed.parts[0].measures).toBe(initial.parts[0].measures);
-      expect(changed.schemaVersion).toBe(2);
+      expect(changed.schemaVersion).toBe(3);
       expect(undo(outcome.session).current).toBe(initial);
       expect(redo(undo(outcome.session)).current).toEqual(changed);
     },

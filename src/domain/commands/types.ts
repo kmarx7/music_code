@@ -1,4 +1,5 @@
-import type { KeySignature, NoteEvent, RestEvent, TimeSignature } from "@/domain/score/types";
+import type { Clef, KeySignature, NoteEvent, RestEvent, TimeSignature } from "@/domain/score/types";
+import type { InstrumentId } from "@/domain/score/constants";
 import type { ClipboardPayload } from "@/domain/score/clipboard";
 import type { TransposeSpec } from "@/domain/score/transpose";
 import type { TransposeErrorCode } from "@/domain/music-theory/transpose";
@@ -13,6 +14,10 @@ export type EditCommand =
   | { type: "SetTempo"; tempoBpm: number; updatedAt: string }
   | { type: "SetKeySignature"; partId: string; keySignature: KeySignature; updatedAt: string }
   | { type: "SetTimeSignature"; partId: string; timeSignature: TimeSignature; updatedAt: string }
+  /** Phase 7 decision 6: what the part is written for. Notes, clef and key stay as they are. */
+  | { type: "SetInstrument"; partId: string; instrument: InstrumentId; updatedAt: string }
+  /** Notation only: the clef changes how notes are drawn, never their pitch or position. */
+  | { type: "SetClef"; partId: string; clef: Clef; updatedAt: string }
   /**
    * `measureId`는 note가 **시작하는** 마디다.
    * 길이가 마디 끝을 넘으면 마디 경계에서 분할하고 타이로 연결한다(ADR-009).
@@ -53,6 +58,8 @@ export type CommandErrorCode =
   | TransposeErrorCode
   | "INVALID_TITLE"
   | "INVALID_KEY_SIGNATURE"
+  | "INVALID_INSTRUMENT"
+  | "INVALID_CLEF"
   | "TIME_SIGNATURE_REQUIRES_EMPTY_SCORE"
   | "PART_NOT_FOUND"
   | "MEASURE_NOT_FOUND"

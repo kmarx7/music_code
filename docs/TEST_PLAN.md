@@ -1704,3 +1704,15 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 | `record-flow.spec.ts`, `a11y.spec.ts` | 공통 모듈로 바꾼 `/record` 회귀, axe 0건 | PASS |
 
 - 전체: unit 73파일/1033, **E2E 108/108 PASS**. 실제 마이크·Safari·실기기 미검증.
+
+## Phase 7 B-2 — 악기 정보·schemaVersion 3 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/instrument.test.ts` (9) | 새 악보 v3·피아노, v2 → v3 이동(붙임줄 포함 나머지 동일), v1 이동, 악기별 v3 왕복(이동 없음), 모르는 악기·숫자 악기 거부, 필드 없음 = 피아노, `SetInstrument`·`SetClef` 음 불변·오류 코드, 프로필(피아노 확정, 국악기 값 없음) | PASS |
+| `tests/unit/score-backup.test.ts` +1 | 악기·음자리표 Command 각 Undo 1회, JSON 백업 → 가져오기 왕복 | PASS |
+| `tests/integration/score-open-preservation.test.ts` +1 | 저장된 v2(악기 없음)를 쓰기 없이 열고 피아노로 보이며 원본 그대로, 편집 후 v3 저장 | PASS |
+| `tests/e2e/score-open-preservation.spec.ts` | 정상 v1·v2·v3 직접 열기: 원본 보존, 편집 저장은 v3·피아노 | PASS |
+| 기존 테스트 | `schemaVersion` 기대값 2 → 3만 변경(결정 6) | PASS |
+
+- 전체: unit 74파일/1044, **E2E 109/109 PASS**.

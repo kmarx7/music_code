@@ -6,7 +6,7 @@ import { createScoreStore } from "@/store/score-store";
 import { createRestEvent } from "@/domain/score";
 import { tiedScore } from "../fixtures/scores";
 
-it("saves mixed rest/tied-note edits and reopens identical v2 content after undo/redo", async () => {
+it("saves mixed rest/tied-note edits and reopens identical content after undo/redo", async () => {
   const dbName = "rest-persistence";
   const repository = createIndexedDbScoreRepository({ dbName });
   const store = createScoreStore();
@@ -24,7 +24,7 @@ it("saves mixed rest/tied-note edits and reopens identical v2 content after undo
   const reopened = createIndexedDbScoreRepository({ dbName });
   expect(await reopened.load(edited.id)).toEqual(edited);
   expect((await reopened.load(edited.id))!.parts[0].ties).toEqual(initial.parts[0].ties);
-  expect(edited.schemaVersion).toBe(2);
+  expect(edited.schemaVersion).toBe(3);
   expect(store.dispatch({ type: "DeleteEvent", partId, eventId: "r" })?.ok).toBe(true);
   await persist(repository, store.getState()!.current);
   expect(await reopened.load(initial.id)).toEqual(initial);

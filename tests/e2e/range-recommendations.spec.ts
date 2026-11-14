@@ -55,7 +55,7 @@ test("전체 음역·추천은 무쓰기이며 옥타브 후보의 확정·Undo/
   await expect(page.getByTestId("score-range")).toContainText("C6 (MIDI 84) ~ G6 (MIDI 91)");
   await page.getByRole("button", { name: "Undo", exact: true }).click(); await expect(page.getByTestId("score-range")).toContainText("C4 (MIDI 60)");
   await page.getByRole("button", { name: "Redo", exact: true }).click(); await expect(page.getByTestId("score-range")).toContainText("C6 (MIDI 84)");
-  await save(page); const changed = await storedScore(page, id); expect(changed.schemaVersion).toBe(2); expect(changed).not.toHaveProperty("targetRange");
+  await save(page); const changed = await storedScore(page, id); expect(changed.schemaVersion).toBe(3); expect(changed).not.toHaveProperty("targetRange");
   await openMode(page, "다듬기");
   await page.reload(); await expect(page.getByTestId("score-range")).toContainText("C6 (MIDI 84) ~ G6 (MIDI 91)"); expect(await storedScore(page, id)).toEqual(changed);
 });
