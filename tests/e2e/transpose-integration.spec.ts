@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Locator } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedScore } from "./storage";
 
 async function save(page: Page) {
@@ -9,6 +10,7 @@ async function ready(page: Page, id: string) {
   await page.goto(`/editor/${id}`); await expect(page.getByRole("button", { name: "저장", exact: true })).toBeVisible();
 }
 async function preview(page: Page, target = "major:2") {
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "조옮김", exact: true }).click();
   const panel = page.getByTestId("transpose-preview");
   await panel.getByLabel("조옮김 목표 조성", { exact: true }).selectOption(target);
@@ -49,6 +51,7 @@ test("D/Db/C# 기보의 실제 SVG 위치·조표·타이가 Undo/Redo·저장·
   ] as const) {
     const id = `e2e-transpose-svg-${suffix}`; await ready(page, id);
     for (const midi of [60, 62, 64]) await page.getByRole("button", { name: `MIDI ${midi}`, exact: true }).click();
+    await openMode(page, "입력");
     await page.getByRole("button", { name: "2분음표", exact: true }).click();
     await page.getByRole("button", { name: "MIDI 67", exact: true }).click(); await save(page);
     const original = await storedScore(page, id); const staff = page.getByTestId("editor-content").getByTestId("staff");
@@ -59,6 +62,7 @@ test("D/Db/C# 기보의 실제 SVG 위치·조표·타이가 Undo/Redo·저장·
     await expect.poll(async () => (await notation(candidate)).heads).toEqual(expectedHeads);
     const candidateNotation = await notation(candidate); expect(candidateNotation.ties).toBe(1);
     expect(candidateNotation.signature.length).toBeGreaterThan(0); expect(await notation(staff)).toEqual(before);
+    await openMode(page, "다듬기");
     await panel.getByRole("button", { name: "확정", exact: true }).click();
     await expect.poll(() => notation(staff)).toEqual(candidateNotation); await save(page);
     const changed = await storedScore(page, id);
@@ -69,9 +73,11 @@ test("D/Db/C# 기보의 실제 SVG 위치·조표·타이가 Undo/Redo·저장·
     await page.getByRole("button", { name: "Redo", exact: true }).click();
     await expect.poll(() => notation(staff)).toEqual(candidateNotation); await expect.poll(() => storedScore(page, id)).toEqual(changed);
     await page.reload(); await expect.poll(() => notation(staff)).toEqual(candidateNotation);
+    await openMode(page, "연습");
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(page.getByTestId("playback-position")).toContainText("재생 중");
     await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await openMode(page, "내보내기");
     await page.getByRole("link", { name: "악보함 / JSON 가져오기", exact: true }).click();
     await page
       .getByRole("link", { name: "열기", exact: true })
@@ -83,25 +89,32 @@ test("D/Db/C# 기보의 실제 SVG 위치·조표·타이가 Undo/Redo·저장·
 
 test("미리보기 진입·취소 및 원본 재생 중 확정은 오디오 상태와 후보 하이라이트를 분리한다", async ({ page }) => {
   const id = "e2e-transpose-audio-state"; await ready(page, id);
+  await openMode(page, "다듬기");
   await page.getByLabel("기본 템포 (BPM)", { exact: true }).fill("60");
   await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "온음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click(); await save(page);
   const original = await raw(page, id); const cursor = page.getByTestId("playback-position");
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => Number(await cursor.getAttribute("data-tick"))).toBeGreaterThan(0);
   let panel = await preview(page); await expect(cursor).toContainText("정지");
   await panel.getByRole("button", { name: "취소", exact: true }).click();
   expect(await raw(page, id)).toEqual(original); await expect(cursor).toHaveAttribute("data-tick", "0");
   panel = await preview(page);
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("editor-content").getByRole("button", { name: "C4", exact: true })).toHaveAttribute("data-playing", "true");
   await expect(panel.locator('[data-playing="true"]')).toHaveCount(0);
   await panel.getByRole("button", { name: "확정", exact: true }).click();
   await expect(cursor).toContainText("정지"); await expect(cursor).toHaveAttribute("data-tick", "0");
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("editor-content").getByRole("button", { name: "D4", exact: true })).toHaveAttribute("data-playing", "true");
-  await page.getByRole("button", { name: "Stop", exact: true }).click(); await save(page);
+  await openMode(page, "연습"); await page.getByRole("button", { name: "Stop", exact: true }).click(); await save(page);
   expect((await storedScore(page, id)).parts[0].measures[0].events[0].pitch.midi).toBe(62);
 });
 
@@ -112,12 +125,14 @@ test("알림 없는 두 탭 동시 저장에서도 조옮김 결과와 패자의
   const other = await context.newPage(); await ready(other, id); const baseline = await raw(page, id);
   for (const tab of [page, other]) { await tab.clock.install(); await tab.clock.pauseAt(new Date(Date.now() + 1000)); }
   const panel = await preview(page); await panel.getByRole("button", { name: "확정", exact: true }).click();
+  await openMode(other, "입력");
   await other.getByRole("button", { name: "MIDI 65", exact: true }).click();
   await Promise.all([page, other].map((tab) => tab.getByRole("button", { name: "저장", exact: true }).click()));
   await expect.poll(async () => (await raw(page, id)).revision).toBe(baseline.revision + 1);
   const committed = await raw(page, id); const transposed = JSON.parse(committed.json).parts[0].keySignature.fifths === 2;
   const loser = transposed ? other : page; const ownLabel = transposed ? "F4" : "D4";
   await expect(loser.getByTestId("storage-conflict")).toBeVisible();
+  await openMode(loser, "다듬기");
   const chip = loser.getByTestId("editor-content").getByRole("button", { name: ownLabel, exact: true });
   await expect(chip).toBeVisible(); await loser.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(chip).toHaveCount(0); await loser.getByRole("button", { name: "Redo", exact: true }).click(); await expect(chip).toBeVisible();

@@ -1,4 +1,5 @@
 import { expect, test, type Download } from "@playwright/test";
+import { openMode } from "./editor-modes";
 
 async function json(download: Promise<Download>) {
   const chunks: Buffer[] = [];
@@ -17,7 +18,8 @@ test.describe("저장소를 쓸 수 없는 브라우저(P6-05)", () => {
   test("홈은 안내와 '저장 없이 편집' 경로를 주고, 편집기는 메모리로 열려 저장됐다고 말하지 않으며 JSON 백업을 받을 수 있다", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("home-recent")).toContainText("최근 악보를 불러오지 못했습니다");
-    await page.getByRole("button", { name: "피아노로 시작", exact: true }).click();
+    await page.getByRole("link", { name: "피아노로 시작", exact: true }).click();
+    await page.getByRole("button", { name: "만들기", exact: true }).click();
     const alert = page.getByRole("alert").filter({ hasText: "이 브라우저에 악보를 저장할 수 없습니다" });
     await expect(alert).toBeVisible();
     await alert.getByRole("link", { name: "저장 없이 편집기 열기" }).click();
@@ -26,9 +28,11 @@ test.describe("저장소를 쓸 수 없는 브라우저(P6-05)", () => {
     const banner = page.getByTestId("storage-unavailable");
     await expect(banner).toContainText("편집 내용이 저장되지 않습니다");
     for (const key of [60, 64]) await page.getByRole("button", { name: `MIDI ${key}`, exact: true }).click();
+    await openMode(page, "다듬기");
     await expect(page.getByRole("button", { name: "E4", exact: true })).toBeVisible();
     await expect(page.getByText("저장 실패", { exact: true })).toBeVisible();
     await expect(page.getByText("저장됨", { exact: true })).toHaveCount(0);
+    await openMode(page, "내보내기");
     await expect(page.getByRole("button", { name: "PDF (인쇄)", exact: true })).toBeDisabled();
 
     const download = page.waitForEvent("download");
@@ -36,6 +40,7 @@ test.describe("저장소를 쓸 수 없는 브라우저(P6-05)", () => {
     expect(noteMidis(await json(download))).toEqual([60, 64]);
     // MIDI still works from memory.
     const midi = page.waitForEvent("download");
+    await openMode(page, "내보내기");
     await page.getByRole("button", { name: "MIDI", exact: true }).click();
     expect((await midi).suggestedFilename().normalize("NFC")).toBe("새 악보.mid");
   });
@@ -67,6 +72,7 @@ test("없는 주소는 안내 화면과 홈·악보함 링크를 보여 준다",
 test("화면 오류가 나도 편집 중인 악보를 JSON으로 받을 수 있다", async ({ page }) => {
   await page.goto("/editor/e2e-render-crash");
   for (const key of [62, 65]) await page.getByRole("button", { name: `MIDI ${key}`, exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "F4", exact: true })).toBeVisible();
   // Simulate a rendering bug: the clipboard summary formats its length with toFixed during render.
   await page.evaluate(() => { Number.prototype.toFixed = () => { throw new Error("simulated render failure"); }; });

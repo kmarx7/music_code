@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { openMode, renameScore } from "./editor-modes";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import { readSmf } from "../fixtures/smf-reader";
 import { validateMusicXml, xpath } from "../fixtures/xmllint";
@@ -6,6 +7,7 @@ import { mergeTiedNotes, type Score } from "../../src/domain/score";
 import { storedRow, storedScore } from "./storage";
 
 async function download(page: Page, name: string): Promise<{ filename: string; data: Buffer }> {
+  await openMode(page, "내보내기");
   const wait = page.waitForEvent("download");
   await page.getByRole("button", { name, exact: true }).click();
   const file: Download = await wait;
@@ -17,8 +19,7 @@ async function download(page: Page, name: string): Promise<{ filename: string; d
 test("Phase 5 통합: 피아노 입력→편집→조옮김→연습 속도·라벨 설정→MIDI·MusicXML·PDF 출력, 저장·이력 불변", async ({ page, context }, testInfo) => {
   const id = "e2e-phase5-flow";
   await page.goto(`/editor/${id}`);
-  await page.getByLabel("악보 제목", { exact: true }).fill("Phase 5 흐름");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "Phase 5 흐름");
 
   // 1. Input: C D E (quarters) and a half-note G; edit: raise E by a semitone → F.
   await page.getByRole("button", { name: "4분음표", exact: true }).click();
@@ -26,6 +27,7 @@ test("Phase 5 통합: 피아노 입력→편집→조옮김→연습 속도·라
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 67", exact: true }).click();
   const list = page.getByTestId("editor-content");
+  await openMode(page, "다듬기");
   await list.locator("li button").nth(2).click();
   await page.getByRole("button", { name: "반음 올리기", exact: true }).click();
 
@@ -42,6 +44,7 @@ test("Phase 5 통합: 피아노 입력→편집→조옮김→연습 속도·라
   expect(notes.map((note) => note.pitch.midi)).toEqual([62, 64, 67, 69]);
 
   // 3. Practice settings and labels are UI state: none of them may reach an export.
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "50%", exact: true }).click();
   await expect(page.getByTestId("practice-rate")).toHaveAttribute("data-rate", "50");
   await page.getByLabel("악보 라벨", { exact: true }).selectOption("letter");
@@ -77,6 +80,7 @@ test("Phase 5 통합: 피아노 입력→편집→조옮김→연습 속도·라
 
   // 6. PDF: the print tab follows the label setting and shows the transposed key.
   const opened = context.waitForEvent("page");
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "PDF (인쇄)", exact: true }).click();
   const print = await opened;
   await print.waitForURL(`**/print/${id}?labels=letter`);

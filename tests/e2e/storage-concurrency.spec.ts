@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { renameScore } from "./editor-modes";
 import { storedScore } from "./storage";
 
 async function rename(page: Page, title: string) {
-  await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill(title);
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, title);
 }
 async function ready(page: Page, id: string) {
   await page.goto(`/editor/${id}`);

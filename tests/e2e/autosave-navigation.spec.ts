@@ -1,4 +1,5 @@
 import { scoreNoteCount } from "./score-summary";
+import { openMode, renameScore } from "./editor-modes";
 import { expect, test } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -8,11 +9,11 @@ test("연속 편집·제목 Undo/Redo 직후 이동해도 최신 ID·제목·음
   await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
-  await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill("이동 직전 연습곡");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "이동 직전 연습곡");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   // 저장됨을 기다리지 않는다. 제품의 이동 전 flush를 검증한다.
+  await openMode(page, "내보내기");
   await page.getByRole("link", { name: "악보함 / JSON 가져오기", exact: true }).click();
   await expect(page).toHaveURL(/\/library$/);
   const source = page.getByRole("link", { name: "이동 직전 연습곡", exact: true });
@@ -45,8 +46,8 @@ test("저장 트랜잭션 실패 시 이동을 막고 오류·JSON 백업·재�
       IDBObjectStore.prototype.put = original;
     };
   }, id);
-  await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill("저장 실패해도 유지");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "저장 실패해도 유지");
+  await openMode(page, "내보내기");
   await page.getByRole("link", { name: "악보함 / JSON 가져오기", exact: true }).click();
   await expect(page.locator('p[role="status"]')).toContainText("저장하지 못해 이동을 중단했습니다");
   await expect(page.getByText("저장 실패", { exact: true })).toBeVisible();

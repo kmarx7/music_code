@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 const tickOf = async (page: Page) => Number(await page.getByTestId("playback-position").getAttribute("data-tick"));
@@ -14,6 +15,7 @@ test("A–B 반복: 3–4마디를 반복 재생하고 해제·잘못된 구간�
   const id = "e2e-ab-loop";
   await fourWholeNotes(page, id);
   const rowBefore = await storedRow(page, id);
+  await openMode(page, "연습");
   const loop = page.getByTestId("practice-loop");
   const cursor = page.getByTestId("playback-position");
   const toggle = page.getByLabel("A–B 반복", { exact: true });
@@ -34,23 +36,31 @@ test("A–B 반복: 3–4마디를 반복 재생하고 해제·잘못된 구간�
   await page.getByLabel("연습 속도", { exact: true }).fill("150");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(() => tickOf(page)).toBeGreaterThan(7680);
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "E4", exact: true })).toHaveAttribute("data-playing", "true");
+  await openMode(page, "연습");
   await expect.poll(() => tickOf(page)).toBeGreaterThan(13000);
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "G4", exact: true })).toHaveAttribute("data-playing", "true");
   // Wrap: the cursor returns to measure 3 and playback never leaves [A, B).
+  await openMode(page, "연습");
   await expect.poll(() => tickOf(page)).toBeLessThan(10000);
   await expect(cursor).toContainText("재생 중");
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "E4", exact: true })).toHaveAttribute("data-playing", "true");
   await expect(page.locator('[data-playing="true"]').filter({ hasText: /^(C4|D4)$/ })).toHaveCount(0);
   for (let sample = 0; sample < 20; sample += 1) {
+    await openMode(page, "연습");
     const tick = await tickOf(page);
     expect(tick).toBeGreaterThanOrEqual(7680);
     expect(tick).toBeLessThan(15360);
     await page.waitForTimeout(150);
   }
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("staff").locator('[data-event-id][data-playing="true"]')).toHaveCount(1);
 
   // Turning the loop off continues from the current position to the natural end without stuck highlights.
+  await openMode(page, "연습");
   await toggle.uncheck();
   await expect(loop).toHaveAttribute("data-loop", "off");
   await expect(cursor).toContainText("재생 중");
@@ -93,14 +103,18 @@ test("A–B 반복: 3–4마디를 반복 재생하고 해제·잘못된 구간�
   // A Score edit stops playback (existing policy) and keeps the still-valid measure range.
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(() => tickOf(page)).toBeGreaterThan(0);
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "MIDI 69", exact: true }).click();
+  await openMode(page, "연습");
   await expect(cursor).toContainText("정지");
   await expect(loop).toHaveAttribute("data-loop", "on");
   await expect(loop).toHaveAttribute("data-end-tick", "7680");
   await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures.flatMap((m: { events: unknown[] }) => m.events).length).toBe(5);
 
   await page.reload();
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+  await openMode(page, "연습");
   await expect(page.getByLabel("A–B 반복", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("반복 첫 마디", { exact: true })).toHaveValue("1");
   await expect(page.getByTestId("practice-loop")).toHaveAttribute("data-loop", "off");
@@ -112,9 +126,9 @@ test("A–B 반복: 모바일 터치로 켜고 반복 재생·정지한다", asy
   try {
     await page.goto("/editor/e2e-ab-loop-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
-    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "재생·연습", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "연습", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await page.getByLabel("A–B 반복", { exact: true }).tap();
     await expect(page.getByTestId("practice-loop")).toHaveAttribute("data-loop", "on");
     await page.getByLabel("연습 속도", { exact: true }).fill("150");

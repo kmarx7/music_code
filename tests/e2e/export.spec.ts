@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { openMode, renameScore } from "./editor-modes";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import { baseScore, withMeasureEvents } from "../fixtures/scores";
 import { readSmf } from "../fixtures/smf-reader";
@@ -48,8 +49,7 @@ function melody(id: string, title: string, measures: number): Score {
 test("MIDI와 MusicXML은 현재 악보를 내려받고 저장·이력을 바꾸지 않는다", async ({ page }) => {
   const id = "e2e-export-files";
   await page.goto(`/editor/${id}`);
-  await page.getByLabel("악보 제목", { exact: true }).fill("출력 / 연습곡");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "출력 / 연습곡");
   await page.getByRole("button", { name: "4분음표", exact: true }).click();
   for (const key of [60, 62, 64, 65]) await page.getByRole("button", { name: `MIDI ${key}`, exact: true }).click();
   await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures[0].events.length).toBe(4);
@@ -57,6 +57,7 @@ test("MIDI와 MusicXML은 현재 악보를 내려받고 저장·이력을 바꾸
   const stored: Score = await storedScore(page, id);
 
   const midiDownload = page.waitForEvent("download");
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "MIDI", exact: true }).click();
   const midi = await bytes(midiDownload);
   expect(midi.name).toBe("출력 _ 연습곡.mid");
@@ -64,6 +65,7 @@ test("MIDI와 MusicXML은 현재 악보를 내려받고 저장·이력을 바꾸
   expect(smf).toMatchObject({ format: 1, division: 960, trackCount: 2 });
   expect(smf.notes.map(({ midi: key, startTick, durationTicks }) => [key, startTick, durationTicks]))
     .toEqual(mergeTiedNotes(stored.parts[0]).map((note) => [note.pitch.midi, note.startTick, note.durationTicks]));
+  await openMode(page, "내보내기");
   await expect(page.getByTestId("export-notice")).toContainText("출력 _ 연습곡.mid");
 
   const wait = page.waitForEvent("download");
@@ -89,6 +91,7 @@ test("PDF: 저장 후 새 탭 인쇄 화면 → A4 PDF에 제목·머리글, 저
   const row = await storedRow(page, score.id);
 
   const opened = context.waitForEvent("page");
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "PDF (인쇄)", exact: true }).click();
   const print = await opened;
   await print.waitForURL(`**/print/${score.id}`);
@@ -144,6 +147,7 @@ test("PDF: 라벨 설정을 따르고, 기보 불가 악보와 없는 악보는 
   await expect(page.getByTestId("print-error")).toContainText("1마디");
   await expect(page.getByRole("button", { name: "인쇄 / PDF로 저장" })).toBeDisabled();
   await page.goto(`/editor/${odd.id}`);
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "MusicXML", exact: true }).click();
   await expect(page.getByTestId("export-notice")).toContainText("MusicXML로 내보낼 수 없습니다");
   // MIDI keeps exact ticks, so it still exports.

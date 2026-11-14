@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { createNewScore, listScores, type ScoreSummary } from "@/application";
+import { listScores, type ScoreSummary } from "@/application";
 import { getScoreRepository } from "@/adapters/indexeddb";
 import { formatDate } from "@/shared";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "./brand";
@@ -15,6 +14,7 @@ const page: React.CSSProperties = {
   fontFamily: "system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif",
 };
 const primary: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", textDecoration: "none",
   minHeight: 48, padding: "10px 18px", borderRadius: 10, border: "1px solid #1b2a4a", background: "#1b2a4a",
   color: "#ffffff", fontSize: 15, fontWeight: 600, cursor: "pointer",
 };
@@ -25,12 +25,7 @@ type Recent = { kind: "loading" } | { kind: "ready"; scores: ScoreSummary[] } | 
 
 /** Entry point (PRD §4): start by humming or piano, reopen a recent score. Everything stays in this browser. */
 export default function HomePage() {
-  const router = useRouter();
   const [recent, setRecent] = useState<Recent>({ kind: "loading" });
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<{ text: string; fallback: string } | null>(null);
-  const pending = useRef(false);
-
   useEffect(() => {
     let active = true;
     listScores(getScoreRepository()).then(
@@ -39,22 +34,6 @@ export default function HomePage() {
     );
     return () => { active = false; };
   }, []);
-
-  async function start(mode: "hum" | "piano") {
-    // One score per intent, even on a double click.
-    if (pending.current) return;
-    pending.current = true; setCreating(true); setError(null);
-    try {
-      const id = crypto.randomUUID();
-      await createNewScore(getScoreRepository(), { id, createdAt: new Date().toISOString() });
-      router.push(`/editor/${id}?start=${mode}`);
-    } catch {
-      pending.current = false; setCreating(false);
-      // Storage refused (P6-05): the editor still works in memory-only mode with a clear "not saved" notice.
-      setError({ text: "이 브라우저에 악보를 저장할 수 없습니다(사생활 보호 모드 또는 사이트 데이터 차단). 저장 없이 편집은 할 수 있으며, 내용은 JSON 백업으로 보관해야 합니다.",
-        fallback: `/editor/${crypto.randomUUID()}?start=${mode}` });
-    }
-  }
 
   return (
     <main style={page}>
@@ -71,13 +50,10 @@ export default function HomePage() {
         PDF·MIDI·MusicXML로 내보낼 수 있습니다. 로그인은 필요 없습니다.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-        <button type="button" style={primary} disabled={creating} onClick={() => void start("hum")}>허밍으로 시작</button>
-        <button type="button" style={secondary} disabled={creating} onClick={() => void start("piano")}>피아노로 시작</button>
+        <Link href="/record" style={primary}>허밍으로 시작</Link>
+        <Link href="/new" style={secondary}>피아노로 시작</Link>
       </div>
       <p style={muted}>허밍은 마이크 동의 후에만 녹음하며, 녹음은 이 기기 안에서 분석하고 저장하거나 보내지 않습니다.</p>
-      {error ? <p role="alert" style={{ color: "#b91c1c", fontSize: 14 }}>
-        {error.text} <Link href={error.fallback}>저장 없이 편집기 열기</Link>
-      </p> : null}
 
       <section aria-labelledby="recent-heading" data-testid="home-recent" style={{ marginTop: 40 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>

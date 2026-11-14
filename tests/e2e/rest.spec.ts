@@ -1,4 +1,5 @@
 import { scoreNoteCount } from "./score-summary";
+import { openMode } from "./editor-modes";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -16,6 +17,7 @@ test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Re
   await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByText("선택한 쉼표 편집", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "쉼표", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("staff").locator("svg .vf-stavenote")).toHaveCount(2);
@@ -26,6 +28,7 @@ test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Re
   await page.getByRole("button", { name: "쉼표 위치 변경", exact: true }).click();
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 4800, durationTicks: 480 });
 
+  await openMode(page, "다듬기");
   await page.getByLabel("시작 마디").fill("1");
   await page.getByLabel("마디 안 박 위치").fill("1");
   await page.getByRole("button", { name: "쉼표 위치 변경", exact: true }).click();
@@ -38,6 +41,7 @@ test("쉼표 삽입·선택·길이/위치 수정·경계/충돌 거부·Undo/Re
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 4800, durationTicks: 480 });
   await page.reload();
   await expect(page.getByText(/쉼표 1개/)).toBeVisible();
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "쉼표", exact: true }).click();
   await expect(page.getByLabel("시작 마디")).toHaveValue("2");
   await expect(page.getByLabel("마디 안 박 위치")).toHaveValue("2");
@@ -56,15 +60,19 @@ test("음표·쉼표 혼합 악보에서 쉼표 편집 후 붙임줄과 음표 �
   for (let index = 0; index < 3; index++) await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "4분음표", exact: true }).click();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click();
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 4800, durationTicks: 960 });
   const before = await storedScore(page, id);
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "선택 쉼표 길이 2분음표", exact: true }).click();
   await expect.poll(() => storedRest(page, id)).toEqual({ startTick: 4800, durationTicks: 1920 });
   await page.reload();
   await expect(scoreNoteCount(page, 5)).toBeVisible();
+  await openMode(page, "다듬기");
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
   await expect(page.getByTestId("staff").locator("svg .vf-stavenote")).toHaveCount(6);
   const after = await storedScore(page, id);

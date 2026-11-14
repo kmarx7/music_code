@@ -1,12 +1,12 @@
 import { scoreNoteCount } from "./score-summary";
+import { renameScore } from "./editor-modes";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
 type WriteAudit = { hold: boolean; writes: number; active: number; maximum: number };
 type AuditWindow = Window & { manualWriteAudit?: WriteAudit; restoreManualWrites?: () => void };
 async function rename(page: Page, title: string) {
-  await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill(title);
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, title);
 }
 async function rawRecord(page: Page, id: string) {
   return page.evaluate(async (id) => {

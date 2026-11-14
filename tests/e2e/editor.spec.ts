@@ -1,4 +1,5 @@
 import { scoreNoteCount } from "./score-summary";
+import { openMode, renameScore } from "./editor-modes";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -50,6 +51,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
   await page.getByRole("button", { name: "MIDI 62" }).click();
   await expect(scoreNoteCount(page, 2)).toBeVisible();
 
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "C4", exact: true }).click();
   await expect(page.getByText("선택한 음표 편집")).toBeVisible();
   await page.getByRole("button", { name: "반음 올리기" }).click();
@@ -75,6 +77,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
 
   await page.reload();
   await expect(scoreNoteCount(page, 2)).toBeVisible();
+  await openMode(page, "다듬기");
   const restoredNote = page.getByRole("button", { name: "C#4", exact: true });
   await restoredNote.click();
   await expect(restoredNote).toHaveAttribute("aria-pressed", "true");
@@ -86,6 +89,7 @@ test("새 악보 생성 → 건반 입력 → 음표 수정 → 저장 → 새�
   await expect(page).toHaveURL(new RegExp(`/editor/${scoreId}$`));
   await expect(scoreNoteCount(page, 2)).toBeVisible();
 
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
   await page.getByRole("button", { name: "Stop" }).click();
@@ -118,6 +122,7 @@ test("키보드 입력과 포커스·접근성 상태가 동작한다", async ({
   await c4.focus();
   await expect(c4).toBeFocused();
 
+  await openMode(page, "다듬기");
   const chip = page.locator("button[aria-pressed]").first();
   await expect(chip).toHaveAttribute("aria-pressed", "false");
   await chip.click();
@@ -141,6 +146,7 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
   await page.getByRole("button", { name: "MIDI 62" }).click();
 
   await expect(scoreNoteCount(page, 5)).toBeVisible();
+  await openMode(page, "다듬기");
   const tiedChips = page.locator("button[aria-pressed]", { hasText: "⌒" });
   await expect(tiedChips).toHaveCount(2);
   await expect(page.locator("svg")).toHaveCount(1);
@@ -151,6 +157,7 @@ test("마디를 넘는 음표는 분할되어 붙임줄로 표시·저장된다"
 
   await page.reload();
   await expect(scoreNoteCount(page, 5)).toBeVisible();
+  await openMode(page, "다듬기");
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
 });
 
@@ -165,12 +172,12 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await expect(scoreNoteCount(page, 5)).toBeVisible();
 
   const title = page.getByRole("textbox", { name: "악보 제목" });
-  await title.fill("백업 연습곡");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "백업 연습곡");
   await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByRole("heading", { name: "새 악보", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await page.getByRole("button", { name: "이름 바꾸기", exact: true }).click();
   await expect(title).toHaveValue("백업 연습곡");
   await title.fill("   ");
   await page.getByRole("button", { name: "제목 변경", exact: true }).click();
@@ -178,6 +185,7 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await expect(scoreNoteCount(page, 5)).toBeVisible();
 
   const downloadEvent = page.waitForEvent("download");
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
   const download = await downloadEvent;
   // The app hands the browser an NFC name; WebKit on macOS reports it decomposed (NFD). Compare the same text in one form.
@@ -211,6 +219,7 @@ test("제목 변경·Undo/Redo → JSON 다운로드 → 새 악보로 복원·�
   await expect(page.getByRole("link", { name: "백업 연습곡", exact: true })).toHaveCount(2);
   await page.goto(restoredHref!);
   await expect(page.getByRole("heading", { name: "백업 연습곡", exact: true })).toBeVisible();
+  await openMode(page, "다듬기");
   await expect(page.locator("button[aria-pressed]", { hasText: "⌒" })).toHaveCount(2);
   await page.reload();
   await expect(scoreNoteCount(page, 5)).toBeVisible();

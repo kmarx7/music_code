@@ -1,15 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number; durationTicks: number; pitch?: { midi: number } }
 interface StoredPart { measures: { events: StoredEvent[] }[]; ties: { from: string; to: string }[] }
 
 async function moveCursor(page: Page, measure: number, beat: number) {
+  await openMode(page, "입력");
   await page.getByLabel("커서 마디", { exact: true }).fill(String(measure));
   await page.getByLabel("커서 박", { exact: true }).fill(String(beat));
   await page.getByRole("button", { name: "커서 이동", exact: true }).click();
 }
 async function selectMeasures(page: Page, first: number, last: number) {
+  await openMode(page, "다듬기");
   await page.getByLabel("구간 첫 마디", { exact: true }).fill(String(first));
   await page.getByLabel("구간 마지막 마디", { exact: true }).fill(String(last));
   await page.getByRole("button", { name: "구간 선택", exact: true }).click();
@@ -30,6 +33,7 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
   await moveCursor(page, 2, 4);
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "2분음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 62", exact: true }).click();
   const original = [["note", 0, 3840, 60], ["note", 6720, 960, 62], ["note", 7680, 960, 62]];
@@ -38,6 +42,7 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
   const rowBefore = await storedRow(page, id);
   const revisionBefore = await revisionOf(page, id);
 
+  await openMode(page, "다듬기");
   const chips = page.getByTestId("editor-content").locator("button[data-event-id]");
   const clip = page.getByTestId("clipboard-status");
   const feedback = page.getByTestId("clipboard-feedback");
@@ -46,16 +51,19 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
 
   // Put m1 on the clipboard first so a failed cut can be shown to keep it.
   await selectMeasures(page, 1, 1);
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "구간 복사", exact: true }).click();
   await expect(clip).toHaveAttribute("data-length-ticks", "3840");
   await expect(clip).toHaveAttribute("data-event-count", "1");
 
   // A range that cuts the tie chain is never selectable, so it can never be cut.
   await selectMeasures(page, 2, 2);
+  await openMode(page, "다듬기");
   await expect(selection).toHaveAttribute("data-selected", "off");
   await expect(cutButton(page)).toBeDisabled();
   // An empty measure has nothing to cut: the previous clipboard, the score and storage are kept.
   await selectMeasures(page, 4, 4);
+  await openMode(page, "다듬기");
   await cutButton(page).click();
   await expect(feedback).toHaveAttribute("data-kind", "error");
   await expect(feedback).toContainText("잘라낼 음표·쉼표가 없습니다");
@@ -67,6 +75,7 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
 
   // Successful cut of the whole tied chain: one command, one save, the gap stays, nothing shifts.
   await selectMeasures(page, 2, 3);
+  await openMode(page, "다듬기");
   await cutButton(page).click();
   await expect(feedback).toHaveAttribute("data-kind", "ok");
   await expect(feedback).toContainText("잘라냈습니다");
@@ -81,9 +90,11 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
 
   // One Undo restores every cut event and the tie; the clipboard is not part of history.
   await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(chips).toHaveCount(3);
   await expect.poll(async () => flat(await storedPart(page, id)).length).toBe(3);
   expect(await storedPart(page, id)).toEqual(partBefore);
+  await openMode(page, "다듬기");
   await expect(clip).toHaveAttribute("data-length-ticks", "7680");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(chips).toHaveCount(1);
@@ -91,6 +102,7 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
 
   // Cut then paste elsewhere = move. Fresh IDs, the tie is rebuilt.
   await moveCursor(page, 5, 1);
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "커서에 붙여넣기", exact: true }).click();
   await expect(chips).toHaveCount(3);
   await expect.poll(async () => shape(await storedPart(page, id)))
@@ -100,6 +112,7 @@ test("잘라내기: 실패 시 clipboard·악보 유지, 성공 시 원자 삭�
   expect(flat(moved).map((event) => event.id)).not.toContain(flat(partBefore)[1].id);
 
   await page.reload();
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("editor-content").locator("button[data-event-id]")).toHaveCount(3);
   await expect(page.getByTestId("clipboard-status")).toHaveAttribute("data-filled", "off");
   expect(await storedPart(page, id)).toEqual(moved);
@@ -112,15 +125,15 @@ test("잘라내기: 모바일 터치로 잘라내고 붙여넣는다", async ({ 
     const id = "e2e-cut-touch";
     await page.goto(`/editor/${id}`);
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
-    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
     await cutButton(page).tap();
     await expect(page.getByTestId("editor-content").locator("button[data-event-id]")).toHaveCount(0);
-    await page.getByRole("tab", { name: "입력", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "입력", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
     await moveCursor(page, 2, 1);
-    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await page.getByRole("button", { name: "커서에 붙여넣기", exact: true }).tap();
     await expect.poll(async () => shape(await storedPart(page, id))).toEqual([["note", 3840, 960, 60]]);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

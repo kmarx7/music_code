@@ -945,3 +945,13 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - 개발 모드에서만 `'unsafe-eval'`과 `ws:`를 더한다. 새 의존성 없음.
 - 근거 측정: 앱 전 과정에서 외부 호스트 요청 0건(악보 글꼴은 VexFlow 번들 내장, 녹음 모듈은 `blob:`).
 - 외부 출처(분석 도구, CDN, 글꼴 서비스 등)를 추가하려면 CSP 변경이 필요하며, 개인정보 화면 고지도 함께 바꾼다.
+
+## Phase 7 트랙 A — 시작 흐름과 작업 모드 (2026-11-14, D-05 결정 2·3·4)
+
+- `createNewScore(repository, { id, createdAt, title?, measureCount?, tempoBpm?, timeSignature?, keySignature? })`: 빈 악보를 만들고 `validateScore`로 검사한 뒤 저장한다. 제목 공백·템포 범위 밖 등은 저장 전에 거부한다(쓰기 0회).
+- `buildTranscribedScore({ id, createdAt, setup, clipboard, nextId })`: 순수 함수. 설정값의 빈 악보(8마디)에 확정된 채보 후보를 1마디부터 기존 `planTranscriptionCommit` + `PasteEvents` Command로 넣고, 모자란 마디를 더한다. `updatedAt = createdAt`.
+- `createTranscribedScore(repository, input)`: 위 결과를 `repository.create`로 한 번 저장한다. 후보가 비었거나 검증 실패면 아무것도 쓰지 않는다.
+- `features/score-setup`: `parseScoreSetup(form values)` → `{ title, tempoBpm, timeSignature, keySignature }` 또는 오류 문구(기본값 4/4·90·C장조·"새 악보", 박자 2/4·3/4·4/4·6/8, 템포 20–400 정수). `ScoreSetupFields`는 `/new`와 `/record` ①이 같이 쓰는 비제어 입력(목표 악기는 트랙 B 전까지 피아노만 선택 가능).
+- `features/audio-recording/HummingFlow`: `/record` 4단계. 녹음·PCM은 컴포넌트 메모리에만 있고, ④ "악보 만들기"에서 `onCreate(setup, clipboard)`를 한 번만 부른다(연속 클릭 차단). 화면을 떠나면 캡처를 취소한다.
+- 편집기 작업 모드: `입력/다듬기/연습/내보내기` 한 개만 보인다(숨김일 뿐 마운트 유지 → 녹음·재생·입력 상태 보존). 모드는 화면 상태이며 Score·JSON·저장 이력에 들어가지 않는다. 미리보기 악보가 있는 도구(녹음 패널, 조옮김)와 재생·내보내기 도구는 이전과 같이 `editor-content` 밖에 두어 재생 하이라이트가 미리보기에 닿지 않는다.
+- 진입 주소: 홈 "피아노로 시작" → `/new` → `/editor/<id>?start=piano`(입력 모드, 건반 위치). 홈 "허밍으로 시작" → `/record` → `/editor/<id>`. 옛 `?start=hum`은 입력 모드의 녹음 패널에 포커스(녹음 자동 시작 없음).

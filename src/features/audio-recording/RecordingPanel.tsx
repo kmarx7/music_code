@@ -150,7 +150,7 @@ export function RecordingPanel({ score, cursorTick = null, labelMode = "none", p
       <h2 style={{ fontSize: 18, margin: "0 0 8px" }}>허밍 녹음</h2>
       <p style={note}>
         악보 템포 {score.tempoBpm} BPM, {numerator}/{denominator}박자. 1마디 카운트인 후 최대 8마디({formatRecordingTime(preview.limitSeconds)})를 녹음합니다.
-        템포와 박자는 위 악보 설정에서 바꿀 수 있습니다.
+        템포와 박자는 다듬기 모드의 악보 설정에서 바꿀 수 있습니다.
       </p>
       <p style={note}>녹음은 이 기기 안에서만 분석하며 저장하거나 전송하지 않습니다. 메트로놈 소리가 섞이지 않도록 이어폰을 권장합니다.</p>
 

@@ -166,12 +166,13 @@ The following **14 feature groups** are all MVP requirements. Phase 0–6 only d
 
 | Page | Essential elements |
 |---|---|
-| Home `/` | Product intro, new score, Hum / Piano entry, recent score access (P6-02: 3 most recent) |
-| Recorder (editor panel) | Mic permission, device states, tempo/meter, level, pitch visualization, recording actions. **2026-11-14 user-approved change (D-04 #2):** implemented as the recording panel inside `/editor/[scoreId]`; Home "Hum" creates a score and opens that panel. No separate `/record` route. |
-| Editor `/editor/[scoreId]` | Score/staff, main toolbar, note tool, piano/record panel, playback, transposition, practice controls, file export |
+| Home `/` | Product intro, Hum (`/record`) / Piano (`/new`) entry, recent score access (P6-02: 3 most recent) |
+| Recorder `/record` | **Phase 7 decision 2 (D-05, 2026-11-14) — replaces D-04 #2:** four steps ① settings (title, meter, tempo, target instrument; defaults 4/4 · 90 · piano, "기본값으로 시작") ② microphone (consent, metronome, earphone advice) ③ record (count-in, measure/beat progress, level, live pitch) ④ review (candidate staff, listen, re-record, "악보 만들기"). The score is first saved at ④. Leaving at any step stores nothing; audio is never stored or sent. |
+| New score `/new` | Phase 7 decision 3: one setup step (title, meter, tempo, key, target instrument) → "만들기" saves one score and opens the editor in the input mode. |
+| Editor `/editor/[scoreId]` | Score/staff always on top; four work modes on every screen size (Phase 7 decision 4): 입력 (durations, cursor, piano, humming), 다듬기 (note/range edit, transposition, range recommendations, score settings), 연습 (playback, rate, A–B, metronome), 내보내기 (PDF, MIDI, MusicXML, JSON). The mode is UI state and never stored. Old `?start=piano|hum` links open the input mode. |
 | Library `/library` | Saved scores, rename/open/delete, backup/import |
 
-**Desktop editor layout:** top toolbar, left editing controls, center notation, contextual right properties and optional bottom piano/record/practice panel. **Mobile:** prioritize readable staff and collapse secondary controls into accessible tabs/drawers. Keyboard and screen-reader pathways must not rely exclusively on canvas/pointer gestures.
+**Editor layout (Phase 7 A-1):** header (home, title + "이름 바꾸기", save state, Undo/Redo, 저장) → staff with the label switch → mode bar → the chosen mode's tools. **Mobile:** same modes; the mode bar is fixed to the bottom edge. Keyboard and screen-reader pathways must not rely exclusively on canvas/pointer gestures.
 
 ## 5. Non-functional requirements
 

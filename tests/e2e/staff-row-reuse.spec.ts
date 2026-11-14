@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { scoreNoteCount } from "./score-summary";
 import { storedScore } from "./storage";
 
@@ -13,6 +14,7 @@ async function kept(page: Page) {
     .map((row) => `${row.getAttribute("data-staff-row")}:${(row as Element & { kept?: boolean }).kept ? "kept" : "new"}`));
 }
 async function move(page: Page, measure: number) {
+  await openMode(page, "입력");
   await page.getByLabel("커서 마디", { exact: true }).fill(String(measure));
   await page.getByLabel("커서 박", { exact: true }).fill("1");
   await page.getByRole("button", { name: "커서 이동", exact: true }).click();
@@ -33,9 +35,11 @@ test("편집·Undo·커서 이동은 바뀐 줄만 다시 그리고 표시 방�
   await expect(scoreNoteCount(page, 1)).toBeVisible();
   await mark(page);
   await move(page, last);
+  await openMode(page, "입력");
   await expect(page.getByTestId("staff-edit-cursor")).toHaveAttribute("data-tick", String((last - 1) * 3840));
   expect(await kept(page)).toEqual(["0:kept", "1:kept", "2:kept"]); // a cursor move redraws no row
 
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "MIDI 64", exact: true }).click();
   await expect(scoreNoteCount(page, 2)).toBeVisible();
   expect(await kept(page)).toEqual(["0:kept", "1:kept", "2:new"]);

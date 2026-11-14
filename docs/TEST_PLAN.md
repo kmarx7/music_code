@@ -1678,3 +1678,17 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 이것은 실제 Safari·실기기 PASS가 아니다. 휴대폰 동작은 `mobile-editor.spec.ts`(Chromium 모바일 에뮬레이션)와 UAT-B/UAT-T로 확인한다.
 - 데스크톱 전제 테스트를 휴대폰 폭에서 돌리도록 고치는 일은 하지 않았다(탭 조작을 넣으면 테스트 의미가 바뀐다). WebKit 정식 대상화는 P6-10 이후 판단.
 - 재실행(배포 `40c2db3`, Chromium + WebKit Desktop Safari, 204개): **Chromium 102/102 PASS**, WebKit 93/102. WebKit 실패 9건 전부 환경 제약: `page.pdf` Chromium 전용 3(export 2, phase5 통합 1), 가짜 마이크 Chromium 전용 6(recording 3, phase4 통합, 실시간 음높이, CSP 녹음 단계). 파일 이름 NFC 보정 4건은 PASS로 바뀜. 실제 Safari·실기기 PASS가 아니다.
+
+## Phase 7 A-2~A-4·A-6 — 시작 흐름과 편집기 작업 모드 (2026-11-14, Claude Code)
+
+| 대상 | 확인 내용 | 결과 |
+|---|---|---|
+| `tests/unit/score-setup.test.ts` (9) | 기본값 4/4·90·C장조·"새 악보", 값 읽기, 제목·박자·템포·조성 거부, 악기는 피아노만 선택 가능 | PASS |
+| `tests/unit/score-library.test.ts` (+2) | `createNewScore` 설정값 저장, 잘못된 값은 쓰기 0회 | PASS |
+| `tests/unit/transcribed-score.test.ts` (2) | 설정·채보를 1마디부터 넣고 마디 확장·검증 통과, 1회 저장, 빈 후보 거부 | PASS |
+| `tests/e2e/record-flow.spec.ts` (3) | 설정→마이크→녹음→확인→악보 만들기(연속 클릭 1개), 설정·A4 채보 저장, 오디오 비저장 / 기본값으로 시작·취소·다시 녹음·중간 이탈 무저장 / 권한 거부 안내 | PASS |
+| `tests/e2e/home.spec.ts` | `/new` 기본값·검증·설정 저장·입력 모드 건반, 이탈 무저장, 옛 `?start=hum` | PASS |
+| `tests/e2e/mobile-editor.spec.ts` | 휴대폰 아래 고정 모드 막대·상태 보존 / 데스크톱 4모드·화살표 키·모드 무저장 | PASS |
+| 기존 E2E 26파일 | 조작에 모드 전환(`openMode`)·제목 변경(`renameScore`)만 추가, 기대값 변경 없음 | PASS |
+
+- 전체: unit 73파일/1033, **E2E 107/107 PASS**, axe 0건. 실제 마이크·Safari·실기기 미검증.

@@ -1,4 +1,5 @@
 import { scoreNoteCount } from "./score-summary";
+import { openMode, renameScore } from "./editor-modes";
 import { expect, test, type Page } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -31,6 +32,7 @@ async function seed(page: Page, id: string) {
   await save(page);
 }
 async function preview(page: Page) {
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "조옮김", exact: true }).click();
   const panel = page.getByTestId("transpose-preview");
   await panel.getByLabel("조옮김 목표 조성", { exact: true }).selectOption("major:2");
@@ -47,12 +49,14 @@ async function midis(page: Page, id: string): Promise<number[]> {
 
 test("조옮김 미리보기 취소는 원시 저장본·커서·편집 이력을 보존한다", async ({ page }) => {
   const id = "e2e-transpose-cancel"; await seed(page, id);
+  await openMode(page, "입력");
   await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
   const cursor = await page.getByTestId("edit-cursor-position").getAttribute("data-tick");
   const before = await raw(page, id); const panel = await preview(page);
   expect(await raw(page, id)).toEqual(before);
   await panel.getByRole("button", { name: "취소", exact: true }).click();
   await expect(panel).toHaveCount(0); expect(await raw(page, id)).toEqual(before);
+  await openMode(page, "입력");
   await expect(page.getByTestId("edit-cursor-position")).toHaveAttribute("data-tick", cursor!);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect.poll(() => midis(page, id)).toEqual([60, 62, 64]);
@@ -67,6 +71,7 @@ test("확정은 조표·음높이를 한 Undo 단위로 바꾸고 저장·새로
   const changed = await storedScore(page, id);
   expect(changed.parts[0].keySignature).toMatchObject({ tonic: "D", fifths: 2 });
   expect(await midis(page, id)).toEqual([62, 64, 66, 69]);
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("editor-content").getByRole("button", { name: "F#4", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect.poll(() => storedScore(page, id)).toEqual(original);
@@ -79,9 +84,9 @@ test("확정은 조표·음높이를 한 Undo 단위로 바꾸고 저장·새로
 
 test("미리보기 도중 실제 편집은 오래된 후보 확정을 차단한다", async ({ page }) => {
   const id = "e2e-transpose-stale"; await seed(page, id); const panel = await preview(page);
-  await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill("미리보기 중 제목 변경");
-  await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+  await renameScore(page, "미리보기 중 제목 변경");
   await expect(panel).toContainText("원본 또는 저장 버전이 변경");
+  await openMode(page, "다듬기");
   const confirm = panel.getByRole("button", { name: "확정", exact: true }); await expect(confirm).toBeDisabled();
   await confirm.evaluate((button: HTMLButtonElement) => button.click());
   await panel.getByRole("button", { name: "취소", exact: true }).click(); await save(page);
@@ -93,8 +98,7 @@ test("미리보기 도중 실제 편집은 오래된 후보 확정을 차단한�
 test("다른 탭의 저장 알림 후 후보 확정을 차단하고 최신 원본을 보존한다", async ({ page, context }) => {
   const id = "e2e-transpose-conflict"; await seed(page, id);
   const other = await context.newPage(); await ready(other, id); const panel = await preview(page);
-  await other.getByRole("textbox", { name: "악보 제목", exact: true }).fill("다른 탭 최신본");
-  await other.getByRole("button", { name: "제목 변경", exact: true }).click(); await save(other);
+  await renameScore(other, "다른 탭 최신본"); await save(other);
   await expect(page.getByTestId("storage-conflict")).toBeVisible();
   const before = await raw(other, id); const confirm = panel.getByRole("button", { name: "확정", exact: true });
   await expect(confirm).toBeDisabled(); await confirm.evaluate((button: HTMLButtonElement) => button.click());
@@ -111,6 +115,7 @@ test("다른 탭의 삭제 알림 이후 후보 확정과 자동 재생성을 �
   await library.locator("li").filter({ has: library.locator(`a[href="/editor/${id}"]`) }).getByRole("button", { name: "삭제", exact: true }).click();
   await expect(page.getByTestId("storage-conflict")).toContainText("삭제된 악보");
   const tombstone = await raw(page, id); expect(tombstone.deleted).toBe(true);
+  await openMode(page, "다듬기");
   const confirm = panel.getByRole("button", { name: "확정", exact: true }); await expect(confirm).toBeDisabled();
   await confirm.evaluate((button: HTMLButtonElement) => button.click());
   await panel.press("Escape"); await expect(panel).toHaveCount(0);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMode, renameScore } from "./editor-modes";
 import { tiedScore } from "../fixtures/scores";
 import { storedScore } from "./storage";
 
@@ -97,13 +98,13 @@ for (const version of [1, 2]) {
     await expect(page.getByTestId("staff").locator("svg")).toHaveCount(1);
     await page.clock.runFor(1000);
     expect(await rawRecord(page, score.id)).toEqual(original);
+    await openMode(page, "내보내기");
     await page.getByRole("link", { name: "악보함 / JSON 가져오기", exact: true }).click();
     await expect(page).toHaveURL(/\/library$/);
     expect(await rawRecord(page, score.id)).toEqual(original);
     expect(await page.evaluate(() => (window as Window & { scoreWriteCount?: number }).scoreWriteCount)).toBe(0);
     await page.getByRole("link", { name: score.title, exact: true }).click();
-    await page.getByRole("textbox", { name: "악보 제목", exact: true }).fill("검증된 편집");
-    await page.getByRole("button", { name: "제목 변경", exact: true }).click();
+    await renameScore(page, "검증된 편집");
     await page.clock.runFor(500);
     await expect(page.getByText("저장됨", { exact: true })).toBeVisible();
     expect(await storedScore(page, score.id)).toMatchObject({ id: score.id, title: "검증된 편집", schemaVersion: 2 });
@@ -125,6 +126,7 @@ test("이전 정상 편집 세션이 남아 있어도 같은 ID의 실패 저장
   await rawRecord(page, score.id, { id: score.id, updatedAt: score.updatedAt, json: JSON.stringify(score) });
   await page.goto(`/editor/${score.id}`);
   await expect(page.getByRole("heading", { name: score.title, exact: true })).toBeVisible();
+  await openMode(page, "내보내기");
   await page.getByRole("link", { name: "악보함 / JSON 가져오기", exact: true }).click();
   const open = page.getByRole("link", { name: score.title, exact: true });
   await expect(open).toBeVisible();

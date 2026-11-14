@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number; durationTicks: number; pitch?: { midi: number }; provenance?: { source: string } }
@@ -6,6 +7,7 @@ const events = (score: { parts: { measures: { events: StoredEvent[] }[] }[] }) =
 const notes = (score: Parameters<typeof events>[0]) => events(score).filter((event) => event.kind === "note");
 
 async function moveCursor(page: Page, measure: number, beat: number) {
+  await openMode(page, "입력");
   await page.getByLabel("커서 마디", { exact: true }).fill(String(measure));
   await page.getByLabel("커서 박", { exact: true }).fill(String(beat));
   await page.getByRole("button", { name: "커서 이동", exact: true }).click();
@@ -29,8 +31,10 @@ test("Phase 4 통합: 녹음→후보 검토→커서 마디에 확정→편집�
   const id = "e2e-phase4-flow";
   await page.goto(`/editor/${id}`);
   // 400 BPM keeps the take short; one whole note C4 in measure 1 so the score is not empty.
+  await openMode(page, "다듬기");
   await page.getByLabel("기본 템포 (BPM)", { exact: true }).fill("400");
   await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "온음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await expect.poll(async () => notes(await storedScore(page, id)).length).toBe(1);
@@ -51,6 +55,7 @@ test("Phase 4 통합: 녹음→후보 검토→커서 마디에 확정→편집�
   // 2. Confirm at the cursor's measure (cursor in the middle of measure 3 → the take starts at measure 3, beat 1).
   await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
   await moveCursor(page, 3, 2);
+  await openMode(page, "입력");
   await panel.getByLabel("커서가 있는 마디부터").check();
   await expect(panel).toContainText("3마디부터 넣으면");
   await panel.getByRole("button", { name: "악보에 넣기", exact: true }).click();
@@ -70,6 +75,7 @@ test("Phase 4 통합: 녹음→후보 검토→커서 마디에 확정→편집�
   await expect.poll(async () => notes(await storedScore(page, id)).at(-1)?.pitch?.midi).toBe(64);
   const edited = await storedScore(page, id);
   expect(notes(edited).at(-1)?.provenance?.source).toBe("piano");
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => Number(await page.getByTestId("playback-position").getAttribute("data-tick"))).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Stop", exact: true }).click();
@@ -101,6 +107,7 @@ test("Phase 4 통합: 녹음→후보 검토→커서 마디에 확정→편집�
 
   // 5. JSON backup is the stored score; no audio, frames or candidate fields.
   const download = page.waitForEvent("download");
+  await openMode(page, "내보내기");
   await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
   const chunks: Buffer[] = [];
   for await (const chunk of await (await download).createReadStream()) chunks.push(chunk as Buffer);

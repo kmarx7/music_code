@@ -1,4 +1,5 @@
 import { scoreNoteCount } from "./score-summary";
+import { openMode } from "./editor-modes";
 import { expect, test } from "@playwright/test";
 import { storedScore } from "./storage";
 
@@ -6,6 +7,7 @@ test("빈 악보 박자·템포·조표 변경과 Undo/Redo·재생 정지·저�
   const id = "e2e-score-settings";
   await page.goto(`/editor/${id}`);
   await expect(page.getByText(/120 BPM · 4\/4/)).toBeVisible();
+  await openMode(page, "다듬기");
   await page.getByLabel("박자", { exact: true }).selectOption("6/8");
   await page.getByRole("button", { name: "박자 적용", exact: true }).click();
   await expect(page.getByText(/120 BPM · 6\/8/)).toBeVisible();
@@ -22,24 +24,30 @@ test("빈 악보 박자·템포·조표 변경과 Undo/Redo·재생 정지·저�
   await expect(page.getByText(/90 BPM · 6\/8/)).toBeVisible();
   await tempo.fill("120");
   await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "MIDI 61", exact: true }).click();
   await page.getByRole("button", { name: "온음표", exact: true }).click();
   await page.getByRole("button", { name: "MIDI 64", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByLabel("박자", { exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "박자 적용", exact: true })).toBeDisabled();
   await page.getByLabel("조표", { exact: true }).selectOption("major:-2");
   await page.getByRole("button", { name: "조표 적용", exact: true }).click();
   await expect(page.getByRole("button", { name: "C#4", exact: true })).toBeVisible();
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+  await openMode(page, "다듬기");
   await tempo.fill("60");
   await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await openMode(page, "연습");
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await expect.poll(async () => (await storedScore(page, id))?.tempoBpm).toBe(60);
   const saved = await storedScore(page, id);
   expect(saved.parts[0].keySignature).toEqual({ tonic: "B", alter: -1, mode: "major", fifths: -2 });
   expect(saved.parts[0].measures.flatMap((m: { events: { kind: string; pitch: { midi: number } }[] }) => m.events).map((e: { pitch: { midi: number } }) => e.pitch.midi)).toEqual([61, 64, 64]);
   await page.reload();
+  await openMode(page, "다듬기");
   await expect(tempo).toHaveValue("60");
   await expect(page.getByLabel("조표", { exact: true })).toHaveValue("major:-2");
   await expect(page.getByText(/60 BPM · 6\/8/)).toBeVisible();
@@ -52,10 +60,13 @@ test("쉼표만 있는 악보도 박자 변경을 잠그고 단조 조표 변경
   await page.goto(`/editor/${id}`);
   await expect(scoreNoteCount(page, 0)).toBeVisible();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(page.getByLabel("박자", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "선택 쉼표 삭제", exact: true }).click();
   await expect(page.getByLabel("박자", { exact: true })).toBeEnabled();
+  await openMode(page, "입력");
   await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
+  await openMode(page, "다듬기");
   await page.getByLabel("조표", { exact: true }).selectOption("minor:-1");
   await page.getByRole("button", { name: "조표 적용", exact: true }).click();
   await expect.poll(async () => (await storedScore(page, id))?.parts[0].keySignature.mode).toBe("minor");

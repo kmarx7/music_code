@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Locator } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedScore } from "./storage";
 
 const mainStaff = (page: Page) => page.getByTestId("editor-content").getByTestId("staff");
@@ -18,6 +19,7 @@ async function raw(page: Page, id: string) {
   }, id);
 }
 async function preview(page: Page, key: string) {
+  await openMode(page, "다듬기");
   await page.getByRole("button", { name: "조옮김", exact: true }).click(); const panel = page.getByTestId("transpose-preview");
   await panel.getByLabel("조옮김 목표 조성", { exact: true }).selectOption(key); return panel;
 }
@@ -40,7 +42,9 @@ test("표시 안 함/음이름/계이름 전환은 선택·커서·Redo·원시 
   await page.getByRole("button", { name: "Undo", exact: true }).click(); await save(page);
   const source = await raw(page, id); const score = await storedScore(page, id); const staff = mainStaff(page);
   await expect(page.getByLabel("악보 라벨", { exact: true })).toHaveValue("none"); await expect(labels(staff)).toHaveCount(0);
+  await openMode(page, "다듬기");
   await page.getByTestId("editor-content").getByRole("button", { name: "C4", exact: true }).click();
+  await openMode(page, "입력");
   await page.getByLabel("입력 위치", { exact: true }).selectOption("cursor");
   const cursor = await page.getByTestId("edit-cursor-position").getAttribute("data-tick");
   await page.clock.install();
@@ -53,7 +57,9 @@ test("표시 안 함/음이름/계이름 전환은 선택·커서·Redo·원시 
     await page.getByLabel("악보 라벨", { exact: true }).selectOption(mode);
     await expect(labels(staff)).toHaveText([...expected]);
     if (mode !== "none") await readable(staff);
+    await openMode(page, "다듬기");
     await expect(page.getByTestId("editor-content").locator('button[aria-pressed="true"]')).toHaveCount(1);
+    await openMode(page, "입력");
     await expect(page.getByTestId("edit-cursor-position")).toHaveAttribute("data-tick", cursor!);
   }
   await page.clock.runFor(1000);
@@ -79,6 +85,7 @@ test("D/Db/C# 후보·확정·취소·Undo/Redo의 라벨은 각 Score 철자와
   const panel = await preview(page, "major:2");
   await page.getByLabel("악보 라벨", { exact: true }).selectOption("fixed-do");
   await expect(labels(panel.getByTestId("staff"))).toHaveText(["레", "미", "파♯", "라"]);
+  await openMode(page, "다듬기");
   await expect(panel.getByRole("button", { name: "확정", exact: true })).toBeEnabled();
   await panel.getByRole("button", { name: "확정", exact: true }).click(); await expect(labels(staff)).toHaveText(["레", "미", "파♯", "라"]);
   await page.getByRole("button", { name: "Undo", exact: true }).click(); await expect(labels(staff)).toHaveText(["도", "레", "미", "솔"]);
@@ -88,23 +95,32 @@ test("D/Db/C# 후보·확정·취소·Undo/Redo의 라벨은 각 Score 철자와
 
 test("타이 머리 라벨·편집·재생 하이라이트·모드 전환·JSON 및 새로고침 복원을 유지한다", async ({ page }) => {
   const id = "e2e-label-playback"; await page.goto(`/editor/${id}`);
+  await openMode(page, "다듬기");
   await page.getByLabel("기본 템포 (BPM)", { exact: true }).fill("60"); await page.getByRole("button", { name: "템포 적용", exact: true }).click();
+  await openMode(page, "입력");
   for (let index = 0; index < 3; index++) await page.getByRole("button", { name: "MIDI 60", exact: true }).click();
   await page.getByRole("button", { name: "2분음표", exact: true }).click(); await page.getByRole("button", { name: "MIDI 67", exact: true }).click();
   await page.getByRole("button", { name: "쉼표 삽입", exact: true }).click(); await save(page);
   const staff = mainStaff(page); await page.getByLabel("악보 라벨", { exact: true }).selectOption("letter");
   await expect(labels(staff)).toHaveText(["C4", "C4", "C4", "G4"]); await expect(staff.locator(".vf-stavetie")).toHaveCount(1); await readable(staff);
   const firstId = (await storedScore(page, id)).parts[0].measures[0].events[0].id;
+  await openMode(page, "다듬기");
   await page.getByTestId("editor-content").locator(`button[data-event-id="${firstId}"]`).click();
   await page.getByRole("button", { name: "반음 올리기", exact: true }).click(); await expect(labels(staff)).toHaveText(["C♯4", "C4", "C4", "G4"]); await save(page);
   const before = await storedScore(page, id);
+  await openMode(page, "연습");
   await page.getByLabel("메트로놈", { exact: true }).check(); await page.getByRole("button", { name: "Play", exact: true }).click();
+  await openMode(page, "다듬기");
   await expect(staff.locator('[data-event-id][data-playing="true"]')).toHaveCount(1);
   await page.getByLabel("악보 라벨", { exact: true }).selectOption("fixed-do");
   await expect(labels(staff)).toHaveText(["도♯", "도", "도", "솔"]);
+  await openMode(page, "연습");
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible(); await expect(page.getByLabel("메트로놈", { exact: true })).toBeChecked();
+  await openMode(page, "다듬기");
   await expect(staff.locator('[data-event-id][data-playing="true"]')).toHaveCount(1);
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Stop", exact: true }).click(); await expect(staff.locator('[data-playing="true"]')).toHaveCount(0);
+  await openMode(page, "내보내기");
   const download = page.waitForEvent("download"); await page.getByRole("button", { name: "JSON 백업", exact: true }).click();
   const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   expect(JSON.parse(Buffer.concat(chunks).toString("utf8"))).toEqual(before);

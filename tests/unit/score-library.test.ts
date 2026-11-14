@@ -56,4 +56,24 @@ describe("score library use cases", () => {
     const list = await listScores(repository);
     expect(list.map((item) => item.id).sort()).toEqual(["a", "b"]);
   });
+
+  it("creates a score with the chosen settings (Phase 7 A-2 /new)", async () => {
+    const repository = new MemoryScoreRepository();
+    const keySignature = { tonic: "G" as const, alter: 0, mode: "major" as const, fifths: 1 };
+    const score = await createNewScore(repository, {
+      id: "s", createdAt: CREATED_AT, title: "봄", tempoBpm: 72,
+      timeSignature: { numerator: 3, denominator: 4 }, keySignature,
+    });
+    expect(score.tempoBpm).toBe(72);
+    expect(score.parts[0].timeSignature).toEqual({ numerator: 3, denominator: 4 });
+    expect(score.parts[0].keySignature).toEqual(keySignature);
+    expect((await repository.read("s"))?.score.tempoBpm).toBe(72);
+  });
+
+  it("refuses invalid settings without saving anything", async () => {
+    const repository = new MemoryScoreRepository();
+    await expect(createNewScore(repository, { id: "bad", createdAt: CREATED_AT, tempoBpm: 9 })).rejects.toThrow(/tempoBpm/);
+    await expect(createNewScore(repository, { id: "bad", createdAt: CREATED_AT, title: "   " })).rejects.toThrow();
+    expect(repository.size()).toBe(0);
+  });
 });

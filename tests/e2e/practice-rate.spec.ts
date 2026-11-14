@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openMode } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경·무저장·새로고침 초기화", async ({ page }) => {
@@ -11,6 +12,7 @@ test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경
   const rowBefore = await storedRow(page, id);
   expect((await storedScore(page, id)).tempoBpm).toBe(120);
 
+  await openMode(page, "연습");
   const rate = page.getByTestId("practice-rate");
   const slider = page.getByLabel("연습 속도", { exact: true });
   const cursor = page.getByTestId("playback-position");
@@ -26,9 +28,11 @@ test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경
   await expect(rate).toContainText("재생 60 BPM");
   await expect(rate).toContainText("악보 템포 120 BPM");
   await expect(page.getByRole("button", { name: "50%", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await openMode(page, "다듬기");
   await expect(page.getByLabel("기본 템포 (BPM)", { exact: true })).toHaveValue("120");
 
   // Keyboard: 5% steps and the 25%/150% bounds.
+  await openMode(page, "연습");
   await slider.focus();
   await page.keyboard.press("ArrowRight");
   await expect(rate).toHaveAttribute("data-rate", "55");
@@ -50,9 +54,11 @@ test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경
   await expect(cursor).toContainText("재생 중");
   expect(Number(await cursor.getAttribute("data-tick"))).toBeGreaterThanOrEqual(tickBefore);
   await expect.poll(async () => Number(await cursor.getAttribute("data-tick"))).toBeGreaterThan(tickBefore + 400);
+  await openMode(page, "다듬기");
   await expect(page.getByTestId("staff").locator('[data-event-id][data-playing="true"]')).toHaveCount(1);
 
   // Paused: the tick is kept, and resume continues at the new rate.
+  await openMode(page, "연습");
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(cursor).toContainText("일시정지");
   const paused = Number(await cursor.getAttribute("data-tick"));
@@ -71,7 +77,9 @@ test("연습 속도: 기본 100%·프리셋·키보드 조작·재생 중 변경
   expect(await storedRow(page, id)).toEqual(rowBefore);
 
   await page.reload();
+  await openMode(page, "다듬기");
   await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+  await openMode(page, "연습");
   await expect(page.getByTestId("practice-rate")).toHaveAttribute("data-rate", "100");
   expect(await storedRow(page, id)).toEqual(rowBefore);
 });
@@ -82,9 +90,9 @@ test("연습 속도: 모바일 터치로 프리셋을 선택하고 재생한다"
   try {
     await page.goto("/editor/e2e-practice-rate-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
-    await page.getByRole("tab", { name: "편집", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "재생·연습", exact: true }).tap(); // phone layout: P6-03 tabs
+    await page.getByRole("tab", { name: "연습", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await page.getByRole("button", { name: "50%", exact: true }).tap();
     await expect(page.getByTestId("practice-rate")).toHaveAttribute("data-rate", "50");
     await page.getByRole("button", { name: "Play", exact: true }).tap();

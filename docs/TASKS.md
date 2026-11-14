@@ -1445,3 +1445,21 @@
 - 테스트 보정: 다운로드 파일 이름 비교를 `normalize("NFC")`로 통일(WebKit/macOS가 한글 파일 이름을 NFD로 돌려줌, 기존 `editor.spec.ts` 관례와 동일). 기대 문자열은 그대로.
 - iPhone 홈 화면 아이콘 `src/app/apple-icon.png`(180×180) 추가, 홈 E2E 확인. MANUAL_UAT_CHECKLIST에 UAT-B(베타 신기능 13항목)·P6-10 권장 실행 순서 추가.
 - 로컬 검증: 단위 1020, E2E 102/102 PASS, typecheck·lint·architecture·build PASS.
+
+## 43. Phase 7 계획 제안 (문서만, 2026-11-14)
+
+- 사용자 요청: 화면 흐름 개편(단계형 시작)과 국악기 오선보(향피리·25현 가야금 우선) 계획 문서. 조사 결과는 대화 기록.
+- 산출: [PHASE7_MASTER_PLAN](PHASE7_MASTER_PLAN.md)(결정 D-05 1~10), [PHASE7_BACKLOG](PHASE7_BACKLOG.md)(트랙 A 6작업, 트랙 B 6작업, UAT-G).
+- 상태: **D-05 승인(2026-11-14, 권고안 그대로).** 구현은 §44.
+
+## 44. Phase 7 트랙 A: A-1~A-4, A-6 (2026-11-14, 커밋 전)
+
+- A-1 화면 설계: ui-craft shape 시안 → 사용자 "권장안대로" 승인(백로그 A-1 확정 5항목).
+- A-2 `/new`: 제목·박자·템포·조성·목표 악기(피아노만 선택 가능) → "만들기" 1회 = 악보 1개 → `/editor/<id>?start=piano`(입력 모드). `createNewScore`가 설정값을 받고 저장 전에 검증.
+- A-3 편집기 4모드: 입력/다듬기/연습/내보내기, 데스크톱·휴대폰 공통(휴대폰은 아래 고정). 악보·라벨·요약은 항상 위, 상단 "이름 바꾸기"·Undo/Redo·저장. 모드는 저장하지 않음, 패널은 숨김만(상태 보존). WAI-ARIA 탭(화살표·Home·End). 미리보기·재생·내보내기 도구는 이전처럼 `editor-content` 밖.
+- A-4 `/record`: `HummingFlow` 4단계, ④ "악보 만들기"에서 `createTranscribedScore`로 처음 저장. 홈 "허밍으로 시작" → `/record`.
+- 공통: `--hb-*` 색·모서리 변수, `features/score-setup`(`parseScoreSetup`, `ScoreSetupFields`).
+- 구현 기본값: 입력 레벨은 ③에서 표시(마이크는 녹음 시작 때 한 번만 연다). `/new`에서 저장소를 못 쓸 때의 "저장 없이 편집기 열기"는 기본 설정의 메모리 악보로 열린다(선택한 설정은 넘기지 않음).
+- A-6: 기존 E2E 26개 파일에 모드 전환 단계(`openMode`)·`renameScore`만 추가, 기대값 유지. 바뀐 계약 3개는 새 테스트로 대체(데스크톱 "탭 없음" → 4모드·키보드·무저장, 홈 "허밍으로 시작" → `/record` 3개, 모바일 탭 이름). 새 E2E: `record-flow.spec.ts` 3, home `/new` 2·옛 `?start=hum` 1, a11y `/new`·`/record`·편집기 4모드.
+- 검증: unit 73파일/1033 PASS, typecheck·lint PASS, architecture 위반 0, build PASS, **E2E 107/107 PASS**(최종 코드). axe 0건(`/new`, `/record` ①②, 편집기 4모드 데스크톱·휴대폰).
+- 미검증: 실제 마이크·실제 청취, Safari·휴대폰 실기기. 남은 일: A-5(편집기 "허밍 추가"를 단계 화면으로), 휴대폰 다듬기 모드가 긴 문제(P2).

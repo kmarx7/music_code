@@ -1,6 +1,10 @@
 import { ScoreConflictError, type ScoreRepository, type ScoreSummary } from "@/application/ports";
-import type { Score } from "@/domain/score/types";
-import { createEmptyScore } from "@/domain/score/create";
+import type { KeySignature, Score, TimeSignature } from "@/domain/score/types";
+import type { ClipboardPayload } from "@/domain/score/clipboard";
+import { applyEditCommand } from "@/domain/commands";
+import { planTranscriptionCommit } from "@/application/transcription";
+import { createEmptyScore, type CreateScoreInput } from "@/domain/score/create";
+import { validateScore } from "@/domain/score/validate";
 import { deserializeScore, serializeScore } from "@/domain/score";
 import { exportFileName } from "@/application/export";
 
@@ -68,16 +72,32 @@ export async function openOrCreateScore(
   }
 }
 
-export async function createNewScore(
-  repository: ScoreRepository,
-  input: { id: string; createdAt: string; title?: string; measureCount?: number },
-): Promise<Score> {
+/** Settings a new score may start with (Phase 7 A-2 `/new`). Everything else uses the empty-score defaults. */
+export interface NewScoreInput {
+  id: string;
+  createdAt: string;
+  title?: string;
+  measureCount?: number;
+  tempoBpm?: number;
+  timeSignature?: CreateScoreInput["timeSignature"];
+  keySignature?: CreateScoreInput["keySignature"];
+}
+
+/** Creates and saves one empty score. Invalid settings are refused before anything is written. */
+export async function createNewScore(repository: ScoreRepository, input: NewScoreInput): Promise<Score> {
+  const title = (input.title ?? "새 악보").trim();
+  if (!title) throw new Error("제목을 입력해 주세요.");
   const score = createEmptyScore({
     id: input.id,
-    title: input.title ?? "새 악보",
+    title,
     measureCount: input.measureCount ?? 8,
+    tempoBpm: input.tempoBpm,
+    timeSignature: input.timeSignature,
+    keySignature: input.keySignature,
     createdAt: input.createdAt,
   });
+  const issues = validateScore(score);
+  if (issues.length > 0) throw new Error(issues.map((issue) => issue.message).join(" "));
   await repository.create(score);
   return score;
 }
@@ -93,4 +113,38 @@ export function listScores(repository: ScoreRepository): Promise<ScoreSummary[]>
  */
 export async function probeScoreStorage(repository: ScoreRepository): Promise<boolean> {
   try { await repository.list(); return true; } catch { return false; }
+}
+
+export interface TranscribedScoreInput {
+  id: string;
+  createdAt: string;
+  setup: { title: string; tempoBpm: number; timeSignature: TimeSignature; keySignature: KeySignature };
+  /** The confirmed take (transcription candidate). */
+  clipboard: ClipboardPayload;
+  /** Measure ids for the measures the take adds beyond the first eight. */
+  nextId: () => string;
+}
+
+/**
+ * The score "악보 만들기" would save (Phase 7 decision 2): an empty score with the step-1 settings and the take
+ * pasted from measure 1 through the same PasteEvents command the editor uses. Pure; nothing is stored.
+ */
+export function buildTranscribedScore(input: TranscribedScoreInput): { ok: true; score: Score } | { ok: false; message: string } {
+  const empty = createEmptyScore({ id: input.id, measureCount: 8, createdAt: input.createdAt, ...input.setup });
+  const plan = planTranscriptionCommit(empty, input.clipboard, { target: "end", cursorTick: null, nextMeasureId: input.nextId });
+  if (!plan.ok) return plan;
+  const applied = applyEditCommand(empty, plan.command);
+  if (!applied.ok) return { ok: false, message: applied.error.message };
+  const issues = validateScore(applied.score);
+  if (issues.length > 0) return { ok: false, message: issues.map((issue) => issue.message).join(" ") };
+  // A new score starts with its own creation time, not the command's edit time.
+  return { ok: true, score: { ...applied.score, updatedAt: input.createdAt } };
+}
+
+/** Saves the score built from a confirmed take. One call = one score; a failed build writes nothing. */
+export async function createTranscribedScore(repository: ScoreRepository, input: TranscribedScoreInput): Promise<Score> {
+  const built = buildTranscribedScore(input);
+  if (!built.ok) throw new Error(built.message);
+  await repository.create(built.score);
+  return built.score;
 }
