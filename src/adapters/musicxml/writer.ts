@@ -1,6 +1,6 @@
 import type { ExportPort, ExportWriteResult } from "@/application/ports";
-import { measureStartTick, measureTicks, planPartNotation } from "@/domain/score";
-import type { NotatableDuration, NotationFragment, Part, Score } from "@/domain/score";
+import { assignGrandStaves, measureStartTick, measureTicks, planPartNotation, usesGrandStaff } from "@/domain/score";
+import type { GrandStaffNumber, NotatableDuration, NotationFragment, Part, Score } from "@/domain/score";
 
 /*
  * MusicXML 4.0 partwise writer (D-03 #5, #6): uncompressed, divisions 960 (= Score PPQ), key/time/clef in each
@@ -9,6 +9,7 @@ import type { NotatableDuration, NotationFragment, Part, Score } from "@/domain/
  * Gaps between events advance with <forward> (no invented rests). Labels and velocity are not written.
  * Implementation defaults: one voice, no <accidental> (readers derive it from <alter>), part ids P1..Pn,
  * empty measures stay empty, a measure with events is filled to its end with <forward>.
+ * A 25현 가야금 part is one voice on a grand staff: <staves>2</staves>, G and F clefs, and <staff> on every note.
  */
 
 const TYPE_NAMES: Readonly<Record<NotatableDuration["base"], string>> = {
@@ -21,7 +22,7 @@ export function escapeXml(value: string): string {
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, "");
 }
 
-function fragmentXml(fragment: NotationFragment, tiedFrom: ReadonlySet<string>, tiedTo: ReadonlySet<string>): string[] {
+function fragmentXml(fragment: NotationFragment, tiedFrom: ReadonlySet<string>, tiedTo: ReadonlySet<string>, staff?: GrandStaffNumber): string[] {
   const { event, duration, index, count } = fragment;
   const lines = ["<note>"];
   if (event.kind === "rest") {
@@ -39,6 +40,7 @@ function fragmentXml(fragment: NotationFragment, tiedFrom: ReadonlySet<string>, 
   for (const type of ties) lines.push(`  <tie type="${type}"/>`);
   lines.push("  <voice>1</voice>", `  <type>${TYPE_NAMES[duration.base]}</type>`);
   for (let dot = 0; dot < duration.dots; dot++) lines.push("  <dot/>");
+  if (staff !== undefined) lines.push(`  <staff>${staff}</staff>`);
   if (ties.length) lines.push(`  <notations>${ties.map((type) => `<tied type="${type}"/>`).join("")}</notations>`);
   lines.push("</note>");
   return lines;
@@ -50,6 +52,7 @@ function partXml(part: Part, measures: readonly (readonly NotationFragment[])[],
   const tiedFrom = new Set(part.ties.map((tie) => tie.from));
   const tiedTo = new Set(part.ties.map((tie) => tie.to));
   const length = measureTicks(part.timeSignature);
+  const staves = usesGrandStaff(part) ? assignGrandStaves(measures) : null;
   const lines: string[] = [];
   part.measures.forEach((measure, m) => {
     lines.push(`<measure number="${m + 1}">`);
@@ -58,8 +61,11 @@ function partXml(part: Part, measures: readonly (readonly NotationFragment[])[],
       const { fifths, mode } = part.keySignature;
       const { numerator, denominator } = part.timeSignature;
       const clef = part.clef === "bass" ? "<sign>F</sign><line>4</line>" : "<sign>G</sign><line>2</line>";
+      const clefs = staves
+        ? ["  <staves>2</staves>", '  <clef number="1"><sign>G</sign><line>2</line></clef>', '  <clef number="2"><sign>F</sign><line>4</line></clef>']
+        : [`  <clef>${clef}</clef>`];
       body.push("<attributes>", "  <divisions>960</divisions>", `  <key><fifths>${fifths}</fifths><mode>${mode}</mode></key>`,
-        `  <time><beats>${numerator}</beats><beat-type>${denominator}</beat-type></time>`, `  <clef>${clef}</clef>`, "</attributes>");
+        `  <time><beats>${numerator}</beats><beat-type>${denominator}</beat-type></time>`, ...clefs, "</attributes>");
       if (tempoBpm !== undefined) {
         body.push('<direction placement="above">',
           `  <direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${tempoBpm}</per-minute></metronome></direction-type>`,
@@ -68,11 +74,11 @@ function partXml(part: Part, measures: readonly (readonly NotationFragment[])[],
     }
     const start = measureStartTick(measure.index, part.timeSignature);
     let cursor = start;
-    for (const fragment of measures[m] ?? []) {
+    (measures[m] ?? []).forEach((fragment, position) => {
       if (fragment.startTick > cursor) body.push(...forward(fragment.startTick - cursor));
-      body.push(...fragmentXml(fragment, tiedFrom, tiedTo));
+      body.push(...fragmentXml(fragment, tiedFrom, tiedTo, staves?.[m][position]));
       cursor = fragment.startTick + fragment.duration.ticks;
-    }
+    });
     if ((measures[m]?.length ?? 0) > 0 && cursor < start + length) body.push(...forward(start + length - cursor));
     lines.push(...body.map((line) => `  ${line}`), "</measure>");
   });

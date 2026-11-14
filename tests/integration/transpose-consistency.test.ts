@@ -18,6 +18,8 @@ vi.mock("vexflow", async (original) => {
   return { ...actual,
     Renderer: class { static Backends = { SVG: 1 }; resize() {} getContext() { return {}; } },
     Stave: class {
+      // The renderer reads where notes may start (clef/key/time take room at the start of a row).
+      getNoteStartX() { return 20; } getNoteEndX() { return 200; }
       addClef() { return this; } addTimeSignature() { return this; }
       addKeySignature(key: string) { notation.keys.push(key); return this; } setContext() { return this; } draw() {}
     },

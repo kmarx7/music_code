@@ -1,6 +1,6 @@
 import type { NoteLabelMode } from "@/domain/music-theory";
 import type { Score } from "@/domain/score/types";
-import { renderScoreInto, STAFF_ROW_LAYOUT } from "./renderScore";
+import { renderScoreInto, STAFF_ROW_LAYOUT, staffRowGeometry } from "./renderScore";
 
 interface Box { x: number; y: number; width: number; height: number }
 
@@ -13,10 +13,11 @@ const BAND_BOTTOM = 100;
  * The viewBox of one printed row: the full canvas width (so every row prints at the same scale) and the row's
  * staff band, grown to whatever the row actually drew (ledger lines, labels, ties).
  */
-export function printRowViewBox(drawn: Box, row: number, rowHeight: number, canvas: { x: number; width: number }): Box {
+export function printRowViewBox(drawn: Box, row: number, rowHeight: number, canvas: { x: number; width: number }, bassOffset = 0): Box {
   const origin = row * rowHeight + STAFF_ROW_LAYOUT.staveTop;
   const top = Math.min(drawn.y, origin + BAND_TOP) - MARGIN;
-  const bottom = Math.max(drawn.y + drawn.height, origin + BAND_BOTTOM) + MARGIN;
+  // A grand staff (25현 가야금) keeps its bass stave in the same printed row.
+  const bottom = Math.max(drawn.y + drawn.height, origin + BAND_BOTTOM + bassOffset) + MARGIN;
   const left = Math.min(canvas.x, drawn.x - MARGIN);
   const right = Math.max(canvas.x + canvas.width, drawn.x + drawn.width + MARGIN);
   return { x: left, y: top, width: right - left, height: bottom - top };
@@ -33,11 +34,13 @@ export async function renderPrintRows(host: HTMLDivElement, score: Score, labelM
   await host.ownerDocument.fonts?.ready;
   const svg = host.querySelector("svg");
   if (!svg) return [];
-  const rowHeight = labelMode === "none" ? STAFF_ROW_LAYOUT.rowHeight : STAFF_ROW_LAYOUT.labelledRowHeight;
+  const part = score.parts[0];
+  const { rowHeight, bassOffset } = part ? staffRowGeometry(part, labelMode)
+    : { rowHeight: labelMode === "none" ? STAFF_ROW_LAYOUT.rowHeight : STAFF_ROW_LAYOUT.labelledRowHeight, bassOffset: 0 };
   const view = svg.viewBox?.baseVal;
   const canvas = view && view.width > 0 ? { x: view.x, width: view.width } : { x: 0, width: Number(svg.getAttribute("width")) || svg.getBBox().width };
   const groups = Array.from(svg.children).filter((child): child is SVGGElement => child.matches("g[data-staff-row]"));
-  const boxes = groups.map((group) => printRowViewBox(group.getBBox(), Number(group.getAttribute("data-staff-row")), rowHeight, canvas));
+  const boxes = groups.map((group) => printRowViewBox(group.getBBox(), Number(group.getAttribute("data-staff-row")), rowHeight, canvas, bassOffset));
   const left = Math.min(...boxes.map((box) => box.x));
   const right = Math.max(...boxes.map((box) => box.x + box.width));
   return groups.map((group, index) => {

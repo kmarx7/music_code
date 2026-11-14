@@ -1,5 +1,5 @@
 import type { Part, Score, ScoreEvent } from "@/domain/score/types";
-import { planPartNotation } from "@/domain/score";
+import { assignGrandStaves, planPartNotation, usesGrandStaff } from "@/domain/score";
 import type { NotationIssue } from "@/domain/score";
 import type { NotatableDuration } from "@/domain/score/tie";
 import { measureStartTick, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
@@ -38,8 +38,21 @@ const MEASURE_WIDTH = 220;
 const ROW_HEIGHT = 130;
 const LABELLED_ROW_HEIGHT = 180;
 const STAVE_TOP = 40;
+/** Distance from the treble stave to the bass stave of a grand staff (25현 가야금), without and with labels. */
+const GRAND_BASS_OFFSET = 100;
+const GRAND_LABELLED_BASS_OFFSET = 150;
 /** Row geometry shared with the print layout (P5-06). */
 export const STAFF_ROW_LAYOUT = { rowHeight: ROW_HEIGHT, labelledRowHeight: LABELLED_ROW_HEIGHT, staveTop: STAVE_TOP, measuresPerRow: MEASURES_PER_ROW } as const;
+
+/**
+ * Height of one staff row for this part and label mode. A grand-staff part adds the bass stave below the treble one
+ * (`bassOffset` is the distance between them, 0 on a single staff).
+ */
+export function staffRowGeometry(part: Part, labelMode: NoteLabelMode): { rowHeight: number; bassOffset: number } {
+  const labelled = labelMode !== "none";
+  const bassOffset = usesGrandStaff(part) ? (labelled ? GRAND_LABELLED_BASS_OFFSET : GRAND_BASS_OFFSET) : 0;
+  return { rowHeight: (labelled ? LABELLED_ROW_HEIGHT : ROW_HEIGHT) + bassOffset, bassOffset };
+}
 
 function keySpecOf(part: Part): string {
   return KEY_SPEC_BY_FIFTHS[part.keySignature.fifths] ?? "C";
@@ -123,9 +136,14 @@ export async function renderScoreInto(
   }
   if (!liveCache(element)) {
     const plannedRows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
-    reserveHeight(element, plannedRows * ((options?.labelMode ?? "none") !== "none" ? LABELLED_ROW_HEIGHT : ROW_HEIGHT) + STAVE_TOP);
+    reserveHeight(element, plannedRows * staffRowGeometry(part, options?.labelMode ?? "none").rowHeight + STAVE_TOP);
   }
   const vexflow = await import("vexflow");
+  // VexFlow starts loading its music font on import but does not wait for it. Glyph widths measured before
+  // Bravura is ready come from a fallback font, which drew stems and ledger lines away from their noteheads
+  // (UAT, 2026-11-15). Browser only; a failed load still renders, as before.
+  const fonts = element.ownerDocument?.fonts;
+  if (fonts?.load) await fonts.load("30pt Bravura").catch(() => undefined);
   if (options?.signal?.aborted || renderRequests.get(element) !== request) return;
   try {
     const {
@@ -140,6 +158,7 @@ export async function renderScoreInto(
       Dot,
       Annotation,
       SVGContext,
+      StaveConnector,
     } = vexflow;
 
 
@@ -148,13 +167,17 @@ export async function renderScoreInto(
     let expandedLayout = labelled;
     const continuation = new Set(part.ties.map((tie) => tie.to));
     const annotations = new Map<InstanceType<typeof StaveNote>, InstanceType<typeof Annotation>>();
-    const rowHeight = labelled ? LABELLED_ROW_HEIGHT : ROW_HEIGHT;
-    let rowX = 10;
+    // 25현 가야금: a grand staff (treble over bass) per row; each glyph goes on the staff assignGrandStaves gives it.
+    const { rowHeight, bassOffset } = staffRowGeometry(part, labelMode);
+    const grandStaves = bassOffset > 0 ? assignGrandStaves(plan.measures) : null;
+    // Room for the grand staff's brace left of the staves.
+    const rowStartX = grandStaves ? 30 : 10;
+    let rowX = rowStartX;
     let rowY = STAVE_TOP;
-    let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
+    let canvasWidth = MEASURES_PER_ROW * MEASURE_WIDTH + rowStartX + 10;
 
     const rows = Math.max(1, Math.ceil(part.measures.length / MEASURES_PER_ROW));
-    const width = MEASURES_PER_ROW * MEASURE_WIDTH + 20;
+    const width = MEASURES_PER_ROW * MEASURE_WIDTH + rowStartX + 10;
     const height = rows * rowHeight + STAVE_TOP;
 
     const kept = liveCache(element);
@@ -195,7 +218,7 @@ export async function renderScoreInto(
     }
     function signatureOf(row: number): string {
       const from = row * MEASURES_PER_ROW;
-      return JSON.stringify([row, labelMode, part.clef, keySpec, part.timeSignature.numerator, part.timeSignature.denominator,
+      return JSON.stringify([row, labelMode, part.clef, bassOffset, keySpec, part.timeSignature.numerator, part.timeSignature.denominator,
         part.measures.slice(from, from + MEASURES_PER_ROW).map((measure, offset) => [measure.index, measure.events.length,
           planned[from + offset].map((fragment) => [fragment.event.id, fragment.event.kind,
             fragment.event.kind === "note" ? vexKeyOf(fragment.event) : "", fragment.startTick, fragment.duration.base,
@@ -212,7 +235,7 @@ export async function renderScoreInto(
       const row = Math.floor(index / MEASURES_PER_ROW);
       const column = index % MEASURES_PER_ROW;
       if (column === 0) {
-        rowX = 10; rowY = row * rowHeight + STAVE_TOP;
+        rowX = rowStartX; rowY = row * rowHeight + STAVE_TOP;
         const signature = svgContext ? signatureOf(row) : "";
         const previous = previousRows?.[row];
         reused = Boolean(svgContext && previous?.group && previous.signature === signature);
@@ -231,25 +254,38 @@ export async function renderScoreInto(
         if (svgContext && (column === MEASURES_PER_ROW - 1 || index === part.measures.length - 1)) svgContext.closeGroup();
       };
       layout.spaced ||= spaced;
+      const staveX = rowX;
       const stave = new Stave(
         rowX,
         rowY,
         MEASURE_WIDTH,
       );
+      const bassStave = grandStaves ? new Stave(rowX, rowY + bassOffset, MEASURE_WIDTH) : null;
 
       if (column === 0) {
-        stave.addClef(part.clef);
+        stave.addClef(grandStaves ? "treble" : part.clef);
         stave.addKeySignature(keySpec);
+        bassStave?.addClef("bass").addKeySignature(keySpec);
       }
 
       if (index === 0) {
         stave.addTimeSignature(
           `${part.timeSignature.numerator}/${part.timeSignature.denominator}`,
         );
+        bassStave?.addTimeSignature(`${part.timeSignature.numerator}/${part.timeSignature.denominator}`);
       }
 
+      // Both staves of a grand staff start their notes at the same x.
+      if (bassStave) Stave.formatBegModifiers([stave, bassStave]);
       stave.setContext(context);
-      if (!spaced || measure.events.length === 0) stave.draw();
+      bassStave?.setContext(context);
+      // Brace and bar lines joining the two staves of a grand staff.
+      const drawConnectors = () => {
+        if (!bassStave) return;
+        const types = column === 0 ? (["brace", "singleLeft", "singleRight"] as const) : (["singleRight"] as const);
+        for (const type of types) new StaveConnector(stave, bassStave).setType(type).setContext(context).draw();
+      };
+      if (!spaced || measure.events.length === 0) { stave.draw(); bassStave?.draw(); }
       const start = measureStartTick(measure.index, part.timeSignature);
       // A cached row keeps every anchor for later cursor moves; otherwise only the cursor's own measure is measured.
       const anchored = svgContext !== null ||
@@ -258,18 +294,20 @@ export async function renderScoreInto(
         layout.measures.push({ start, points: anchored ? [{ tick: start, x: stave.getNoteStartX() }, ...anchors(),
           { tick: start + length, x: stave.getNoteEndX() }] : [] });
       }
-      if (measure.events.length === 0) { recordAnchors(); rowX += MEASURE_WIDTH; closeRow(); return; }
+      if (measure.events.length === 0) { drawConnectors(); recordAnchors(); rowX += MEASURE_WIDTH; closeRow(); return; }
 
       const events = fragments.map((fragment) => fragment.event);
-      const notes = fragments.map((fragment) => {
+      const staffOf = grandStaves?.[index];
+      const notes = fragments.map((fragment, position) => {
         const event = fragment.event;
+        const clef = staffOf ? (staffOf[position] === 1 ? "treble" : "bass") : part.clef;
         let note: InstanceType<typeof StaveNote>;
         if (event.kind === "rest") {
-          note = new StaveNote({ keys: [part.clef === "bass" ? "d/3" : "b/4"],
-            duration: vexDurationOf(fragment.duration, true), clef: part.clef });
+          note = new StaveNote({ keys: [clef === "bass" ? "d/3" : "b/4"],
+            duration: vexDurationOf(fragment.duration, true), clef });
         } else {
           note = new StaveNote({ keys: [vexKeyOf(event)],
-            duration: vexDurationOf(fragment.duration, false), clef: part.clef });
+            duration: vexDurationOf(fragment.duration, false), clef });
         }
         for (let dot = 0; dot < fragment.duration.dots; dot++) Dot.buildAndAttach([note], { all: true });
         const label = event.kind !== "note" || fragment.index !== 0 || continuation.has(event.id)
@@ -289,11 +327,14 @@ export async function renderScoreInto(
       const tickables: InstanceType<typeof StaveNote | typeof GhostNote>[] = [];
       const ticks: number[] = [];
       let cursor = measureStartTick(measure.index, part.timeSignature);
-      function addGap(tick: number, durationTicks: number) {
+      function ghost(durationTicks: number) {
         const gap = new GhostNote({ duration: "q" });
         // Rational tick multiplication, rather than overriding a visible note's glyph duration.
         gap.applyTickMultiplier(durationTicks, TICKS_PER_QUARTER);
-        tickables.push(gap); ticks.push(tick);
+        return gap;
+      }
+      function addGap(tick: number, durationTicks: number) {
+        tickables.push(ghost(durationTicks)); ticks.push(tick);
       }
       fragments.forEach((fragment, position) => {
         if (fragment.startTick > cursor) addGap(cursor, fragment.startTick - cursor);
@@ -305,23 +346,35 @@ export async function renderScoreInto(
       });
       if (cursor < start + length) addGap(cursor, start + length - cursor);
 
-      const voice = new Voice({
+      const voiceOf = (items: typeof tickables) => new Voice({
         numBeats: part.timeSignature.numerator,
         beatValue: part.timeSignature.denominator,
       })
-        .addTickables(tickables)
+        .addTickables(items)
         .setStrict(true);
-
+      const voice = voiceOf(tickables);
+      const voices = [voice];
       Accidental.applyAccidentals([voice], keySpec);
       const formatter = new Formatter().joinVoices([voice]);
       // Annotation-aware VexFlow spacing, expanding dense measures rather than overlapping labels.
-      const inset = spaced ? stave.getNoteStartX() - stave.getX() : 0;
-      const measureWidth = spaced ? Math.max(MEASURE_WIDTH, Math.ceil(formatter.preCalculateMinTotalWidth([voice])) + inset + 40) : MEASURE_WIDTH;
-      if (spaced) stave.setWidth(measureWidth);
-      formatter.format([voice], spaced ? measureWidth - inset - 30 : measureWidth - 40);
+      // The clef, key and time signature at the start of a row take room from the notes, spaced or not
+      // (UAT: the last note of the first measure used to land past its bar line).
+      const inset = stave.getNoteStartX() - staveX;
+      const measureWidth = spaced ? Math.max(MEASURE_WIDTH, Math.ceil(formatter.preCalculateMinTotalWidth(voices)) + inset + 40) : MEASURE_WIDTH;
+      if (spaced) { stave.setWidth(measureWidth); bassStave?.setWidth(measureWidth); }
+      formatter.format(voices, Math.min(measureWidth - inset - 30, measureWidth - 40));
       rowX += measureWidth;
-      if (spaced) stave.draw();
-      voice.draw(context, stave);
+      if (spaced) { stave.draw(); bassStave?.draw(); }
+      // Grand staff: the melody stays one voice (one x per beat); each glyph is drawn on its own stave
+      // (cross-staff notes). Staves are given after formatting, as for the single staff, and draw() without a
+      // stave argument keeps them.
+      if (staffOf && bassStave) {
+        tickables.forEach((tickable) => tickable.setStave(stave));
+        notes.forEach((note, position) => { if (staffOf[position] === 2) note.setStave(bassStave); });
+        voice.draw(context);
+      } else voice.draw(context, stave);
+      // After the notes: the brace glyph's font must not leak into note metrics.
+      drawConnectors();
       recordAnchors(() => tickables.map((note, index) => ({ tick: ticks[index], x: note.getAbsoluteX() })));
 
       events.forEach((event, position) => {
@@ -414,7 +467,7 @@ export async function renderScoreInto(
       if (svg) {
         const line = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "line");
         for (const [key, value] of Object.entries({ x1: cursorPoint.x, x2: cursorPoint.x,
-          y1: cursorPoint.y, y2: cursorPoint.y + 75, stroke: "#2563eb", "stroke-width": 2,
+          y1: cursorPoint.y, y2: cursorPoint.y + 75 + bassOffset, stroke: "#2563eb", "stroke-width": 2,
           "pointer-events": "none", "data-testid": "staff-edit-cursor", "data-tick": cursorTick,
           "aria-label": "편집 커서" })) line.setAttribute(key, String(value));
         svg.appendChild(line);

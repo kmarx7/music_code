@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { exportScore } from "@/application";
 import { musicXmlExport, writeMusicXml } from "@/adapters/musicxml";
-import { createEmptyScore, createNoteEvent } from "@/domain/score";
+import { createEmptyScore, createNoteEvent, createRestEvent } from "@/domain/score";
 import type { Part, Score } from "@/domain/score";
 import { KEY_SIGNATURE_OPTIONS } from "@/domain/music-theory";
 import { validateMusicXml, xpath } from "../fixtures/xmllint";
@@ -188,5 +188,41 @@ describe("musicXmlExport through exportScore", () => {
     const result = exportScore(score, musicXmlExport);
     expect(result).toMatchObject({ ok: true, file: { filename: `${score.title}.musicxml`, mimeType: "application/vnd.recordare.musicxml+xml" } });
     expect(JSON.stringify(score)).toBe(before);
+  });
+});
+
+describe("writeMusicXml: 25현 가야금 on a grand staff (B-1)", () => {
+  function gayageumScore(): Score {
+    const score = createEmptyScore({ id: "g", createdAt: FIXTURE_CREATED_AT, measureCount: 2 });
+    const part = score.parts[0];
+    const events = [
+      createNoteEvent({ id: "hi", step: "C", octave: 4, startTick: 0, durationTicks: 960 }),
+      createNoteEvent({ id: "lo", step: "E", octave: 2, startTick: 960, durationTicks: 960 }),
+      createRestEvent({ id: "r", startTick: 1920, durationTicks: 960 }),
+      createNoteEvent({ id: "top", step: "G", octave: 5, startTick: 2880, durationTicks: 960 }),
+    ];
+    return { ...score, parts: [{ ...part, instrument: "gayageum-25",
+      measures: part.measures.map((measure) => (measure.index === 0 ? { ...measure, events } : measure)) }] };
+  }
+
+  it("declares two staves with treble and bass clefs, and puts each glyph on its staff; still valid MusicXML 4.0", () => {
+    const text = xml(gayageumScore());
+    valid(text);
+    expect(str(text, "//part[1]/measure[1]/attributes/staves")).toBe("2");
+    expect(str(text, '//part[1]/measure[1]/attributes/clef[@number="1"]/sign')).toBe("G");
+    expect(str(text, '//part[1]/measure[1]/attributes/clef[@number="2"]/sign')).toBe("F");
+    expect(str(text, '//part[1]/measure[1]/attributes/clef[@number="2"]/line')).toBe("4");
+    expect([1, 2, 3, 4].map((n) => str(text, `${note(n)}/staff`))).toEqual(["1", "2", "2", "1"]);
+  });
+
+  it("keeps a single clef and no <staff> for the piano and the 12-string sanjo gayageum", () => {
+    for (const instrument of ["piano", "gayageum-12-sanjo"] as const) {
+      const score = gayageumScore();
+      const text = xml({ ...score, parts: [{ ...score.parts[0], instrument }] });
+      valid(text);
+      expect(count(text, "//staves")).toBe(0);
+      expect(count(text, "//note/staff")).toBe(0);
+      expect(count(text, "//attributes/clef")).toBe(1);
+    }
   });
 });

@@ -970,3 +970,10 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 
 - `RefineSection({ title, summary, children })`(`@/features/score-editor`): ≤768px에서 닫힌 줄(aria-expanded, UI 상태만, 저장 안 함), 그보다 넓으면 줄 숨김·내용 항상 표시. 스타일은 편집기 `EDITOR_CSS`의 `.refine-*`.
 - 편집기: 고른 음표·쉼표 편집 패널 `.refine-selection`은 휴대폰에서 모드 막대 위 고정, `.refine-phone-only` 이전·다음·닫기. Score·Command 계약 변경 없음.
+
+
+## 25현 큰보표 (2026-11-15)
+
+- Domain `@/domain/score`: `InstrumentProfile.grandStaff`, `usesGrandStaff(part)`, `assignGrandStaves(measures): (1|2)[][]`, `GRAND_STAFF_SPLIT_MIDI = 60`. 순수 함수, Score 불변.
+- VexFlow 어댑터: `staffRowGeometry(part, labelMode) → { rowHeight, bassOffset }`(큰보표가 아니면 bassOffset 0). `renderScoreInto`는 그리기 전에 Bravura 글꼴 로드를 기다린다(브라우저만).
+- MusicXML writer: 큰보표 파트는 `<staves>2</staves>`, 번호 붙은 clef 2개, 모든 note에 `<staff>`.

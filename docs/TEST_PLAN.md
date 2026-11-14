@@ -1740,3 +1740,9 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 ## UAT 결함 수정 — 끝 입력 시 마디 자동 추가 (2026-11-15, Claude Code)
 
 - 단위 `append-auto-measure.test.ts` 5개, E2E `auto-measure.spec.ts` 1개. 기존 `append-note.test.ts`의 "가득 찬 악보 거부"(마디 ID 생성기 없을 때)와 `edit-cursor.spec`의 커서 범위 밖 안내는 기대값 그대로 유지.
+
+## 25현 큰보표·악보 글꼴 대기 (2026-11-15, Claude Code)
+
+- 단위: `grand-staff.test.ts`(악기별 큰보표 여부, C4 기준 위·아래, 쉼표 규칙, 붙임줄 같은 보표), `grand-staff-rendering.test.ts`(한 voice·음표별 보표, 보표 간격, 시작 x 일치, 괄호·마디선 연결, 피아노·12현 한 줄, 행 높이), `musicxml-export.test.ts`(staves·clef 번호·staff, XSD).
+- E2E `grand-staff.spec.ts` 4개. 마지막 테스트는 피아노와 25현 모두 첫 로드에서 기둥과 머리 간격 < 3px(글꼴 대기 회귀 방지).
+- 결과: unit 1064, E2E 115/115(Chromium).

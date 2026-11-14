@@ -10,5 +10,6 @@ export * from "./transpose";
 export * from "./range";
 export * from "./range-recommendations";
 export * from "./notation";
+export * from "./grand-staff";
 export * from "./selection";
 export * from "./clipboard";
