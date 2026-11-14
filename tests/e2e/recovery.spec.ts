@@ -37,7 +37,7 @@ test.describe("저장소를 쓸 수 없는 브라우저(P6-05)", () => {
     // MIDI still works from memory.
     const midi = page.waitForEvent("download");
     await page.getByRole("button", { name: "MIDI", exact: true }).click();
-    expect((await midi).suggestedFilename()).toBe("새 악보.mid");
+    expect((await midi).suggestedFilename().normalize("NFC")).toBe("새 악보.mid");
   });
 });
 

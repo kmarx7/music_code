@@ -1436,3 +1436,12 @@
 - 사용자 지시 "일단 허밍버드로 해줘"(결정 12, 출시 전 임시 확정): `src/app/brand.ts` 한 곳에 이름·소개 문구. 루트 메타데이터(제목 템플릿 `%s · 허밍버드`, 설명, applicationName, Open Graph 텍스트), 파비콘 `src/app/icon.svg`(8분음표 마크), 홈 상단 표기, 악보함·편집기 탭 제목, MusicXML `<software>`.
 - 남은 것: OG 이미지(한글 글꼴 포함 필요)·apple-touch-icon PNG 없음 — P2. 개인정보·약관(운영자 정보)은 사용자가 마지막에 제공. push·배포는 별도 승인 대기.
 - 검증: 단위 71파일/1020 PASS, E2E 101/101 PASS(홈 제목·파비콘·og:site_name·라이선스 탭 제목 확인 추가), typecheck·lint·architecture·build PASS. 프로덕션 빌드 홈 화면 확인. 커밋하지 않음.
+
+## 42. P6-09 배포·공개 주소 E2E, 휴대폰 건반 위치 수정 (2026-11-14)
+
+- 사용자 승인 "둘 다 진행해줘": `0a2fcfd` 커밋, GitHub main push(22커밋). Vercel 프로젝트 `00_music_code`는 이미 `kmarx7/music_code`와 연동되어 있어 push로 운영 배포가 자동 생성됐다(Ready, `https://00musiccode.vercel.app`). 공개 주소에서 제목·CSP(개발용 예외 없음)·Permissions-Policy·X-Frame-Options·`/icon.svg` 확인. Vercel MCP는 다른 계정으로 연결되어 프로젝트를 찾지 못해(404) CLI를 사용했다.
+- 공개 주소 E2E(Chromium·WebKit Desktop Safari·WebKit iPhone 15 에뮬레이션, 임시 설정은 실행 후 삭제): 결과는 TEST_PLAN "P6-09 공개 주소 E2E" 참고.
+- 실제 결함 1건 수정: 화면 건반(88건반, 약 1.8k px)이 맨 왼쪽(A0)부터 보여 폭 800px 미만에서 가온 도가 화면 밖이었다. `PianoKeyboard`가 처음 폭이 생길 때 한 번 C4를 가운데로 스크롤(이후 스크롤은 사용자 몫). E2E 추가(휴대폰 폭에서 C4 보임·A0 안 보임, 탭 전환 후 유지). RED 확인 후 수정.
+- 테스트 보정: 다운로드 파일 이름 비교를 `normalize("NFC")`로 통일(WebKit/macOS가 한글 파일 이름을 NFD로 돌려줌, 기존 `editor.spec.ts` 관례와 동일). 기대 문자열은 그대로.
+- iPhone 홈 화면 아이콘 `src/app/apple-icon.png`(180×180) 추가, 홈 E2E 확인. MANUAL_UAT_CHECKLIST에 UAT-B(베타 신기능 13항목)·P6-10 권장 실행 순서 추가.
+- 로컬 검증: 단위 1020, E2E 102/102 PASS, typecheck·lint·architecture·build PASS.

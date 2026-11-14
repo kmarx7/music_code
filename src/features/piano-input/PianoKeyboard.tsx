@@ -9,6 +9,8 @@ const WHITE_WIDTH = 34; // P6-04: black keys reach the WCAG 2.5.8 24×24 px targ
 const BLACK_WIDTH = 24;
 const WHITE_HEIGHT = 120;
 const BLACK_HEIGHT = 74;
+/** The strip opens around middle C: 88 keys are ~1.8k px wide, so a phone would otherwise show only the lowest octave. */
+const CENTRE_MIDI = 60;
 
 export function PianoKeyboard({
   onPitch,
@@ -75,6 +77,23 @@ export function PianoKeyboard({
   const whiteKeys = useMemo(() => keys.filter((key) => !key.isBlack), [keys]);
   const blackKeys = useMemo(() => keys.filter((key) => key.isBlack), [keys]);
   const width = whiteKeys.length * WHITE_WIDTH;
+  const stripRef = useRef<HTMLDivElement | null>(null);
+
+  // Centre once, when the strip first has a width (it can mount hidden behind a phone tab). Later scrolling is the user's.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const centre = keys.find((key) => key.midi === CENTRE_MIDI);
+    if (!strip || !centre) return;
+    const apply = () => {
+      if (strip.clientWidth === 0) return false;
+      strip.scrollLeft = Math.max(0, (centre.whiteIndex + 0.5) * WHITE_WIDTH - strip.clientWidth / 2);
+      return true;
+    };
+    if (apply() || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => { if (apply()) observer.disconnect(); });
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [keys]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -103,7 +122,7 @@ export function PianoKeyboard({
       <p data-testid="piano-preview-message" aria-live="polite" style={{ fontSize: 12, margin: "8px 0" }}>
         {previewError || "입력음을 짧게 한 음씩 미리듣습니다. 소리를 꺼도 음표는 입력됩니다."}
       </p>
-      <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+      <div ref={stripRef} style={{ overflowX: "auto", paddingBottom: 8 }}>
       <div style={{ position: "relative", width, height: WHITE_HEIGHT }}>
         {whiteKeys.map((key, index) => (
           <button

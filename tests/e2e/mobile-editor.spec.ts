@@ -7,6 +7,22 @@ const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.
 test.describe("모바일 편집기(P6-03)", () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
+  test("휴대폰 폭에서도 건반은 가온 도(C4) 둘레부터 보인다: 홈 '피아노로 시작'과 탭 전환 뒤", async ({ page }) => {
+    const keyInView = async (midi: number) => page.getByRole("button", { name: `MIDI ${midi}`, exact: true }).evaluate((key) => {
+      const box = key.getBoundingClientRect(), strip = key.parentElement!.parentElement!.getBoundingClientRect();
+      return box.left >= strip.left && box.right <= strip.right;
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "피아노로 시작", exact: true }).tap();
+    await page.waitForURL(/\?start=piano$/);
+    await expect.poll(() => keyInView(60)).toBe(true);
+    expect(await keyInView(21)).toBe(false);
+    // Still there after visiting another tab (the strip is hidden, not remounted).
+    await tab(page, "파일").tap();
+    await tab(page, "입력").tap();
+    expect(await keyInView(60)).toBe(true);
+  });
+
   test("악보가 첫 화면에 보이고, 탭 4개로 입력·재생·편집·파일을 오가며 상태를 잃지 않는다", async ({ page }) => {
     const id = "e2e-mobile-editor";
     await page.goto(`/editor/${id}`);
@@ -62,7 +78,7 @@ test.describe("모바일 편집기(P6-03)", () => {
     await expect(page.getByLabel("악보 제목", { exact: true })).toBeVisible();
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "MIDI", exact: true }).tap();
-    expect((await download).suggestedFilename()).toBe("새 악보.mid");
+    expect((await download).suggestedFilename().normalize("NFC")).toBe("새 악보.mid");
     expect(await noOverflow(page)).toBe(true);
 
     // Undo/Redo stay reachable from every tab.

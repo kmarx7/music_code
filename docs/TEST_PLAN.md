@@ -1664,3 +1664,16 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - E2E `home.spec.ts`: 문서 제목 "허밍버드 — 흥얼거린 멜로디를 악보로", 홈 상단 표기, `link[rel=icon]` SVG 응답, `og:site_name`, 라이선스 화면 제목 "오픈소스 라이선스 · 허밍버드".
 - 단위 `musicxml-export.test.ts`: `<software>허밍버드</software>`.
 - 미확인: 실제 공유 미리보기(카카오톡·슬랙 등)와 iPhone 홈 화면 아이콘 — 배포 후 UAT.
+
+## Phase 6 P6-09 공개 주소 E2E (2026-11-14, Claude Code)
+
+대상 `https://00musiccode.vercel.app`(코드 `0a2fcfd`), 전체 E2E 101개 × 3환경. iPhone 구간은 실패마다 60초 대기라 55/101에서 중단했다.
+
+| 환경 | 실행 | 실패 | 분류 |
+|---|---|---|---|
+| Chromium | 101 | 0 | — |
+| WebKit Desktop Safari | 101 | 12 | 전부 테스트 환경: 한글 파일 이름 NFD 4(테스트를 NFC 비교로 보정), `page.pdf` Chromium 전용 3, 가짜 마이크 Chromium 전용 5(녹음·CSP 녹음 단계) |
+| WebKit iPhone 15 에뮬레이션 | 55(중단) | 37 | 대부분 데스크톱 전제 테스트가 휴대폰 탭에 숨은 컨트롤을 찾지 못함(제목 입력·조옮김·Play 등), 위 환경 제약 동일, 데스크톱 전용 테스트 1. **실제 결함 1**: 건반이 A0부터 보여 가온 도가 화면 밖(`home.spec` "피아노로 시작") → 수정·E2E 추가 |
+
+- 이것은 실제 Safari·실기기 PASS가 아니다. 휴대폰 동작은 `mobile-editor.spec.ts`(Chromium 모바일 에뮬레이션)와 UAT-B/UAT-T로 확인한다.
+- 데스크톱 전제 테스트를 휴대폰 폭에서 돌리도록 고치는 일은 하지 않았다(탭 조작을 넣으면 테스트 의미가 바뀐다). WebKit 정식 대상화는 P6-10 이후 판단.

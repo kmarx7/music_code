@@ -24,7 +24,7 @@ async function bytes(download: Promise<Download>): Promise<{ name: string; data:
   const file = await download;
   const chunks: Buffer[] = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
-  return { name: file.suggestedFilename(), data: Buffer.concat(chunks) };
+  return { name: file.suggestedFilename().normalize("NFC"), data: Buffer.concat(chunks) };
 }
 
 async function printToPdf(page: Page, path: string) {

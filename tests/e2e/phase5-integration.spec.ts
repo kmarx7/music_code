@@ -11,7 +11,7 @@ async function download(page: Page, name: string): Promise<{ filename: string; d
   const file: Download = await wait;
   const chunks: Buffer[] = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
-  return { filename: file.suggestedFilename(), data: Buffer.concat(chunks) };
+  return { filename: file.suggestedFilename().normalize("NFC"), data: Buffer.concat(chunks) };
 }
 
 test("Phase 5 통합: 피아노 입력→편집→조옮김→연습 속도·라벨 설정→MIDI·MusicXML·PDF 출력, 저장·이력 불변", async ({ page, context }, testInfo) => {

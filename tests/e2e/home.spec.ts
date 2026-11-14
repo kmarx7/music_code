@@ -21,6 +21,8 @@ test("홈 첫 방문: 소개·시작 버튼·로컬 저장 안내, 최근 악보
   await expect(page.getByTestId("brand")).toHaveText("허밍버드");
   const icon = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute("href");
   expect((await page.request.get(icon!)).headers()["content-type"]).toContain("image/svg+xml");
+  const apple = await page.locator('link[rel="apple-touch-icon"]').getAttribute("href");
+  expect((await page.request.get(apple!)).headers()["content-type"]).toContain("image/png");
   expect(await page.locator('meta[property="og:site_name"]').getAttribute("content")).toBe("허밍버드");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "허밍으로 시작", exact: true })).toBeEnabled();
