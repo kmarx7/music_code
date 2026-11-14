@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { NoteLabelMode } from "@/domain/music-theory";
 import type { Score } from "@/domain/score/types";
-import { NotationRenderError, renderScoreInto } from "@/adapters/vexflow/renderScore";
+import { measureTicks } from "@/domain/score";
+import { NotationRenderError, renderScoreInto, STAFF_ROW_LAYOUT } from "@/adapters/vexflow/renderScore";
 
 const NO_RANGE: readonly string[] = [];
 /** Latest range selection per staff element, so an async redraw can re-apply it without a redraw of its own. */
@@ -16,6 +17,25 @@ function markRange(root: HTMLElement, eventIds: readonly string[]): void {
     if (selected.has(element.getAttribute("data-event-id") ?? "")) element.setAttribute("data-range-selected", "true");
     else element.removeAttribute("data-range-selected");
   });
+}
+
+/**
+ * The score as drawn on a phone in the 다듬기 mode: whole staff rows after the last row with any event (note or
+ * rest) and after the edit cursor's row are left out, so an empty second line does not push the tools down.
+ * Display only — the stored Score keeps all its measures. Returns the same object when nothing is dropped.
+ */
+export function compactStaffScore(score: Score, cursorTick: number | null): Score {
+  const part = score.parts[0];
+  if (!part) return score;
+  const perRow = STAFF_ROW_LAYOUT.measuresPerRow;
+  let lastUsed = -1;
+  part.measures.forEach((measure, index) => { if (measure.events.length > 0) lastUsed = index; });
+  if (cursorTick !== null && Number.isSafeInteger(cursorTick) && cursorTick >= 0) {
+    lastUsed = Math.max(lastUsed, Math.min(part.measures.length - 1, Math.floor(cursorTick / measureTicks(part.timeSignature))));
+  }
+  const keep = Math.min(part.measures.length, (Math.floor(Math.max(lastUsed, 0) / perRow) + 1) * perRow);
+  if (keep >= part.measures.length) return score;
+  return { ...score, parts: score.parts.map((candidate, index) => (index === 0 ? { ...candidate, measures: candidate.measures.slice(0, keep) } : candidate)) };
 }
 
 export function StaffView({ score, cursorTick = null, labelMode = "none", onSelectEvent, rangeEventIds = NO_RANGE }: {

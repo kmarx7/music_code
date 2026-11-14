@@ -102,7 +102,13 @@ test.describe("모바일 편집기(P6-03 → Phase 7 작업 모드)", () => {
     }
     await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures[0].events.length).toBe(4);
     const before = await storedScore(page, id);
+    const staffRows = () => page.getByTestId("editor-content").getByTestId("staff").locator("[data-staff-row]")
+      .evaluateAll((groups) => new Set(groups.map((group) => group.getAttribute("data-staff-row"))).size);
+    await expect.poll(staffRows).toBe(2); // 8 measures, four per row: the input mode shows every row
     await tab(page, "다듬기").tap();
+    // Phone 다듬기 leaves out the empty second row (display only), and shows it again for the cursor or other modes.
+    await expect.poll(staffRows).toBe(1);
+    expect((await storedScore(page, id))?.parts[0].measures).toHaveLength(8);
 
     // Closed rows with a summary; their tools are hidden until opened, and the mode fits about one screen.
     const row = (title: string) => page.locator(".refine-toggle").filter({ has: page.locator(".refine-toggle-title", { hasText: title }) });
@@ -145,6 +151,10 @@ test.describe("모바일 편집기(P6-03 → Phase 7 작업 모드)", () => {
       .map((event: { kind: string; pitch?: { midi: number } }) => event.kind === "note" ? event.pitch?.midi : null)).toEqual([60, 63, 64, 67]);
     await page.getByRole("button", { name: "선택한 음표·쉼표 편집 닫기", exact: true }).tap();
     await expect(dock).toHaveCount(0);
+    await tab(page, "입력").tap();
+    await expect.poll(staffRows).toBe(2);
+    await tab(page, "다듬기").tap();
+    await expect.poll(staffRows).toBe(1);
     expect(await noOverflow(page)).toBe(true);
     // Open/closed rows and the dock are UI state: a reload starts closed, and only the pitch edit was stored.
     await page.getByRole("button", { name: "Undo", exact: true }).tap();

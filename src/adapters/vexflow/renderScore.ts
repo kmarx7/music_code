@@ -39,7 +39,7 @@ const ROW_HEIGHT = 130;
 const LABELLED_ROW_HEIGHT = 180;
 const STAVE_TOP = 40;
 /** Row geometry shared with the print layout (P5-06). */
-export const STAFF_ROW_LAYOUT = { rowHeight: ROW_HEIGHT, labelledRowHeight: LABELLED_ROW_HEIGHT, staveTop: STAVE_TOP } as const;
+export const STAFF_ROW_LAYOUT = { rowHeight: ROW_HEIGHT, labelledRowHeight: LABELLED_ROW_HEIGHT, staveTop: STAVE_TOP, measuresPerRow: MEASURES_PER_ROW } as const;
 
 function keySpecOf(part: Part): string {
   return KEY_SPEC_BY_FIFTHS[part.keySignature.fifths] ?? "C";

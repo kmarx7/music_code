@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
@@ -11,7 +11,7 @@ import { downloadScoreJson } from "@/adapters/file-export/json";
 import { createUnavailableScoreRepository, getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { ClipboardControls, EditCursor, NoteLabelsControl, RangeSelect, RefineSection, ScoreSettings, StaffView } from "@/features/score-editor";
+import { ClipboardControls, compactStaffScore, EditCursor, NoteLabelsControl, RangeSelect, RefineSection, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
@@ -104,6 +104,15 @@ const EDITOR_CSS = `
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: var(--hb-surface); border-top: 1px solid var(--hb-border); }
 }
 `;
+
+/** Same breakpoint as the phone layout in EDITOR_CSS. Server render and first paint assume a wide screen. */
+const PHONE_QUERY = "(max-width: 768px)";
+function subscribePhone(onChange: () => void): () => void {
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const readPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
 const panel: React.CSSProperties = {
   background: "#ffffff",
@@ -260,6 +269,12 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
     },
     [durationTicks, moveCursor],
   );
+
+  const phone = useSyncExternalStore(subscribePhone, readPhone, () => false);
+  // Phone 다듬기: leave out trailing staff rows with nothing in them (display only; the Score keeps every measure).
+  const currentScore = session?.current ?? null;
+  const staffScore = useMemo(() => (currentScore && phone && mode === "edit" ? compactStaffScore(currentScore, cursorTick) : currentScore),
+    [currentScore, phone, mode, cursorTick]);
 
   if (!session) {
     return (
@@ -421,7 +436,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
           </div>
           <div className="editor-staff-view">
             {/* Tapping a glyph opens its editor in the "다듬기" mode. */}
-            <StaffView score={score} cursorTick={cursorTick} labelMode={labelMode}
+            <StaffView score={staffScore ?? score} cursorTick={cursorTick} labelMode={labelMode}
               onSelectEvent={(id) => { setSelectedEventId(id); setMode("edit"); }}
               rangeEventIds={rangeSelection?.eventIds} />
           </div>
