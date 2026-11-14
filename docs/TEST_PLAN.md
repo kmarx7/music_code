@@ -1716,3 +1716,16 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 | 기존 테스트 | `schemaVersion` 기대값 2 → 3만 변경(결정 6) | PASS |
 
 - 전체: unit 74파일/1044, **E2E 109/109 PASS**.
+
+## 공개 주소 E2E — 739f81c (2026-11-14, Claude Code)
+
+대상 `https://00musiccode.vercel.app`(코드 `739f81c`), 전체 E2E 109개 × 2환경, 218개 중 206 PASS.
+
+| 환경 | 실행 | 실패 | 분류 |
+|---|---|---|---|
+| Chromium | 109 | 0 | — |
+| WebKit Desktop Safari | 109 | 12 | 가짜 마이크 Chromium 전용 8(recording 3, record-flow 2, phase4 통합, 실시간 음높이, CSP 녹음 단계), `page.pdf` Chromium 전용 3(export 2, phase5 통합), WebKit 기본 Tab 순서 1 |
+
+- 지난 실행(`40c2db3`, WebKit 9건)보다 3건 늘었다. record-flow 2건은 A-3 `/record` 흐름 테스트가 새로 생겨 가짜 마이크 제약에 걸린 것이다.
+- `keyboard-journey`는 홈에서 Tab으로 "피아노로 시작" 링크에 닿지 못해 실패했다. WebKit·Safari는 설정("Tab 키로 모든 컨트롤 이동")을 켜지 않으면 Tab이 링크를 건너뛰고 Option+Tab으로 이동한다. 같은 흐름이 Chromium에서는 PASS다. 제품 결함으로 보지 않았지만 실제 Safari 키보드 사용(Option+Tab)은 UAT에서 확인해야 한다.
+- 실제 Safari·실기기·실제 마이크 PASS가 아니다.

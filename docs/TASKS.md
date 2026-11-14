@@ -1484,3 +1484,8 @@
 - 검증: unit 74파일/1044 PASS, typecheck·lint PASS, architecture 위반 0(순환 1건 발견 후 `InstrumentId`를 constants로 옮겨 해소), build PASS, **E2E 109/109 PASS**.
 - 사용자 지시로 CLAUDE.md의 schemaVersion 문구를 3으로 고쳤다(CLAUDE_HANDOFF DB 설명도 함께).
 - 남은 것: B-1 값 확인 → 프로필 채우기, B-3(악기에 맞추기 화면).
+
+## 47. 공개 주소 E2E 재실행 — 배포 `739f81c` (2026-11-14)
+
+- 사용자 요청 "공개 주소 E2E 다시 돌려줘". `https://00musiccode.vercel.app`(A-5·B-2 포함 `739f81c`)에서 전체 E2E 109개 × Chromium·WebKit Desktop Safari(임시 설정은 실행 후 삭제, 12.5분).
+- **Chromium 109/109 PASS.** WebKit 97/109, 실패 12건은 모두 환경 제약 또는 WebKit 기본 동작으로 분류했다(TEST_PLAN "공개 주소 E2E — 739f81c"). 코드 변경 없음. 실제 Safari·실기기 PASS가 아니다.
