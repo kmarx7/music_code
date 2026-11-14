@@ -22,3 +22,14 @@ export async function openHummingAdd(page: Page): Promise<void> {
   await panel.getByRole("button", { name: "허밍 추가", exact: true }).click();
   await expect(panel).toHaveAttribute("data-state", "mic");
 }
+
+/**
+ * Opens a 다듬기 tool group by its row (P2 option B). On phones the groups start closed; on wider screens the row
+ * is hidden and the content always shows, so this does nothing there.
+ */
+export async function openRefineSection(page: Page, title: string): Promise<void> {
+  const row = page.locator(".refine-toggle").filter({ has: page.locator(".refine-toggle-title", { hasText: title }) });
+  if (!(await row.isVisible())) return;
+  if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+}

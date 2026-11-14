@@ -1729,3 +1729,10 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 지난 실행(`40c2db3`, WebKit 9건)보다 3건 늘었다. record-flow 2건은 A-3 `/record` 흐름 테스트가 새로 생겨 가짜 마이크 제약에 걸린 것이다.
 - `keyboard-journey`는 홈에서 Tab으로 "피아노로 시작" 링크에 닿지 못해 실패했다. WebKit·Safari는 설정("Tab 키로 모든 컨트롤 이동")을 켜지 않으면 Tab이 링크를 건너뛰고 Option+Tab으로 이동한다. 같은 흐름이 Chromium에서는 PASS다. 제품 결함으로 보지 않았지만 실제 Safari 키보드 사용(Option+Tab)은 UAT에서 확인해야 한다.
 - 실제 Safari·실기기·실제 마이크 PASS가 아니다.
+
+## 휴대폰 다듬기 모드 시안 B (2026-11-15, Claude Code)
+
+- `mobile-editor.spec` "다듬기(P2 시안 B)": 닫힌 줄 3개와 요약, 닫힌 도구는 숨김, 전체 높이 < 844×1.4, 줄 열고 닫기, 음 선택 시 편집이 `position: fixed`로 모드 막대 바로 위(±1px)에 붙고 악보가 그 위에 보임, ‹ › 이동과 순번, 반음 편집 저장, 닫기, Undo로 원래 악보.
+- 데스크톱 4모드 테스트: `.refine-toggle` 숨김, 구간·악보 설정 도구가 바로 보임.
+- 휴대폰 터치 테스트 6개는 `openRefineSection`(editor-modes.ts)으로 줄을 연 뒤 기존 확인을 그대로 수행한다.
+- 결과: E2E 110/110(Chromium). 실제 휴대폰·Safari 미검증.

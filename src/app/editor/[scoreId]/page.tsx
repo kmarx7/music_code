@@ -11,7 +11,7 @@ import { downloadScoreJson } from "@/adapters/file-export/json";
 import { createUnavailableScoreRepository, getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
-import { ClipboardControls, EditCursor, NoteLabelsControl, RangeSelect, ScoreSettings, StaffView } from "@/features/score-editor";
+import { ClipboardControls, EditCursor, NoteLabelsControl, RangeSelect, RefineSection, ScoreSettings, StaffView } from "@/features/score-editor";
 import { midiToPitch, PianoKeyboard } from "@/features/piano-input";
 import { SaveButton, useAutosave, type AutosaveHandle } from "@/features/score-library";
 import { PlaybackControls, highlightPlayback } from "@/features/playback";
@@ -78,6 +78,25 @@ const EDITOR_CSS = `
 .editor-modes [role="tab"][aria-selected="true"] { background: var(--hb-surface); color: var(--hb-accent); font-weight: 600;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px var(--hb-border); }
 .editor-modes [role="tab"]:focus-visible { outline: 3px solid #7fb2ff; outline-offset: 1px; }
+/* 다듬기 on phones (Phase 7 P2, option B): tool groups are closed rows; the selected note's editor docks above the mode bar. */
+.refine-toggle, .refine-phone-only { display: none; }
+@media (max-width: 768px) {
+  .refine-section { background: var(--hb-surface); border: 1px solid var(--hb-border); border-radius: 10px; margin-bottom: 8px; }
+  .refine-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 52px; padding: 0 14px; border: 0;
+    background: transparent; color: var(--hb-text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; border-radius: 10px; }
+  .refine-toggle:focus-visible { outline: 3px solid #7fb2ff; outline-offset: 1px; }
+  .refine-toggle-title { font-weight: 600; flex: none; }
+  .refine-toggle-summary { font-size: 13px; color: var(--hb-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .refine-toggle-mark { margin-left: auto; color: var(--hb-muted); font-size: 18px; }
+  .refine-section[data-open="false"] > .refine-body { display: none; }
+  .refine-section > .refine-body { padding: 0 8px 8px; }
+  .refine-section > .refine-body > * { margin-bottom: 0 !important; }
+  .refine-phone-only { display: flex; }
+  .refine-selection { position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom)); z-index: 9;
+    margin: 0 !important; max-height: 50vh; overflow-y: auto; border-radius: 14px 14px 0 0 !important;
+    box-shadow: 0 -1px 2px rgba(28, 31, 38, 0.06), 0 -8px 24px rgba(28, 31, 38, 0.08); }
+  .editor-main[data-docked="true"] { padding-bottom: calc(88px + 50vh + env(safe-area-inset-bottom)); }
+}
 @media (max-width: 768px) {
   .editor-main { padding: 12px 12px calc(88px + env(safe-area-inset-bottom)); }
   .editor-staff-view { max-height: none; }
@@ -257,6 +276,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
   const notes = events.filter((event) => event.kind === "note");
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const selectedNote = selectedEvent?.kind === "note" ? selectedEvent : undefined;
+  const selectedIndex = selectedEvent ? events.indexOf(selectedEvent) : -1;
   const ticksPerMeasure = measureTicks(part.timeSignature);
   const ticksPerBeat = TICKS_PER_QUARTER * 4 / part.timeSignature.denominator;
   const tiedIds = new Set(part.ties.flatMap((tie) => [tie.from, tie.to]));
@@ -339,7 +359,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
     : saveStatus === "conflict" ? "저장 충돌" : saveStatus === "deleted" ? "삭제됨 · 저장 중단" : saveStatus === "error" ? "저장 실패" : "";
 
   return (
-    <main className="editor-main" data-mode={mode}>
+    <main className="editor-main" data-mode={mode} data-docked={mode === "edit" && selectedEvent ? "true" : undefined}>
       <style>{EDITOR_CSS}</style>
       <header className="editor-header">
         <Link href="/" onNavigate={(event) => { event.preventDefault(); void leaveEditor("/"); }} style={{ fontSize: 14, color: "var(--hb-accent)" }}>
@@ -455,7 +475,16 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
 
         <div role="tabpanel" id="mode-panel-edit" aria-labelledby="mode-tab-edit" hidden={mode !== "edit"}>
           {selectedEvent ? (
-            <div style={panel}>
+            <div style={panel} className="refine-selection">
+              <div className="refine-phone-only" style={{ alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <button type="button" aria-label="이전 음표·쉼표" style={button} disabled={selectedIndex <= 0}
+                  onClick={() => setSelectedEventId(events[selectedIndex - 1].id)}>‹</button>
+                <button type="button" aria-label="다음 음표·쉼표" style={button} disabled={selectedIndex >= events.length - 1}
+                  onClick={() => setSelectedEventId(events[selectedIndex + 1].id)}>›</button>
+                <span style={{ fontSize: 13, color: "var(--hb-muted)", fontVariantNumeric: "tabular-nums" }}>
+                  {selectedIndex + 1} / {events.length}</span>
+                <button type="button" style={{ ...button, marginLeft: "auto" }} aria-label="선택한 음표·쉼표 편집 닫기" onClick={() => setSelectedEventId(null)}>닫기</button>
+              </div>
               <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--hb-muted)" }}>
                 {selectedEvent.kind === "rest" ? "선택한 쉼표 편집" : "선택한 음표 편집"}
               </p>
@@ -510,6 +539,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
               ) : null}
             </div>
           ) : null}
+          <RefineSection title="음표 목록" summary={`${events.length}개`}>
           <div style={panel}>
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--hb-muted)" }}>
               음표·쉼표 목록 (선택해서 편집)
@@ -536,12 +566,15 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
               </ul>
             )}
           </div>
+          </RefineSection>
+          <RefineSection title="구간 편집" summary={rangeSelection ? "구간 선택됨" : "복사·잘라내기·붙여넣기"}>
           <div style={panel}>
             <RangeSelect score={score} selection={rangeSelection}
               onChange={(selection) => setRangeState(selection ? { score, selection } : null)} />
             <ClipboardControls score={score} selection={rangeSelection} cursorTick={cursorTick} clipboard={clipboard}
               onCopy={setClipboard} onCommand={clipboardCommand} onPasted={moveCursor} />
           </div>
+          </RefineSection>
         </div>
 
       </div>
@@ -554,7 +587,9 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
       </div>
       <div role="tabpanel" id="mode-panel-edit-more" aria-labelledby="mode-tab-edit" hidden={mode !== "edit"}>
         <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
-        <ScoreSettings score={score} onCommand={runCommand} />
+        <RefineSection title="악보 설정" summary={`템포 ${score.tempoBpm} · ${part.timeSignature.numerator}/${part.timeSignature.denominator}박자`}>
+          <ScoreSettings score={score} onCommand={runCommand} />
+        </RefineSection>
       </div>
       <div role="tabpanel" id="mode-panel-play" aria-labelledby="mode-tab-play" hidden={mode !== "play"}>
         <PlaybackControls score={score} onPosition={showPosition} stopSignal={playbackStopSignal} cursorTick={cursorTick} />

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openMode, openRefineSection } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 const tickOf = async (page: Page) => Number(await page.getByTestId("playback-position").getAttribute("data-tick"));
@@ -127,6 +127,7 @@ test("A–B 반복: 모바일 터치로 켜고 반복 재생·정지한다", asy
     await page.goto("/editor/e2e-ab-loop-touch");
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
     await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
+    await openRefineSection(page, "음표 목록"); // phones: 다듬기 tool groups start closed (P2 option B)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "연습", exact: true }).tap(); // work modes (Phase 7 decision 4)
     await page.getByLabel("A–B 반복", { exact: true }).tap();

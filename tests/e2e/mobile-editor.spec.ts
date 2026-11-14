@@ -92,6 +92,64 @@ test.describe("모바일 편집기(P6-03 → Phase 7 작업 모드)", () => {
     await page.getByRole("button", { name: "Undo", exact: true }).tap();
     await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures[0].events.length).toBe(3);
   });
+
+  test("다듬기(P2 시안 B): 도구는 닫힌 줄로 한 화면에, 고른 음 편집은 모드 막대 위에 고정되어 악보가 보인다", async ({ page }) => {
+    const id = "e2e-mobile-refine";
+    await page.goto(`/editor/${id}`);
+    for (const key of [60, 62, 64, 67]) {
+      const button = page.getByRole("button", { name: `MIDI ${key}`, exact: true });
+      await button.scrollIntoViewIfNeeded(); await button.tap();
+    }
+    await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures[0].events.length).toBe(4);
+    const before = await storedScore(page, id);
+    await tab(page, "다듬기").tap();
+
+    // Closed rows with a summary; their tools are hidden until opened, and the mode fits about one screen.
+    const row = (title: string) => page.locator(".refine-toggle").filter({ has: page.locator(".refine-toggle-title", { hasText: title }) });
+    for (const title of ["음표 목록", "구간 편집", "악보 설정"]) await expect(row(title)).toHaveAttribute("aria-expanded", "false");
+    await expect(row("음표 목록")).toContainText("4개");
+    await expect(row("악보 설정")).toContainText("템포 120 · 4/4박자");
+    await expect(page.getByLabel("구간 첫 마디", { exact: true })).toBeHidden();
+    await expect(page.getByLabel("기본 템포 (BPM)", { exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "조옮김", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(844 * 1.4);
+    await row("구간 편집").tap();
+    await expect(row("구간 편집")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByLabel("구간 첫 마디", { exact: true })).toBeVisible();
+    await row("구간 편집").tap();
+    await expect(page.getByLabel("구간 첫 마디", { exact: true })).toBeHidden();
+
+    // Tapping a note docks its editor just above the mode bar; the staff stays on screen.
+    const staff = page.getByTestId("editor-content").getByTestId("staff");
+    await staff.locator("[data-event-id]").nth(1).tap();
+    const dock = page.locator(".refine-selection");
+    await expect(dock).toContainText("D4");
+    const geometry = await page.evaluate(() => {
+      const dockBox = document.querySelector(".refine-selection")!.getBoundingClientRect();
+      const bar = document.querySelector('[role="tablist"][aria-label="작업 모드"]')!.getBoundingClientRect();
+      const staffBox = document.querySelector('[data-testid="editor-content"] [data-testid="staff"]')!.getBoundingClientRect();
+      return { position: getComputedStyle(document.querySelector(".refine-selection")!).position,
+        dockBottom: dockBox.bottom, dockTop: dockBox.top, barTop: bar.top, staffTop: staffBox.top };
+    });
+    expect(geometry.position).toBe("fixed");
+    expect(Math.abs(geometry.dockBottom - geometry.barTop)).toBeLessThanOrEqual(1);
+    expect(geometry.staffTop).toBeLessThan(geometry.dockTop);
+    // Step through the notes without the list, edit, then close.
+    await page.getByRole("button", { name: "다음 음표·쉼표", exact: true }).tap();
+    await expect(dock).toContainText("E4");
+    await expect(dock).toContainText("3 / 4");
+    await page.getByRole("button", { name: "이전 음표·쉼표", exact: true }).tap();
+    await expect(dock).toContainText("D4");
+    await page.getByRole("button", { name: "반음 올리기", exact: true }).tap();
+    await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures[0].events
+      .map((event: { kind: string; pitch?: { midi: number } }) => event.kind === "note" ? event.pitch?.midi : null)).toEqual([60, 63, 64, 67]);
+    await page.getByRole("button", { name: "선택한 음표·쉼표 편집 닫기", exact: true }).tap();
+    await expect(dock).toHaveCount(0);
+    expect(await noOverflow(page)).toBe(true);
+    // Open/closed rows and the dock are UI state: a reload starts closed, and only the pitch edit was stored.
+    await page.getByRole("button", { name: "Undo", exact: true }).tap();
+    await expect.poll(async () => (await storedScore(page, id))?.parts[0].measures).toEqual(before?.parts[0].measures);
+  });
 });
 
 test("데스크톱도 같은 4모드: 악보 아래 모드 막대, 한 번에 한 모드의 도구, 화살표 키 이동, 모드는 저장하지 않음", async ({ page }) => {
@@ -115,6 +173,10 @@ test("데스크톱도 같은 4모드: 악보 아래 모드 막대, 한 번에 �
   await expect(tab(page, "다듬기")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "조옮김", exact: true })).toBeVisible();
   await expect(page.getByTestId("recording-panel")).toBeHidden();
+  // Desktop keeps every 다듬기 tool open: the phone's closed rows and dock controls are not shown (P2 option B).
+  await expect(page.locator(".refine-toggle").first()).toBeHidden();
+  await expect(page.getByLabel("구간 첫 마디", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("기본 템포 (BPM)", { exact: true })).toBeVisible();
   await page.keyboard.press("End");
   await expect(tab(page, "내보내기")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "MIDI", exact: true })).toBeVisible();

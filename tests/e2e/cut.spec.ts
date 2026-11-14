@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode } from "./editor-modes";
+import { openMode, openRefineSection } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number; durationTicks: number; pitch?: { midi: number } }
@@ -126,7 +126,9 @@ test("잘라내기: 모바일 터치로 잘라내고 붙여넣는다", async ({ 
     await page.goto(`/editor/${id}`);
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
     await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
+    await openRefineSection(page, "음표 목록"); // phones: 다듬기 tool groups start closed (P2 option B)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+    await openRefineSection(page, "구간 편집");
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
     await cutButton(page).tap();
     await expect(page.getByTestId("editor-content").locator("button[data-event-id]")).toHaveCount(0);

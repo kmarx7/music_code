@@ -964,3 +964,9 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - `Part.instrument?: InstrumentId`(없으면 피아노). `deserializeScore`는 v1/v2를 메모리에서 v3로 옮기며 `instrument: "piano"`를 넣는다(`migrated: true`). 읽기만 한 저장본은 다시 쓰지 않는다. 문자열이 아닌 `instrument`는 `INVALID_SHAPE`, 모르는 값은 `INVALID_SCORE`(`INVALID_INSTRUMENT`).
 - `domain/score/instruments`: `getInstrumentProfile(id)` → `{ id, name, verified, range: {lowMidi, highMidi} | null, clefs, tunings }`, `instrumentOf(part)`, `isInstrumentId(value)`, `DEFAULT_INSTRUMENT`. 피아노만 `verified: true`(21–108). 향피리·25현은 B-1 전이라 `range: null`, `tunings: []`.
 - Command: `SetInstrument { partId, instrument, updatedAt }`(오류 `PART_NOT_FOUND`·`INVALID_INSTRUMENT`), `SetClef { partId, clef, updatedAt }`(오류 `PART_NOT_FOUND`·`INVALID_CLEF`). 각각 Undo 1회, 음높이·위치·조표 불변.
+
+
+## 휴대폰 다듬기 모드 (2026-11-15)
+
+- `RefineSection({ title, summary, children })`(`@/features/score-editor`): ≤768px에서 닫힌 줄(aria-expanded, UI 상태만, 저장 안 함), 그보다 넓으면 줄 숨김·내용 항상 표시. 스타일은 편집기 `EDITOR_CSS`의 `.refine-*`.
+- 편집기: 고른 음표·쉼표 편집 패널 `.refine-selection`은 휴대폰에서 모드 막대 위 고정, `.refine-phone-only` 이전·다음·닫기. Score·Command 계약 변경 없음.

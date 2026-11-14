@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openMode, renameScore } from "./editor-modes";
+import { openMode, renameScore, openRefineSection } from "./editor-modes";
 import { storedRow, storedScore } from "./storage";
 
 interface StoredEvent { id: string; kind: string; startTick: number; durationTicks: number; pitch?: { midi: number } }
@@ -262,7 +262,9 @@ test("복사·붙여넣기: 모바일 터치로 복사하고 붙여넣는다", a
     await page.goto(`/editor/${id}`);
     await page.getByRole("button", { name: "MIDI 60", exact: true }).tap();
     await page.getByRole("tab", { name: "다듬기", exact: true }).tap(); // work modes (Phase 7 decision 4)
+    await openRefineSection(page, "음표 목록"); // phones: 다듬기 tool groups start closed (P2 option B)
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
+    await openRefineSection(page, "구간 편집");
     await page.getByRole("button", { name: "구간 선택", exact: true }).tap();
     await copyButton(page).tap();
     await expect(page.getByTestId("clipboard-status")).toContainText("음표 1개 · 쉼표 0개 · 1마디 길이");
