@@ -256,7 +256,8 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
         id: crypto.randomUUID(),
       };
       const tick = cursorRef.current;
-      const plan = tick === null ? planAppendNote(state.current, input)
+      // At the end of a full score a measure is added in the same command (one Undo); cursor input never adds one.
+      const plan = tick === null ? planAppendNote(state.current, { ...input, nextMeasureId: () => crypto.randomUUID() })
         : planNoteAt(state.current, { ...input, startTick: tick });
       if (!plan.ok) {
         setMessage(plan.message);
@@ -355,11 +356,10 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
   }
 
   function insertRest() {
-    const plan = planAppendRest(score, { id: crypto.randomUUID(), durationTicks });
+    const id = crypto.randomUUID();
+    const plan = planAppendRest(score, { id, durationTicks, nextMeasureId: () => crypto.randomUUID() });
     if (!plan.ok) { setMessage(plan.message); return; }
-    if (runCommand(plan.command) && plan.command.type === "InsertRest") {
-      setSelectedEventId(plan.command.rest.id);
-    }
+    if (runCommand(plan.command)) setSelectedEventId(id);
   }
 
   // Keep the existing note-list identification when extra staff labels are hidden.

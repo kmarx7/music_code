@@ -1736,3 +1736,7 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - 데스크톱 4모드 테스트: `.refine-toggle` 숨김, 구간·악보 설정 도구가 바로 보임.
 - 휴대폰 터치 테스트 6개는 `openRefineSection`(editor-modes.ts)으로 줄을 연 뒤 기존 확인을 그대로 수행한다.
 - 결과: E2E 110/110(Chromium). 실제 휴대폰·Safari 미검증.
+
+## UAT 결함 수정 — 끝 입력 시 마디 자동 추가 (2026-11-15, Claude Code)
+
+- 단위 `append-auto-measure.test.ts` 5개, E2E `auto-measure.spec.ts` 1개. 기존 `append-note.test.ts`의 "가득 찬 악보 거부"(마디 ID 생성기 없을 때)와 `edit-cursor.spec`의 커서 범위 밖 안내는 기대값 그대로 유지.

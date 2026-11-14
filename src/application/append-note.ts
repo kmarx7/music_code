@@ -1,4 +1,4 @@
-import type { Measure, Part, Pitch, Score } from "@/domain/score/types";
+import type { Measure, Part, Pitch, Score, ScoreEvent } from "@/domain/score/types";
 import { createNoteEvent, createRestEvent, measureStartTick, measureTicks } from "@/domain/score/create";
 import { TICKS_PER_QUARTER } from "@/domain/score/constants";
 import type { EditCommand } from "@/domain/commands/types";
@@ -54,10 +54,47 @@ function planAppendPosition(
   return { ok: true, part, target, startTick };
 }
 
+/**
+ * 악보 끝 입력이 마지막 마디를 넘으면(가득 참 포함) `nextMeasureId`가 주어졌을 때만 필요한 수의 빈 마디를 뒤에 붙이고
+ * 같은 명령 하나(`PasteEvents` + `newMeasureIds`)로 넣는다 → Undo 한 번에 마디와 음이 함께 되돌아간다(UAT 결함 수정, 안 A).
+ * 커서 위치 입력·붙여넣기는 지금처럼 마디를 늘리지 않는다.
+ */
+function planEndExtension(
+  score: Score,
+  input: { durationTicks: number; partId?: string; nextMeasureId?: () => string },
+  event: (startTick: number) => ScoreEvent,
+): AppendNotePlan | null {
+  if (!input.nextMeasureId || !Number.isInteger(input.durationTicks) || input.durationTicks <= 0) return null;
+  const part = input.partId ? score.parts.find((candidate) => candidate.id === input.partId) : score.parts[0];
+  if (!part) return null;
+  const bar = measureTicks(part.timeSignature);
+  const capacity = part.measures.length * bar;
+  const startTick = part.measures.flatMap((measure) => measure.events)
+    .reduce((end, item) => Math.max(end, item.startTick + item.durationTicks), 0);
+  if (startTick + input.durationTicks <= capacity) return null;
+  const needed = Math.ceil((startTick + input.durationTicks - capacity) / bar);
+  const created = event(0);
+  return {
+    ok: true,
+    command: {
+      type: "PasteEvents", partId: part.id, startTick,
+      clipboard: { lengthTicks: input.durationTicks, events: [created], ties: [] },
+      newMeasureIds: Array.from({ length: needed }, () => input.nextMeasureId!()),
+    },
+  };
+}
+
 export function planAppendNote(
   score: Score,
-  input: { pitch: Pitch; durationTicks: number; id: string; partId?: string },
+  input: { pitch: Pitch; durationTicks: number; id: string; partId?: string; nextMeasureId?: () => string },
 ): AppendNotePlan {
+  if (input.id.trim()) {
+    const extended = planEndExtension(score, input, (startTick) => createNoteEvent({
+      id: input.id, step: input.pitch.step, alter: input.pitch.alter, octave: input.pitch.octave,
+      startTick, durationTicks: input.durationTicks, provenance: { source: "piano" },
+    }));
+    if (extended) return extended;
+  }
   return planNoteInput(score, input);
 }
 
@@ -108,8 +145,12 @@ export function noteInputTick(part: Part, measure: number, beat: number): number
 /** 기존 입력 위치 계획을 재사용해 끝에 쉼표를 추가한다. 경계 초과를 자동 건너뛰지 않는다. */
 export function planAppendRest(
   score: Score,
-  input: { durationTicks: number; id: string; partId?: string },
+  input: { durationTicks: number; id: string; partId?: string; nextMeasureId?: () => string },
 ): AppendNotePlan {
+  if (input.id.trim()) {
+    const extended = planEndExtension(score, input, (startTick) => createRestEvent({ id: input.id, startTick, durationTicks: input.durationTicks }));
+    if (extended) return extended;
+  }
   const position = planAppendPosition(score, input);
   if (!position.ok) return position;
   const { part, target, startTick } = position;
