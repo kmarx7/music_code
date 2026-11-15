@@ -1590,3 +1590,9 @@
 - `cf38e98` 배포 뒤 산조대금으로 만든 악보가 있다면 계속 열리고, "악기에 맞추기"에 "산조대금 (준비 중)"·"음역 자료를 확인하는 중" 문구가 보이며 다른 악기로 바꿀 수 있다.
 - 테스트 변경(의도된 변화): `instrument.test.ts`(산조대금 값 없음), `score-setup.test.ts`(목록·산조대금 거부), `instrument-fit.test.ts`(선택 가능 3종; 산조대금 경계 테스트는 값이 없어져 "음역 없음·세지 않음" 테스트로 바꿈), `home.spec.ts`·`instrument-fit.spec.ts`("산조대금 (준비 중)" 선택 불가, 향피리 옛 악보는 25현으로 변경).
 - 검증: typecheck, lint, unit 80 files/1084, architecture 위반 0, build, E2E 120/120(Chromium).
+
+## 60. UAT에 Phase 7 항목 추가 (2026-11-16, 사용자 "UAT 페이지에 새 기능 항목 추가해줘", 커밋 전)
+
+- `MANUAL_UAT_CHECKLIST.md`: 5E UAT-P(시작 흐름·편집 모드 7), 5F UAT-I(국악기 9), 5G UAT-G(연주자 기록 3). 화면이 바뀐 B-02·B-04·B-06 순서·기준을 새 흐름으로 갱신(결과 기록이 없던 상태라 잃은 기록 없음). 실행 기록 표·권장 순서에 추가.
+- UAT 페이지(https://claude.ai/artifact/U139L6GzABEGvMhpT1X7ne) 버전 2: 같은 항목 반영. 기기별 항목 수 Mac Chrome 77, Mac Safari 46, iPhone 33, Android 31. 페이지 기록은 2026-11-16 조회 시 0건.
+- 코드 변경 없음. 같은 날 로컬 WebKit 전체 E2E 108/120 PASS, 실패 12건은 이전과 같은 환경 제약(TEST_PLAN).

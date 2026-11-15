@@ -1767,3 +1767,12 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 ## 향피리 → 산조대금 (2026-11-15, Claude Code)
 
 - 단위: 산조대금 값·경계(B3 밖, C4·F6 안, F#6 밖), 목록에서 향피리 제외, 향피리 JSON 왕복 유지. E2E: 산조대금 선택 가능, 향피리 옛 악보 열기와 다른 악기로 변경. unit 1083, E2E 120/120.
+
+## 로컬 WebKit 전체 E2E — `13f5c81` 직전 코드 (2026-11-16, Claude Code)
+
+| 환경 | PASS | FAIL | 분류 |
+|---|---|---|---|
+| WebKit Desktop Safari(로컬 운영 빌드, 임시 설정은 실행 후 삭제) | 108 | 12 | 가짜 마이크 Chromium 전용 8(recording 3, record-flow 2, phase4 통합, 실시간 음높이, CSP 녹음 단계 — 모두 마이크 단계에서 멈춤), `page.pdf` Chromium 전용 3(export 2, phase5 통합), WebKit 기본 Tab 순서 1(keyboard-journey) |
+
+- 실패 12건은 `739f81c`(TASKS §47)와 같은 항목·같은 원인이다. Phase 7 B-3~B-6·산조대금 변경으로 새로 생긴 WebKit 실패는 없다(악기에 맞추기·조율·누름·큰보표·시작 흐름 테스트 모두 PASS).
+- 실제 Safari·iPhone·Android, 실제 마이크·청취는 이 실행으로 확인되지 않는다(UAT-S·T·H·A).
