@@ -12,7 +12,7 @@ export interface ScoreSetupFieldsProps {
 
 /**
  * The setup fields shared by `/new` and `/record` step 1. Uncontrolled inputs named title/meter/tempo/key,
- * read on submit with `parseScoreSetup`. Confirmed instruments can be chosen (B-6); 향피리 stays "준비 중".
+ * read on submit with `parseScoreSetup`. Confirmed instruments can be chosen (B-6).
  */
 export function ScoreSetupFields({ showKey = true, initial }: ScoreSetupFieldsProps) {
   const meter = initial ? `${initial.timeSignature.numerator}/${initial.timeSignature.denominator}` : SETUP_DEFAULTS.meter;
@@ -45,7 +45,7 @@ export function ScoreSetupFields({ showKey = true, initial }: ScoreSetupFieldsPr
         </select>
       </label>
       <p id="setup-instrument-help" className="hb-muted hb-field-wide" style={{ margin: 0 }}>
-        악기에 따라 보표(25현은 큰보표)와 음역·조율 안내가 달라집니다. 향피리는 음역 기준을 확인한 뒤 열립니다.
+        악기에 따라 보표(25현은 큰보표)와 음역·조율 안내가 달라집니다.
       </p>
     </div>
   );

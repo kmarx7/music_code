@@ -17,8 +17,8 @@ const note = (id: string, step: "C" | "D" | "E" | "F" | "G" | "A" | "B", octave:
   createNoteEvent({ id, step, octave, startTick, durationTicks });
 
 describe("악기에 맞추기 (B-3, decision 7)", () => {
-  it("offers only instruments whose values are confirmed; the piri stays out until B-1 confirms it", () => {
-    expect(selectableInstruments().map((profile) => profile.id)).toEqual(["piano", "gayageum-25", "gayageum-12-sanjo"]);
+  it("offers only instruments whose values are confirmed; the retired piri never", () => {
+    expect(selectableInstruments().map((profile) => profile.id)).toEqual(["piano", "gayageum-25", "gayageum-12-sanjo", "daegeum-sanjo"]);
   });
 
   it("counts sounding notes outside the instrument's range, a tie continuation once", () => {
@@ -52,6 +52,15 @@ describe("악기에 맞추기 (B-3, decision 7)", () => {
     expect(analyzeInstrumentFit(high, "piano").suggestedClef).toBe("treble");
     expect(analyzeInstrumentFit(low, "gayageum-25").suggestedClef).toBeNull();
     expect(analyzeInstrumentFit(score([]), "piano").suggestedClef).toBeNull();
+  });
+
+  it("산조대금 C4–F6: the boundary notes are inside, a semitone beyond is outside; one treble staff", () => {
+    // B3 (59) below, C4 (60) and F6 (89) inside, F#6 (90) above.
+    const s = score([note("b3", "B", 3, 0), note("c4", "C", 4, 960), note("f6", "F", 6, 1920), createNoteEvent({ id: "fs6", step: "F", alter: 1, octave: 6, startTick: 2880, durationTicks: 960 })]);
+    const fit = analyzeInstrumentFit(s, "daegeum-sanjo");
+    expect(fit.range).toEqual({ minMidi: 60, maxMidi: 89 });
+    expect(fit.outside).toEqual({ below: 1, above: 1, total: 2 });
+    expect(fit.suggestedClef).toBe("treble");
   });
 
   it("an unconfirmed instrument has no range to fit and counts nothing", () => {

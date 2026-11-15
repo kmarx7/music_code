@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  analyzeInstrumentFit, getInstrumentProfile, INSTRUMENT_IDS, instrumentOf, isInstrumentId, selectableInstruments,
+  analyzeInstrumentFit, getInstrumentProfile, instrumentOf, isInstrumentId, listedInstruments, selectableInstruments,
 } from "@/domain/score";
 import type { Score, TargetMidiRange, TuningRecommendation } from "@/domain/score";
 import { scoreStore } from "@/store/score-store";
@@ -24,7 +24,7 @@ export interface InstrumentFitPanelProps {
 
 /**
  * 악기에 맞추기 (Phase 7 B-3, decision 7). Choosing an instrument and applying a suggested clef are single commands
- * (one Undo each); neither moves a note. Unconfirmed instruments are listed as "준비 중" and cannot be chosen.
+ * (one Undo each); neither moves a note. Unconfirmed instruments are listed as "준비 중"; retired ones are not offered.
  */
 export function InstrumentFitPanel({ score, disabled, onRecommend, tunings = [], tuningId = null, onTuningChange }: InstrumentFitPanelProps) {
   const part = score.parts[0];
@@ -39,7 +39,7 @@ export function InstrumentFitPanel({ score, disabled, onRecommend, tunings = [],
     setError(result && !result.ok ? result.error.message : "");
   }
 
-  const summary = !fit.range ? "음역 자료 준비 중"
+  const summary = !profile.listed ? "지원 종료" : !fit.range ? "음역 자료 준비 중"
     : fit.logicalNoteCount === 0 ? "음표 없음"
     : fit.outside.total === 0 ? "모두 음역 안" : `범위 밖 ${fit.outside.total}개`;
   return (
@@ -54,14 +54,17 @@ export function InstrumentFitPanel({ score, disabled, onRecommend, tunings = [],
                 if (!isInstrumentId(value) || value === current || !selectable.has(value)) return;
                 dispatch({ type: "SetInstrument", partId: part.id, instrument: value, updatedAt: new Date().toISOString() });
               }}>
-              {INSTRUMENT_IDS.map((id) => {
-                const candidate = getInstrumentProfile(id);
-                const ready = selectable.has(id);
-                return <option key={id} value={id} disabled={!ready}>{ready ? candidate.name : `${candidate.name} (준비 중)`}</option>;
+              {/* A score that still names a retired instrument shows it, unselectable, so the list keeps its value. */}
+              {!profile.listed ? <option value={current} disabled>{`${profile.name} (지원 종료)`}</option> : null}
+              {listedInstruments().map((candidate) => {
+                const ready = selectable.has(candidate.id);
+                return <option key={candidate.id} value={candidate.id} disabled={!ready}>{ready ? candidate.name : `${candidate.name} (준비 중)`}</option>;
               })}
             </select>
           </label>
-          <p data-testid="instrument-fit-summary" style={{ margin: 0 }}>{!fit.range || !profile.range
+          <p data-testid="instrument-fit-summary" style={{ margin: 0 }}>{!profile.listed
+            ? `더 이상 지원하지 않는 악기(${profile.name})입니다. 음은 그대로 두고 다른 악기를 고를 수 있습니다.`
+            : !fit.range || !profile.range
             ? "이 악기의 음역 자료를 확인하는 중이라 음역 비교를 할 수 없습니다."
             : fit.logicalNoteCount === 0 ? `음역 ${profile.range.label} · 음표가 없습니다.`
             : fit.outside.total === 0 ? `음역 ${profile.range.label} · 모든 음이 음역 안에 있습니다.`

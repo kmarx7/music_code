@@ -61,7 +61,7 @@ interface TimeSignature { numerator: number; denominator: number }  // 분모 1|
 
 interface Part {
   id: string; name: string; clef: Clef;
-  instrument?: "piano" | "hyang-piri" | "gayageum-25" | "gayageum-12-sanjo";  // v3 신규. 없으면 피아노
+  instrument?: "piano" | "hyang-piri" | "gayageum-25" | "gayageum-12-sanjo" | "daegeum-sanjo";  // v3 신규. 없으면 피아노. "hyang-piri"는 지원 종료(읽기만, 목록에 없음), "daegeum-sanjo" 2026-11-15 추가(schemaVersion 3 유지: 값 추가만)
   keySignature: KeySignature; timeSignature: TimeSignature;
   measures: Measure[];
   ties: TieLink[];            // v2 신규

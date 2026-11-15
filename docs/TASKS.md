@@ -1574,3 +1574,12 @@
 - 미검증: `/record` ④의 범위 밖·추천 문구는 E2E에서 보지 못했다(가짜 마이크 A4가 모든 악기 음역 안). 판정·추천은 단위 테스트(B-3)로만 확인.
 - 검증: typecheck, lint, unit 80 files/1082, architecture 위반 0, build, E2E 119/119(Chromium). Safari·실기기·실제 마이크·연주자 확인(UAT-G) 미검증.
 - Phase 7 트랙 B 남은 것: 향피리(B-1 보류), 12현 산조 5도 위 기보 결정, UAT-G.
+
+## 58. 향피리 → 산조대금 교체 (2026-11-15, 사용자 "향피리 대신 대금", "산조대금", "인터넷에서 찾아서 작업해줘", 커밋 전)
+
+- 저장 형식: `INSTRUMENT_IDS`에 `"daegeum-sanjo"` 추가(schemaVersion 3 유지, 값 추가만). `"hyang-piri"`는 남겨 저장된 악보·JSON이 계속 열린다(`score-backup.test.ts`의 향피리 왕복 테스트 그대로 통과).
+- 프로필: `InstrumentProfile.listed` 추가(향피리 false). 산조대금 6관 본청 C4–F6(MIDI 60–89), 실음, 높은음자리표 한 줄, 조율·누름 없음, `verified: true` — 공개 자료에서 계산한 값(`docs/INSTRUMENTS.md` §2-2, 연주자 확인 아님). `listedInstruments()` 추가.
+- 화면: `/new`·`/record` ①과 "악기에 맞추기" 목록이 `listedInstruments()`를 쓴다 — 피아노·25현·12현 산조·산조대금, 향피리 없음. 향피리로 저장된 악보는 "악기에 맞추기"에 "향피리 (지원 종료)"(선택 불가)와 안내 문구를 보이고 다른 악기로 바꿀 수 있다.
+- 전문가 확인 페이지(산조대금 D1–D6): https://claude.ai/artifact/MsCzXS6aR3ahvScdmkcggp (비공개, 공유는 사용자가 Share 메뉴에서).
+- 테스트: 단위 `instrument.test.ts`(산조대금 값·향피리 지원 종료·목록), `score-setup.test.ts`(목록·향피리 거부), `instrument-fit.test.ts`(선택 가능 4종, 산조대금 경계 B3/C4/F6/F#6). E2E `home.spec.ts`(산조대금 선택 가능, 향피리 없음), `instrument-fit.spec.ts`(+1: 향피리 옛 악보 열기·지원 종료 표시·산조대금으로 변경).
+- 검증: typecheck, lint, unit 80 files/1083, architecture 위반 0, build, E2E 120/120(Chromium). 산조대금 실제 연주 가능성(특히 역취 E6–F6)은 연주자 확인 전.

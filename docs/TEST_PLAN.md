@@ -1763,3 +1763,7 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 ## 시작 흐름의 악기 B-6 (2026-11-15, Claude Code)
 
 - 단위: `score-setup.test.ts`(악기 읽기·거부·목록), `score-library.test.ts`·`transcribed-score.test.ts`(새 악보에 악기). E2E `home.spec.ts`(25현으로 만들기), `record-flow.spec.ts`(12현 산조, ④ 음역 문구). ④의 범위 밖 문구는 E2E 미확인. unit 1082, E2E 119/119.
+
+## 향피리 → 산조대금 (2026-11-15, Claude Code)
+
+- 단위: 산조대금 값·경계(B3 밖, C4·F6 안, F#6 밖), 목록에서 향피리 제외, 향피리 JSON 왕복 유지. E2E: 산조대금 선택 가능, 향피리 옛 악보 열기와 다른 악기로 변경. unit 1083, E2E 120/120.

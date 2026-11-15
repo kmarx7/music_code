@@ -30,10 +30,10 @@ describe("parseScoreSetup (Phase 7 /new, /record step 1)", () => {
     if (!result.ok) expect(result.message).toContain(word);
   });
 
-  it("offers the confirmed instruments; the piri stays listed as 준비 중 until B-1 confirms it (B-6)", () => {
+  it("offers the confirmed instruments including 산조대금; the retired piri is not listed (B-6)", () => {
     expect(SETUP_INSTRUMENTS.filter((instrument) => instrument.available).map((instrument) => instrument.id))
-      .toEqual(["piano", "gayageum-25", "gayageum-12-sanjo"]);
+      .toEqual(["piano", "gayageum-25", "gayageum-12-sanjo", "daegeum-sanjo"]);
     expect(SETUP_INSTRUMENTS.map((instrument) => [instrument.id, instrument.label])).toEqual([
-      ["piano", "피아노"], ["gayageum-25", "25현 가야금"], ["gayageum-12-sanjo", "12현 산조가야금"], ["hyang-piri", "향피리 (준비 중)"]]);
+      ["piano", "피아노"], ["gayageum-25", "25현 가야금"], ["gayageum-12-sanjo", "12현 산조가야금"], ["daegeum-sanjo", "산조대금"]]);
   });
 });

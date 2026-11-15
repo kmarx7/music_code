@@ -46,13 +46,14 @@ test("피아노로 시작(/new): 설정을 고르고 만들기 한 번에 악보
   await page.getByRole("link", { name: "피아노로 시작", exact: true }).click();
   await expect(page).toHaveURL(/\/new$/);
   await expect(page).toHaveTitle("새 악보 · 허밍버드");
-  // Defaults (decision 2/3): 4/4 · 90 BPM · C major · piano. B-6: confirmed gayageums can be chosen, the piri waits.
+  // Defaults (decision 2/3): 4/4 · 90 BPM · C major · piano. B-6: the gayageums and 산조대금 can be chosen; the piri is retired.
   await expect(page.getByLabel("제목")).toHaveValue("새 악보");
   await expect(page.getByLabel("박자")).toHaveValue("4/4");
   await expect(page.getByLabel("템포 (BPM)")).toHaveValue("90");
   await expect(page.getByLabel("조성")).toHaveValue("major:0");
   await expect(page.getByLabel("목표 악기")).toHaveValue("piano");
-  await expect(page.getByRole("option", { name: "향피리 (준비 중)" })).toBeDisabled();
+  await expect(page.getByRole("option", { name: "산조대금", exact: true })).toBeEnabled();
+  await expect(page.getByRole("option", { name: /향피리/ })).toHaveCount(0);
   await expect(page.getByRole("option", { name: "25현 가야금", exact: true })).toBeEnabled();
   await expect(page.getByRole("option", { name: "12현 산조가야금", exact: true })).toBeEnabled();
   expect(await scoreCount(page)).toBe(before);

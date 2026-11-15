@@ -26,6 +26,8 @@ export interface InstrumentProfile {
   tunings: readonly InstrumentTuning[];
   /** Written on a grand staff (treble and bass together). Display and export only; the Score stays one melody. */
   grandStaff: boolean;
+  /** Shown in instrument lists. False for a retired instrument that stored scores may still name (향피리). */
+  listed: boolean;
 }
 
 /**
@@ -43,19 +45,29 @@ const GAYAGEUM_25_AB: readonly number[] = GAYAGEUM_25_EB.map((midi) => (midi % 1
 const GAYAGEUM_12_SANJO: readonly number[] = [43, 48, 50, 55, 57, 60, 62, 64, 67, 69, 72, 74];
 
 const PROFILES: Record<InstrumentId, InstrumentProfile> = {
-  piano: { id: "piano", name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108, label: "A0–C8" }, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
-  "hyang-piri": { id: "hyang-piri", name: "향피리", verified: false, range: null, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
+  piano: { id: "piano", name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108, label: "A0–C8" }, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false, listed: true },
+  // Retired 2026-11-15 (user: 향피리 대신 산조대금). Kept so a stored part that names it still opens.
+  "hyang-piri": { id: "hyang-piri", name: "향피리", verified: false, range: null, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false, listed: false },
   "gayageum-25": {
     id: "gayageum-25", name: "25현 가야금", verified: true, range: { lowMidi: 39, highMidi: 80, label: "Eb2–Ab5" }, clefs: SUPPORTED_CLEFS,
     tunings: [{ id: "eb", name: "Eb조", stringMidis: GAYAGEUM_25_EB, keyFifths: -3 }, { id: "ab", name: "Ab조", stringMidis: GAYAGEUM_25_AB, keyFifths: -4 }],
     // B-1 second answer: 25현 scores use the grand staff.
     grandStaff: true,
+    listed: true,
   },
   "gayageum-12-sanjo": {
     id: "gayageum-12-sanjo", name: "12현 산조가야금", verified: true, range: { lowMidi: 43, highMidi: 74, label: "G2–D5" }, clefs: SUPPORTED_CLEFS,
     tunings: [{ id: "sanjo", name: "산조 조율", stringMidis: GAYAGEUM_12_SANJO, keyFifths: null }],
     grandStaff: false,
+    listed: true,
   },
+  /*
+   * 산조대금, 6관 본청 (user decision 2026-11-15: replaces 향피리; values from published sources at the user's request,
+   * `docs/INSTRUMENTS.md`, not yet confirmed by a player). 전폐음 C4 — a tone above 정악대금's B♭3, the flute's lowest
+   * note — up to F6, i.e. 정악대금's 탁임종–중청황종 (B♭3–E♭6) raised a tone. Written at sounding pitch on one treble staff.
+   */
+  "daegeum-sanjo": { id: "daegeum-sanjo", name: "산조대금", verified: true, range: { lowMidi: 60, highMidi: 89, label: "C4–F6" },
+    clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false, listed: true },
 };
 
 export const DEFAULT_INSTRUMENT: InstrumentId = "piano";
@@ -68,6 +80,12 @@ export function isInstrumentId(value: unknown): value is InstrumentId {
 
 export function getInstrumentProfile(id: InstrumentId): InstrumentProfile {
   return PROFILES[id];
+}
+
+/** Instruments shown in lists, choosable or "준비 중": confirmed ones first, each group in `INSTRUMENT_IDS` order. */
+export function listedInstruments(): readonly InstrumentProfile[] {
+  return INSTRUMENT_IDS.map(getInstrumentProfile).filter((profile) => profile.listed)
+    .sort((a, b) => Number(b.verified) - Number(a.verified));
 }
 
 /** A part without the field (v3 written by hand, or a fixture) is for the piano. */

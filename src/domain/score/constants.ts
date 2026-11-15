@@ -14,7 +14,8 @@ export const MAX_ALTER = 2;
 export const SUPPORTED_CLEFS = ["treble", "bass"] as const;
 
 /** Instruments a part can be written for (v3, Phase 7 decision 6). Profiles live in `instruments.ts`. */
-export const INSTRUMENT_IDS = ["piano", "hyang-piri", "gayageum-25", "gayageum-12-sanjo"] as const;
+/** "hyang-piri" is retired (replaced by 산조대금, 2026-11-15) but stays readable so stored v3 parts still open. */
+export const INSTRUMENT_IDS = ["piano", "hyang-piri", "gayageum-25", "gayageum-12-sanjo", "daegeum-sanjo"] as const;
 export type InstrumentId = (typeof INSTRUMENT_IDS)[number];
 
 export const SUPPORTED_MODES = ["major", "minor"] as const;

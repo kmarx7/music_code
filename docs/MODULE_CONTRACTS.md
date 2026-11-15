@@ -997,3 +997,8 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 ## 시작 흐름의 악기 (2026-11-15, B-6)
 
 - `CreateScoreInput.instrument?`, `NewScoreInput.instrument?`, `TranscribedScoreInput.setup.instrument?`(없으면 피아노). `ScoreSetup.instrument: InstrumentId`, `parseScoreSetup({ instrument })`(선택 불가 악기 거부). `SETUP_INSTRUMENTS`는 Domain 프로필에서 만든다. `/record` ④ `InstrumentRangeNote({ score })`(표시 전용).
+
+## 산조대금·지원 종료 악기 (2026-11-15)
+
+- `InstrumentId`에 `"daegeum-sanjo"`. `InstrumentProfile.listed: boolean`, `listedInstruments()`(목록용, 확인된 것 먼저). `selectableInstruments()`는 listed와 무관하게 verified·range 기준이지만 향피리는 verified false라 제외된다.
+- `SETUP_INSTRUMENTS`는 `listedInstruments()`에서 만든다. `InstrumentFitPanel`은 현재 악기가 목록에 없으면 "(지원 종료)" 항목을 보인다.
