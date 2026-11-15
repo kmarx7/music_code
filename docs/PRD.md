@@ -166,8 +166,9 @@ The following **14 feature groups** are all MVP requirements. Phase 0–6 only d
 
 | Page | Essential elements |
 |---|---|
-| Home `/` | Product intro, Hum (`/record`) / Piano (`/new`) entry, recent score access (P6-02: 3 most recent) |
+| Home `/` | Product intro, Hum (`/record`) / Piano (`/new`) / Upload a score (`/import`) entry, recent score access (P6-02: 3 most recent) |
 | Recorder `/record` | **Phase 7 decision 2 (D-05, 2026-11-14) — replaces D-04 #2:** four steps ① settings (title, meter, tempo, target instrument; defaults 4/4 · 90 · piano, "기본값으로 시작") ② microphone (consent, metronome, earphone advice) ③ record (count-in, measure/beat progress, level, live pitch) ④ review (candidate staff, listen, re-record, "악보 만들기"). The score is first saved at ④. Leaving at any step stores nothing; audio is never stored or sent. |
+| Score upload `/import` | **Phase 8 steps 1–2 (2026-11-16):** ① file (.musicxml/.xml/.mxl up to 5 MB, read in the browser and never sent; PDF/photo recognition later) ② review (preview, listen, summary, part choice, list of what the import changed) ③ convert (title, target instrument, target key and direction, range recommendations, result preview) → "악보 만들기" saves one score. Only one melody line is taken (top staff, highest note); leaving stores nothing. |
 | New score `/new` | Phase 7 decision 3: one setup step (title, meter, tempo, key, target instrument) → "만들기" saves one score and opens the editor in the input mode. |
 | Editor `/editor/[scoreId]` | Score/staff always on top; four work modes on every screen size (Phase 7 decision 4): 입력 (durations, cursor, piano, humming), 다듬기 (note/range edit, transposition, range recommendations, score settings), 연습 (playback, rate, A–B, metronome), 내보내기 (PDF, MIDI, MusicXML, JSON). The mode is UI state and never stored. Old `?start=piano|hum` links open the input mode. |
 | Library `/library` | Saved scores, rename/open/delete, backup/import |
@@ -188,7 +189,7 @@ The following **14 feature groups** are all MVP requirements. Phase 0–6 only d
 
 ## 6. Exclusions / deferred scope
 
-**Not in MVP:** Supabase login/cloud sync, real-time collaboration, automatic full-song polyphonic transcription, chord progression recommendation, piano-roll editing, MP3/WAV file import, required Web MIDI hardware input, multi-part accompaniment/separation, Jeongganbo, gayageum technique detection, payment/subscription. Future compatibility may influence domain interfaces but not require implementing these now.
+**Not in MVP:** Supabase login/cloud sync, real-time collaboration, automatic full-song polyphonic transcription, chord progression recommendation, piano-roll editing, MP3/WAV file import, required Web MIDI hardware input, multi-part accompaniment/separation (score upload takes one melody line only — Phase 8), Jeongganbo, gayageum technique detection, payment/subscription. Future compatibility may influence domain interfaces but not require implementing these now.
 
 ## 7. Delivery phases and gates
 

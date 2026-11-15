@@ -1002,3 +1002,11 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 
 - `InstrumentId`에 `"daegeum-sanjo"`. `InstrumentProfile.listed: boolean`, `listedInstruments()`(목록용, 확인된 것 먼저). `selectableInstruments()`는 listed와 무관하게 verified·range 기준이지만 향피리는 verified false라 제외된다.
 - `SETUP_INSTRUMENTS`는 `listedInstruments()`에서 만든다. `InstrumentFitPanel`은 현재 악기가 목록에 없으면 "(지원 종료)" 항목을 보인다.
+
+## 악보 올리기 (2026-11-16, Phase 8 1·2단계)
+
+- Domain `import-model.ts`: `ImportedScore { title, tempos, parts, ignored }`, `ImportedPart { id, name, staves, notes, measures, timeSignatures, keys }`, `ImportedNote`(tick은 4분음표 960 기준, 분수 가능). Score가 아니며 저장하지 않는다.
+- Domain `extractMelody(score, { partIndex?, fallbackTitle? }): MelodyExtraction` — 성공 시 `settings`·`clipboard`(ClipboardPayload, `provenance.source "import"`, ties 없음)·`notices: ImportNotice[]`·`parts`·`partIndex`; 실패 코드 `NO_NOTES | UNSUPPORTED_KEY | UNSUPPORTED_TIME | TOO_LONG`. `IMPORT_GRID_TICKS = 240`, `IMPORT_NOTICE_CODES`.
+- Adapter `@/adapters/musicxml`: `readMusicXml(root: XmlElementLike)`, `parseXmlText(text)`(브라우저), `decodeXmlBytes(bytes)`. `@/adapters/file-import`: `readZip`, `findMusicXmlEntry`, `ZipReadError`, `readScoreFile(file, parseXml)`, `IMPORT_MAX_FILE_BYTES = 5MB`.
+- Application: `buildImportedScore(input)`(순수), `createImportedScore(repository, input)`(한 번 저장). `ImportedScoreInput { id, createdAt, settings, clipboard, instrument, transpose, nextId }`.
+- Feature `@/features/score-import`: `ImportFlow({ onCreate })`, `describeImportNotice(notice)`. `TakeStepList({ index, steps? })`.

@@ -46,6 +46,8 @@ PASS는 실행자·일시·증거 위치가 있을 때만 기록한다.
 | UAT-P (Mac Chrome / iPhone) | | | | | | |
 | UAT-I (Mac Chrome / iPhone) | | | | | | |
 | UAT-G (연주자) | | | | | | |
+| UAT-U (Mac Chrome) | | | | | | |
+| UAT-U (Mac Safari) | | | | | | |
 
 ## 1. UAT-S — Mac Safari
 
@@ -244,6 +246,16 @@ PASS/FAIL이 아니라 기록 항목이다. 가야금 연주자(또는 전공자
 | [ ] | G-02 12현 산조 악보 읽기 | 12현 산조 PDF | 실음 기보로 읽히는지, 5도 위로 적어야 하는지 |
 | [ ] | G-03 조옮김 추천 결과 | I-03에서 확정한 악보 | 추천 조성이 그 악기에 자연스러운지 |
 
+## 5H. UAT-U — 악보 올리기 (Phase 8 1·2단계, 2026-11-16 추가)
+
+근거: TASKS §61. Mac Chrome과 Mac Safari에서 각각 한 번. 직접 권리를 가진 악보만 쓴다.
+
+| 체크 | ID | 순서 | 통과 기준 |
+|---|---|---|---|
+| [ ] | U-01 실제 MusicXML | MuseScore 등에서 저장한 단선율 `.musicxml`(비압축) → 홈 → 악보 올리기 → 확인 → 바꾸기(그대로) → 악보 만들기 | 제목·템포·박자·조성과 음이 원본과 같다. 바뀐 점 목록이 실제로 바뀐 것만 말한다 |
+| [ ] | U-02 압축 `.mxl` | 같은 곡을 `.mxl`로 저장해 올리기 | U-01과 같은 결과 |
+| [ ] | U-03 피아노 악보 | 양손 피아노 악보 → 확인 → 12현 산조 → 1순위 추천 적용 → 만들기 | 오른손 윗선율만 남고, "아래 단(왼손)" 안내가 보인다. 결과가 모두 음역 안이고 편집기에서 12현 산조로 열린다 |
+
 ## 6. 실패 기록 양식
 
 ```
@@ -262,9 +274,9 @@ P0/P1이 남아 있으면 해당 인수 게이트를 통과로 표시하지 않�
 
 모든 기기를 갖추기 어려우면 아래 순서로 실행하고, 못 한 기기는 NOT RUN으로 남긴다(PASS로 추정하지 않는다).
 
-1. Mac Chrome: UAT-C, UAT-B, UAT-P, UAT-I, UAT-X, UAT-K(K-01·K-02·K-05)
+1. Mac Chrome: UAT-C, UAT-B, UAT-P, UAT-I, UAT-U, UAT-X, UAT-K(K-01·K-02·K-05)
 2. iPhone Safari: UAT-T, UAT-B(B-01·B-04~B-06), UAT-P(P-04·P-05), UAT-I(I-02·I-05·I-09), UAT-H, UAT-X(X-09), UAT-K(K-04)
-3. Mac Safari: UAT-S, UAT-B(B-09), UAT-K(K-03)
+3. Mac Safari: UAT-S, UAT-B(B-09), UAT-U, UAT-K(K-03)
 4. 실제 청취: UAT-A (Mac 스피커·이어폰 한 번씩)
 4-1. 연주자: UAT-G (Mac Chrome에서 만든 PDF·MusicXML로)
 5. Android Chrome: UAT-T, UAT-B(B-04~B-06), UAT-H

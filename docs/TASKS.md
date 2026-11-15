@@ -1596,3 +1596,17 @@
 - `MANUAL_UAT_CHECKLIST.md`: 5E UAT-P(시작 흐름·편집 모드 7), 5F UAT-I(국악기 9), 5G UAT-G(연주자 기록 3). 화면이 바뀐 B-02·B-04·B-06 순서·기준을 새 흐름으로 갱신(결과 기록이 없던 상태라 잃은 기록 없음). 실행 기록 표·권장 순서에 추가.
 - UAT 페이지(https://claude.ai/artifact/U139L6GzABEGvMhpT1X7ne) 버전 2: 같은 항목 반영. 기기별 항목 수 Mac Chrome 77, Mac Safari 46, iPhone 33, Android 31. 페이지 기록은 2026-11-16 조회 시 0건.
 - 코드 변경 없음. 같은 날 로컬 WebKit 전체 E2E 108/120 PASS, 실패 12건은 이전과 같은 환경 제약(TEST_PLAN).
+
+## 61. Phase 8 1·2단계 — 악보 올리기(MusicXML) (2026-11-16, 사용자 "직접 진행", 커밋 전)
+
+- 설계·계획: `docs/superpowers/specs/2026-11-16-score-import-design.md`, `docs/superpowers/plans/2026-11-16-score-import.md`(1·2단계: MusicXML 읽기·선율 추출, `/import` 화면, 홈 시작 3개). MIDI·B♭ 악기 이조·PDF/사진 인식(OMR)은 다음 단계.
+- 읽기(Adapter): `.mxl` 압축 풀기 `readZip`·`findMusicXmlEntry`(새 의존성 없이 브라우저 `DecompressionStream`), `readMusicXml`(partwise; backup·forward·chord·divisions 변경·셋잇단·꾸밈음·큐·붙임줄·못갖춘마디·박자/조/템포 변화 수집, 도돌이표·가사·셈여림은 개수만), `decodeXmlBytes`(UTF-8·UTF-16 BOM만), `parseXmlText`(브라우저 DOMParser), `readScoreFile`(5MB 제한, 정확한 한국어 오류 문구).
+- 선율 추출(Domain `extractMelody`): 첫 음 있는 파트(선택 가능) → 단이 겹치면 위 단만 → 꾸밈음·큐 제외 → 붙임줄 합침 → 16분음표(240 tick) 격자 반올림 → 같은 시점은 가장 높은 음, 겹치면 높은 음 우선. 첫 박자·조·템포(없으면 4/4·C장조·90, 템포 20–400), 선법은 같은 조표 장조, 못갖춘마디는 앞을 채움. 바꾼 것은 모두 `ImportNotice`로 보고. 지원 밖 조표·박자, 음 없음, 1024마디 초과는 거절.
+- 악보 짓기(Application `buildImportedScore`/`createImportedScore`): 녹음 흐름과 같은 붙여넣기 명령 → 목표 조 조옮김(선택) → 악기 권장 음자리표 → 검증·기보 확인. 한 번 = 악보 하나, 실패 시 저장 없음.
+- 화면: `/import` ① 파일(선택·끌어다 놓기, "PDF·사진 인식은 준비 중입니다.") ② 확인(미리보기·듣기·읽은 정보·파트 선택·바뀐 점 목록) ③ 바꾸기(제목·목표 악기·목표 조·이동 방향·음역 추천 상위 5개 "적용"·결과 미리보기) → "악보 만들기" → 편집기. 홈에 "악보 올리기" 시작 추가. `TakeStepList`에 `steps` prop.
+- 계획과 다르게 정한 것: `readScoreFile`은 `src/adapters/file-import`에 둠(규칙 application→adapters 금지). 음자리표는 조옮김 뒤 결과 음으로 고름. 박자·조 "변경"은 앞과 다를 때만 셈. 박자표·조표가 없는 파일은 4/4·C장조로 읽음.
+- 알려진 점: 가져온 악보도 녹음 흐름처럼 최소 8마디로 만들어져, 짧은 곡은 뒤에 빈 마디가 남는다(요약의 마디 수는 곡 길이).
+- 테스트: 단위 `import-zip`(7), `musicxml-reader`(9), `melody-extract`(13), `score-import`(7, 25현 MusicXML 왕복 포함), `import-notices`(4). E2E `import-flow.spec.ts`(6: 홈 세 시작, 쓸 수 없는 파트 뒤에도 파트 선택 유지, 피아노 악보→12현 산조 추천 조·두 번 눌러도 하나, 피아노 B♭장조, `.mxl`·깨진 파일, 중간에 나가면 저장 없음), `home.spec.ts` 링크 1줄.
+- 최종 리뷰(별도 모델) 뒤 고친 것: 아래 성부가 밀려 다음 선율 음을 가리던 문제, `implicit` 없는 짧은 첫 마디를 못갖춘마디로 처리, 반올림은 스펙 §5.2대로 정확히 적을 수 없는 시간만(32분음표·점16분+32분 유지), 쓸 수 없는 파트를 골라도 파트 선택이 남음(음 없는 파트는 선택 불가). 남긴 작은 항목: 소수 템포의 잘못된 '범위로 맞춤' 안내, 5MB 확인 전 파일 전체 읽기, 음수 duration, 첫 파트 실패 시 다른 파트 제안 없음, 4분음표가 아닌 메트로놈 표시, 안내의 마디 번호가 원본 기준, MuseScore PDF→MusicXML 안내 문구, 끌어다 놓기 영역 밖 놓기.
+- 검증: typecheck, lint, unit 85 files/1124, architecture 위반 0, build, E2E 126/126(Chromium).
+- 미검증: Safari·실기기, MuseScore·Finale·Sibelius 등 외부 프로그램이 저장한 실제 MusicXML의 다양성(테스트 파일은 직접 쓴 짧은 곡 4개와 이 앱이 내보낸 파일), 실제 청취.
