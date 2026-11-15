@@ -59,6 +59,8 @@ const PROFILES: Record<InstrumentId, InstrumentProfile> = {
 };
 
 export const DEFAULT_INSTRUMENT: InstrumentId = "piano";
+/** The name every new part gets. Exports replace it with the instrument's name (B-5). */
+export const DEFAULT_PART_NAME = "Melody";
 
 export function isInstrumentId(value: unknown): value is InstrumentId {
   return typeof value === "string" && (INSTRUMENT_IDS as readonly string[]).includes(value);
@@ -71,6 +73,16 @@ export function getInstrumentProfile(id: InstrumentId): InstrumentProfile {
 /** A part without the field (v3 written by hand, or a fixture) is for the piano. */
 export function instrumentOf(part: Part): InstrumentId {
   return part.instrument ?? DEFAULT_INSTRUMENT;
+}
+
+/**
+ * The part's name in exports (B-5, decision 9): the instrument's name for an unnamed part, otherwise the part's own
+ * name with the instrument after it, so a name given by hand is never dropped.
+ */
+export function exportPartName(part: Part): string {
+  const instrument = getInstrumentProfile(instrumentOf(part)).name;
+  const own = part.name.trim();
+  return !own || own === DEFAULT_PART_NAME ? instrument : `${own} (${instrument})`;
 }
 
 /** Whether this part is drawn and exported on a grand staff (its instrument's convention). */

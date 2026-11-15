@@ -1,3 +1,4 @@
+import { DEFAULT_PART_NAME } from "./instruments";
 import type { NoteEvent, RestEvent, Score } from "@/domain/score/types";
 import { SCORE_SCHEMA_VERSION, TICKS_PER_QUARTER } from "@/domain/score/constants";
 import { createPitch } from "@/domain/music-theory/pitch";
@@ -47,7 +48,7 @@ export function createEmptyScore(input: CreateScoreInput): Score {
     parts: [
       {
         id: `${input.id}:part:1`,
-        name: "Melody",
+        name: DEFAULT_PART_NAME,
         instrument: "piano",
         clef: "treble",
         keySignature: input.keySignature ?? {

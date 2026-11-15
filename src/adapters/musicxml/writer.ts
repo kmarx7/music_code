@@ -1,5 +1,7 @@
 import type { ExportPort, ExportWriteResult } from "@/application/ports";
-import { assignGrandStaves, measureStartTick, measureTicks, planPartNotation, usesGrandStaff } from "@/domain/score";
+import {
+  assignGrandStaves, exportPartName, getInstrumentProfile, instrumentOf, measureStartTick, measureTicks, planPartNotation, usesGrandStaff,
+} from "@/domain/score";
 import type { GrandStaffNumber, NotatableDuration, NotationFragment, Part, Score } from "@/domain/score";
 
 /*
@@ -102,7 +104,9 @@ export function writeMusicXml(score: Readonly<Score>): ExportWriteResult {
     `  <work><work-title>${escapeXml(score.title)}</work-title></work>`,
     "  <identification><encoding><software>허밍버드</software></encoding></identification>",
     "  <part-list>",
-    ...score.parts.map((part, p) => `    <score-part id="P${p + 1}"><part-name>${escapeXml(part.name)}</part-name></score-part>`),
+    // Decision 9: the instrument's name in <part-name> and <score-instrument> (one instrument per part).
+    ...score.parts.map((part, p) => `    <score-part id="P${p + 1}"><part-name>${escapeXml(exportPartName(part))}</part-name>`
+      + `<score-instrument id="P${p + 1}-I1"><instrument-name>${escapeXml(getInstrumentProfile(instrumentOf(part)).name)}</instrument-name></score-instrument></score-part>`),
     "  </part-list>",
   ];
   score.parts.forEach((part, p) => {

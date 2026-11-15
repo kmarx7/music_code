@@ -71,11 +71,13 @@ test("25현 조율: 조성에 맞는 조율을 추천하고, 다른 조율의 �
 
   await page.goto(`/print/${id}?tuning=eb`);
   await expect(page.getByTestId("print-view")).toHaveAttribute("data-state", "ready");
-  await expect(page.getByTestId("print-meta")).toContainText("Eb조");
+  await expect(page.getByTestId("print-instrument")).toHaveText("25현 가야금 · Eb조");
   await expect(page.getByTestId("print-rows").getByTestId("press-mark")).toHaveCount(1);
   await page.goto(`/print/${id}`);
   await expect(page.getByTestId("print-view")).toHaveAttribute("data-state", "ready");
   await expect(page.getByTestId("print-rows").getByTestId("press-mark")).toHaveCount(0);
+  // Without a tuning the header names the instrument only.
+  await expect(page.getByTestId("print-instrument")).toHaveText("25현 가야금");
 });
 
 test("12현 산조가야금: 조율이 하나라 선택 없이 맨 위 줄보다 높은 음만 누름으로 표시한다", async ({ page }) => {

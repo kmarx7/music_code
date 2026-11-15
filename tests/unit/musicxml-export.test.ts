@@ -46,7 +46,8 @@ describe("writeMusicXml", () => {
     const text = xml(score);
     valid(text);
     expect(str(text, "//work/work-title")).toBe(`R&B <"연습곡"> 'x'`);
-    expect(str(text, "//part-list/score-part[1]/part-name")).toBe("Melody & Co");
+    // A part named by hand keeps its name next to the instrument (B-5, implementation default).
+    expect(str(text, "//part-list/score-part[1]/part-name")).toBe("Melody & Co (피아노)");
     const attributes = "//part[1]/measure[1]/attributes";
     expect([str(text, `${attributes}/key/fifths`), str(text, `${attributes}/key/mode`)]).toEqual(["1", "minor"]);
     expect([str(text, `${attributes}/time/beats`), str(text, `${attributes}/time/beat-type`)]).toEqual(["6", "8"]);
@@ -224,5 +225,33 @@ describe("writeMusicXml: 25현 가야금 on a grand staff (B-1)", () => {
       expect(count(text, "//note/staff")).toBe(0);
       expect(count(text, "//attributes/clef")).toBe(1);
     }
+  });
+});
+
+describe("writeMusicXml: instrument names (B-5, decision 9)", () => {
+  it("names the default part after its instrument and writes a score-instrument; the file stays valid", () => {
+    for (const [instrument, name] of [["piano", "피아노"], ["gayageum-25", "25현 가야금"], ["gayageum-12-sanjo", "12현 산조가야금"]] as const) {
+      const score = fourNoteScore();
+      score.parts[0] = { ...score.parts[0], instrument };
+      const text = xml(score);
+      valid(text);
+      expect(str(text, "//score-part[1]/part-name")).toBe(name);
+      expect(str(text, "//score-part[1]/score-instrument/@id")).toBe("P1-I1");
+      expect(str(text, "//score-part[1]/score-instrument/instrument-name")).toBe(name);
+    }
+  });
+
+  it("a v2-style part without the field is a piano part", () => {
+    const score = fourNoteScore();
+    const part = { ...score.parts[0] };
+    delete part.instrument;
+    score.parts[0] = part;
+    expect(str(xml(score), "//score-part[1]/score-instrument/instrument-name")).toBe("피아노");
+  });
+
+  it("gives every part its own score-instrument id", () => {
+    const text = xml(twoPartScore());
+    valid(text);
+    expect(xpath(text, "//score-instrument/@id").replace(/\s+/g, " ").trim()).toBe('id="P1-I1" id="P2-I1"');
   });
 });

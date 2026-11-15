@@ -988,3 +988,8 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - Domain: `pressedNoteIds(part, tuning): ReadonlySet<string>`, `recommendTunings(score): TuningRecommendation[]`(`{ tuning, pressed, keyMatch }`). `InstrumentTuning.keyFifths: number | null`.
 - VexFlow: `renderScoreInto(..., { pressedEventIds })`, `renderPrintRows(host, score, labelMode, pressedEventIds?)`. "누름" 요소는 `data-testid="press-mark"`, `data-press-event-id`.
 - UI: `StaffView.pressedEventIds`, `TransposeTool`/`InstrumentFitPanel`의 `tunings`·`tuningId`·`onTuningChange`, `ExportControls.tuningId`, `printPath(id, labelMode, tuningId?)`, `PrintView.tuningId`(주소 `?tuning=`). 조율은 Score에 저장하지 않는다.
+
+## 출력의 악기 이름 (2026-11-15, B-5)
+
+- Domain: `DEFAULT_PART_NAME = "Melody"`, `exportPartName(part)`(기본 이름이면 악기 이름, 아니면 "이름 (악기)").
+- MusicXML writer: `<score-part>`에 `<part-name>`(exportPartName)과 `<score-instrument id="P{n}-I1"><instrument-name>`. PrintView 머리글 `print-instrument`.

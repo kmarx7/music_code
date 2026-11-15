@@ -1555,3 +1555,13 @@
 - 테스트: 단위 `tuning.test.ts` 6(먼저 작성해 실패 확인; 최저·최고 줄 개방, 반음 위아래 누름, Ab조 D줄, 추천 순서·동률 조표, 12현 맨 위 줄 위, 조율 없는 악기, 인쇄 주소). E2E `tuning-press.spec.ts` 2(추천·선택·누름 1개·라벨과 겹침 없음·저장/이력 없음·인쇄 있음/없음, 12현).
 - 기존 테스트 수정 1건: `grand-staff.spec.ts` 기둥 간격 검사가 `.vf-notehead` 그룹 상자를 썼는데, VexFlow는 음표의 Annotation("누름")을 그 그룹 안에 그려 상자가 넓어진다. 음표 머리 글리프(`.vf-notehead > text`)만 재도록 바꿨다. 기대값(3px 미만)은 그대로이고 스크린샷으로 기둥이 붙어 있음을 확인.
 - 검증: typecheck, lint, unit 80 files/1075, architecture 위반 0, build, E2E 119/119(Chromium). Safari·실기기·연주자 확인(UAT-G) 미검증. 줄 번호 표시는 B-1 G5("안 적어도 됨")에 따라 만들지 않았다.
+
+## 56. Phase 7 B-5 — 출력에 악기 이름 (2026-11-15, 사용자 "시작해줘", 커밋 전)
+
+- MusicXML(결정 9): 파트마다 `<score-instrument id="P{n}-I1"><instrument-name>`에 악기 이름. `<part-name>`은 기본 이름("Melody")이면 악기 이름, 직접 붙인 이름이면 "이름 (악기)" — **구현 기본값**(가져온 JSON의 파트 이름을 잃지 않도록). Domain `exportPartName(part)`, `DEFAULT_PART_NAME`. XSD 검증 통과.
+- PDF 머리글: 제목 아래 `악기` 또는 `악기 · 조율`(누름 표시를 인쇄할 때) 한 줄(`data-testid="print-instrument"`). 조율 이름은 B-4에서 박자·조성 줄에 넣었던 것을 이 줄로 옮겼다.
+- MIDI: 그대로(음색·트랙 이름 변경 없음, 일반 MIDI에 국악기 없음).
+- 기존 테스트 기대값 변경 1건: `musicxml-export.test.ts`의 part-name "Melody & Co" → "Melody & Co (피아노)". 결정 9의 의도된 출력 변화이며 XML 이스케이프 검사는 그대로.
+- 12현 산조 5도 위 기보: 결정하지 않았다. 앱은 실음 기보(결정 9 기본)를 유지한다. 국악사전은 관행으로 적었을 뿐 연주자 확인이 없다 — 사용자 결정 대기.
+- 테스트: 단위 MusicXML +3(악기 3종 이름·score-instrument, 필드 없는 파트 = 피아노, 파트별 id), E2E `tuning-press.spec.ts` 인쇄 머리글 2곳 확인.
+- 검증: typecheck, lint, unit 80 files/1078, architecture 위반 0, build, E2E 119/119(Chromium). MuseScore 등 외부 프로그램에서 연 결과는 미확인.

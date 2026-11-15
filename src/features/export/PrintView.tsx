@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { exportFileName } from "@/application";
 import { KEY_SIGNATURE_OPTIONS, type NoteLabelMode } from "@/domain/music-theory";
 import type { Score } from "@/domain/score/types";
-import { pressedNoteIds, recommendTunings } from "@/domain/score";
+import { getInstrumentProfile, instrumentOf, pressedNoteIds, recommendTunings } from "@/domain/score";
 import { NotationRenderError } from "@/adapters/vexflow/renderScore";
 import { renderPrintRows } from "@/adapters/vexflow/printRows";
 
@@ -107,8 +107,11 @@ export function PrintView({ load, labelMode, tuningId = null }: PrintViewProps) 
       {state.kind === "loading" || (state.kind === "ready" && !ready) ? <p className="no-print">인쇄 화면 준비 중…</p> : null}
       {score && part && state.kind !== "error" ? <header style={{ marginBottom: 12 }}>
         <h1 data-testid="print-title" style={{ fontSize: 22, margin: "0 0 4px", overflowWrap: "anywhere" }}>{score.title}</h1>
+        {/* Decision 9: instrument and, when marks are printed, the tuning they follow. */}
+        <p data-testid="print-instrument" style={{ margin: "0 0 2px", fontSize: 13 }}>
+          {getInstrumentProfile(instrumentOf(part)).name}{tuning ? ` · ${tuning.name}` : ""}</p>
         <p data-testid="print-meta" style={{ margin: 0, fontSize: 12, color: "#3f4652" }}>
-          ♩ = {score.tempoBpm} · {part.timeSignature.numerator}/{part.timeSignature.denominator}박자 · {keyLabel(score)}{tuning ? ` · ${tuning.name}` : ""} · 마디 {part.measures.length}개
+          ♩ = {score.tempoBpm} · {part.timeSignature.numerator}/{part.timeSignature.denominator}박자 · {keyLabel(score)} · 마디 {part.measures.length}개
         </p>
       </header> : null}
       <div ref={rows} data-testid="print-rows" hidden={state.kind === "error"} />

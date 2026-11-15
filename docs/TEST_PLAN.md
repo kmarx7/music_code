@@ -1755,3 +1755,7 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 ## 조율 추천·누름 표시 B-4 (2026-11-15, Claude Code)
 
 - 단위 `tuning.test.ts` 6, E2E `tuning-press.spec.ts` 2. 누름 표시는 저장 행(revision 포함)이 바뀌지 않고 Undo로 사라지지 않음을 확인. `grand-staff.spec.ts` 기둥 검사는 음표 머리 글리프만 잰다(Annotation이 notehead 그룹 안에 그려지기 때문). 결과 unit 1075, E2E 119/119(Chromium).
+
+## 출력의 악기 이름 B-5 (2026-11-15, Claude Code)
+
+- 단위 `musicxml-export.test.ts` +3과 part-name 기대값 1건 변경(결정 9 출력 변화). E2E 인쇄 머리글 `print-instrument`. unit 1078, E2E 119/119.
