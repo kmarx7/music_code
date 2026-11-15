@@ -1583,3 +1583,10 @@
 - 전문가 확인 페이지(산조대금 D1–D6): https://claude.ai/artifact/MsCzXS6aR3ahvScdmkcggp (비공개, 공유는 사용자가 Share 메뉴에서).
 - 테스트: 단위 `instrument.test.ts`(산조대금 값·향피리 지원 종료·목록), `score-setup.test.ts`(목록·향피리 거부), `instrument-fit.test.ts`(선택 가능 4종, 산조대금 경계 B3/C4/F6/F#6). E2E `home.spec.ts`(산조대금 선택 가능, 향피리 없음), `instrument-fit.spec.ts`(+1: 향피리 옛 악보 열기·지원 종료 표시·산조대금으로 변경).
 - 검증: typecheck, lint, unit 80 files/1083, architecture 위반 0, build, E2E 120/120(Chromium). 산조대금 실제 연주 가능성(특히 역취 E6–F6)은 연주자 확인 전.
+
+## 59. 산조대금 "준비 중"으로 되돌림 (2026-11-16, 사용자 "산조 대금 확인은 나중에, 지금은 12현·25현 가야금만", 커밋 전)
+
+- 프로필 `daegeum-sanjo`: `verified: false`, `range: null`(결정 5: 확인 전 값은 싣지 않는다). 후보 값 C4–F6은 `docs/INSTRUMENTS.md` §2-2에만 남겼다. 목록에는 "산조대금 (준비 중)"(선택 불가)으로 보인다. 고를 수 있는 악기: 피아노·25현 가야금·12현 산조가야금.
+- `cf38e98` 배포 뒤 산조대금으로 만든 악보가 있다면 계속 열리고, "악기에 맞추기"에 "산조대금 (준비 중)"·"음역 자료를 확인하는 중" 문구가 보이며 다른 악기로 바꿀 수 있다.
+- 테스트 변경(의도된 변화): `instrument.test.ts`(산조대금 값 없음), `score-setup.test.ts`(목록·산조대금 거부), `instrument-fit.test.ts`(선택 가능 3종; 산조대금 경계 테스트는 값이 없어져 "음역 없음·세지 않음" 테스트로 바꿈), `home.spec.ts`·`instrument-fit.spec.ts`("산조대금 (준비 중)" 선택 불가, 향피리 옛 악보는 25현으로 변경).
+- 검증: typecheck, lint, unit 80 files/1084, architecture 위반 0, build, E2E 120/120(Chromium).

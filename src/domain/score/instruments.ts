@@ -62,11 +62,11 @@ const PROFILES: Record<InstrumentId, InstrumentProfile> = {
     listed: true,
   },
   /*
-   * 산조대금, 6관 본청 (user decision 2026-11-15: replaces 향피리; values from published sources at the user's request,
-   * `docs/INSTRUMENTS.md`, not yet confirmed by a player). 전폐음 C4 — a tone above 정악대금's B♭3, the flute's lowest
-   * note — up to F6, i.e. 정악대금's 탁임종–중청황종 (B♭3–E♭6) raised a tone. Written at sounding pitch on one treble staff.
+   * 산조대금 (user decision 2026-11-15: replaces 향피리). Waiting for a player's confirmation (user decision
+   * 2026-11-16), so it is listed as "준비 중" and carries no range (decision 5). The researched candidate — 6관 본청,
+   * C4–F6 (MIDI 60–89), sounding pitch, one treble staff — is recorded in `docs/INSTRUMENTS.md` §2-2 only.
    */
-  "daegeum-sanjo": { id: "daegeum-sanjo", name: "산조대금", verified: true, range: { lowMidi: 60, highMidi: 89, label: "C4–F6" },
+  "daegeum-sanjo": { id: "daegeum-sanjo", name: "산조대금", verified: false, range: null,
     clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false, listed: true },
 };
 

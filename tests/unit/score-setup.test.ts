@@ -24,16 +24,18 @@ describe("parseScoreSetup (Phase 7 /new, /record step 1)", () => {
     [{ instrument: "violin" }, "악기"],
     // Listed but not confirmed (B-1): refused even if the form is tampered with.
     [{ instrument: "hyang-piri" }, "악기"],
+    // Listed as 준비 중: refused even if the form is tampered with.
+    [{ instrument: "daegeum-sanjo" }, "악기"],
   ])("refuses %o", (values, word) => {
     const result = parseScoreSetup(values);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain(word);
   });
 
-  it("offers the confirmed instruments including 산조대금; the retired piri is not listed (B-6)", () => {
+  it("offers the piano and the two gayageums; 산조대금 is listed as 준비 중; the retired piri is not listed (B-6)", () => {
     expect(SETUP_INSTRUMENTS.filter((instrument) => instrument.available).map((instrument) => instrument.id))
-      .toEqual(["piano", "gayageum-25", "gayageum-12-sanjo", "daegeum-sanjo"]);
+      .toEqual(["piano", "gayageum-25", "gayageum-12-sanjo"]);
     expect(SETUP_INSTRUMENTS.map((instrument) => [instrument.id, instrument.label])).toEqual([
-      ["piano", "피아노"], ["gayageum-25", "25현 가야금"], ["gayageum-12-sanjo", "12현 산조가야금"], ["daegeum-sanjo", "산조대금"]]);
+      ["piano", "피아노"], ["gayageum-25", "25현 가야금"], ["gayageum-12-sanjo", "12현 산조가야금"], ["daegeum-sanjo", "산조대금 (준비 중)"]]);
   });
 });

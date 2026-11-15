@@ -97,12 +97,12 @@ describe("Phase 7 B-2: Part.instrument and schemaVersion 3 (decision 6)", () => 
       .toMatchObject({ ok: false, error: { code: "INVALID_CLEF" } });
   });
 
-  it("profiles: the piano; 산조대금 from published sources; 향피리 retired but still readable", () => {
+  it("profiles: the piano; 산조대금 waits for a player's confirmation; 향피리 retired but still readable", () => {
     expect(getInstrumentProfile("piano")).toMatchObject({ name: "피아노", verified: true, range: { lowMidi: 21, highMidi: 108 } });
-    // User decision 2026-11-15: 산조대금 replaces 향피리, values from published sources (docs/INSTRUMENTS.md):
-    // 6관 본청 (전폐음 C4) up to 중청태주 a tone above 정악대금's F-equivalent: C4–F6, sounding pitch, one treble staff.
-    expect(getInstrumentProfile("daegeum-sanjo")).toMatchObject({ name: "산조대금", verified: true, listed: true,
-      range: { lowMidi: 60, highMidi: 89, label: "C4–F6" }, tunings: [], grandStaff: false });
+    // User decision 2026-11-16: 산조대금 waits until a player confirms it. The researched values (C4–F6) stay in
+    // docs/INSTRUMENTS.md only; an unconfirmed profile carries no range (decision 5).
+    expect(getInstrumentProfile("daegeum-sanjo")).toMatchObject({ name: "산조대금", verified: false, listed: true,
+      range: null, tunings: [], grandStaff: false });
     // A stored "hyang-piri" part still opens (schema v3 compatibility); the piri is just never offered.
     expect(getInstrumentProfile("hyang-piri")).toMatchObject({ name: "향피리", verified: false, listed: false, range: null, tunings: [] });
     expect(listedInstruments().map((profile) => profile.id)).toEqual(["piano", "gayageum-25", "gayageum-12-sanjo", "daegeum-sanjo"]);

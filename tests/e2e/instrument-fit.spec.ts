@@ -39,7 +39,7 @@ test("악기에 맞추기: 악기 선택은 음을 바꾸지 않고, 음역 밖 
   await expect(instrument).toHaveValue("piano");
   await expect(page.getByTestId("instrument-fit-summary")).toHaveText("음역 A0–C8 · 모든 음이 음역 안에 있습니다.");
   // The retired piri is not offered at all.
-  await expect(instrument.locator('option[value="daegeum-sanjo"]')).toBeEnabled();
+  await expect(instrument.locator("option", { hasText: "산조대금 (준비 중)" })).toBeDisabled();
   await expect(instrument.locator("option", { hasText: "향피리" })).toHaveCount(0);
 
   await instrument.selectOption("gayageum-12-sanjo");
@@ -101,7 +101,7 @@ test("향피리로 저장된 옛 악보도 열리고, 목록에는 '지원 종�
   await expect(instrument).toHaveValue("hyang-piri");
   await expect(instrument.locator("option", { hasText: "향피리 (지원 종료)" })).toBeDisabled();
   await expect(page.getByTestId("instrument-fit-summary")).toHaveText("더 이상 지원하지 않는 악기(향피리)입니다. 음은 그대로 두고 다른 악기를 고를 수 있습니다.");
-  await instrument.selectOption("daegeum-sanjo");
-  await expect(page.getByTestId("instrument-fit-summary")).toHaveText("음역 C4–F6 · 모든 음이 음역 안에 있습니다.");
+  await instrument.selectOption("gayageum-25");
+  await expect(page.getByTestId("instrument-fit-summary")).toHaveText("음역 Eb2–Ab5 · 모든 음이 음역 안에 있습니다.");
   await expect(instrument.locator("option", { hasText: "향피리" })).toHaveCount(0);
 });
