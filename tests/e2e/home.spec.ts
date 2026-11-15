@@ -29,6 +29,7 @@ test("홈 첫 방문: 소개·시작 버튼·로컬 저장 안내, 최근 악보
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "허밍으로 시작", exact: true })).toHaveAttribute("href", "/record");
   await expect(page.getByRole("link", { name: "피아노로 시작", exact: true })).toHaveAttribute("href", "/new");
+  await expect(page.getByRole("link", { name: "악보 올리기", exact: true })).toHaveAttribute("href", "/import");
   await expect(page.getByTestId("home-recent")).toContainText("아직 만든 악보가 없습니다");
   await expect(page.getByText("이 브라우저에만 저장")).toBeVisible();
   await expect(page.locator('a[href="/editor/demo-score"]')).toHaveCount(0);

@@ -5,3 +5,4 @@ export * from "@/application/score-library";
 export * from "@/application/clipboard";
 export * from "@/application/transcription";
 export * from "@/application/export";
+export * from "@/application/score-import";

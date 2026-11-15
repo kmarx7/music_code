@@ -111,11 +111,11 @@ export function useHummingTake(port?: AudioTranscriptionPort): HummingTake {
   };
 }
 
-/** The step list at the top of both flows; `done` marks a step as finished (✓). */
-export function TakeStepList({ index }: { index: number }) {
+/** The step list at the top of the start flows; steps before `index` are marked finished (✓). */
+export function TakeStepList({ index, steps = TAKE_STEPS }: { index: number; steps?: readonly string[] }) {
   return (
     <ol aria-label="진행 단계" style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", listStyle: "none", padding: 0, margin: "0 0 16px", fontSize: 13 }}>
-      {TAKE_STEPS.map((label, position) => (
+      {steps.map((label, position) => (
         <li key={label} aria-current={position === index ? "step" : undefined}
           style={{ color: position === index ? "var(--hb-accent)" : "var(--hb-muted)", fontWeight: position === index ? 700 : 400 }}>
           {position + 1} {label}{position < index ? " ✓" : ""}

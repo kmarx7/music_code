@@ -23,7 +23,7 @@ const muted: React.CSSProperties = { fontSize: 13, color: "#5f6773" };
 
 type Recent = { kind: "loading" } | { kind: "ready"; scores: ScoreSummary[] } | { kind: "error" };
 
-/** Entry point (PRD §4): start by humming or piano, reopen a recent score. Everything stays in this browser. */
+/** Entry point (PRD §4): start by humming, piano or a score file, reopen a recent score. Everything stays in this browser. */
 export default function HomePage() {
   const [recent, setRecent] = useState<Recent>({ kind: "loading" });
   useEffect(() => {
@@ -46,12 +46,13 @@ export default function HomePage() {
         {PRODUCT_TAGLINE}
       </h1>
       <p style={{ fontSize: 16, margin: "0 0 24px", maxWidth: 560 }}>
-        허밍을 녹음하거나 화면 피아노로 음을 넣으면 악보가 됩니다. 고치고, 조를 옮기고, 느리게 반복해 연습한 뒤
+        허밍을 녹음하거나 화면 피아노로 음을 넣으면 악보가 됩니다. 가진 MusicXML 악보를 올려 선율을 가져올 수도 있습니다. 고치고, 조를 옮기고, 느리게 반복해 연습한 뒤
         PDF·MIDI·MusicXML로 내보낼 수 있습니다. 로그인은 필요 없습니다.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
         <Link href="/record" style={primary}>허밍으로 시작</Link>
         <Link href="/new" style={secondary}>피아노로 시작</Link>
+        <Link href="/import" style={secondary}>악보 올리기</Link>
       </div>
       <p style={muted}>허밍은 마이크 동의 후에만 녹음하며, 녹음은 이 기기 안에서 분석하고 저장하거나 보내지 않습니다.</p>
 

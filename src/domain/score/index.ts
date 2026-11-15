@@ -15,3 +15,5 @@ export * from "./selection";
 export * from "./clipboard";
 export * from "./instrument-fit";
 export * from "./tuning";
+export * from "./import-model";
+export * from "./melody-extract";

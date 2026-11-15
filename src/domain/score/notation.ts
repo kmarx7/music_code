@@ -8,6 +8,8 @@ export const MAX_NOTATION_FRAGMENTS = 64;
 export const MAX_NOTATION_TICKABLES = 4096;
 export const MAX_NOTATION_MEASURES = 1024;
 const UNIT = 30; // gcd of the existing 18 notatable durations
+/** Every notatable start and length is a multiple of this. */
+export const NOTATION_UNIT_TICKS = UNIT;
 const MAX_TICKS = MAX_NOTATION_FRAGMENTS * NOTATABLE_DURATIONS[0].ticks;
 export interface NotationIssue {
   readonly code: "INVALID_NOTATION_DURATION" | "NOT_NOTATABLE" | "NOTATION_LIMIT" | "INVALID_NOTATION_POSITION";
