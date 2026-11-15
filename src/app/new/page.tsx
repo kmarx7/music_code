@@ -20,7 +20,7 @@ export default function NewScorePage() {
   async function submit(form: HTMLFormElement) {
     if (pending.current) return;
     const data = new FormData(form);
-    const parsed = parseScoreSetup({ title: data.get("title"), meter: data.get("meter"), tempo: data.get("tempo"), key: data.get("key") });
+    const parsed = parseScoreSetup({ title: data.get("title"), meter: data.get("meter"), tempo: data.get("tempo"), key: data.get("key"), instrument: data.get("instrument") });
     if (!parsed.ok) { setError({ text: parsed.message }); return; }
     pending.current = true; setCreating(true); setError(null);
     const id = crypto.randomUUID();

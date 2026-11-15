@@ -48,6 +48,14 @@ describe("score library use cases", () => {
     expect(repository.size()).toBe(1);
   });
 
+  it("creates the score for the instrument chosen in step 1 (B-6); without one it is for the piano", async () => {
+    const repository = new MemoryScoreRepository();
+    const gayageum = await createNewScore(repository, { id: "g", createdAt: CREATED_AT, instrument: "gayageum-25" });
+    expect(gayageum.parts[0].instrument).toBe("gayageum-25");
+    const piano = await createNewScore(repository, { id: "p", createdAt: CREATED_AT });
+    expect(piano.parts[0].instrument).toBe("piano");
+  });
+
   it("lists saved scores", async () => {
     const repository = new MemoryScoreRepository();
     await createNewScore(repository, { id: "a", createdAt: CREATED_AT });

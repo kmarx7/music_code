@@ -16,6 +16,12 @@ const take: ClipboardPayload = {
 const ids = () => { let next = 0; return () => `id-${next++}`; };
 
 describe("createTranscribedScore (/record step 4 '악보 만들기')", () => {
+  it("carries the step-1 instrument into the new score (B-6)", () => {
+    const result = buildTranscribedScore({ id: "s", createdAt: CREATED_AT, setup: { ...setup, instrument: "gayageum-12-sanjo" as const },
+      clipboard: take, nextId: ids() });
+    expect(result.ok && result.score.parts[0].instrument).toBe("gayageum-12-sanjo");
+  });
+
   it("builds a valid score with the step-1 settings and the take from measure 1, growing measures as needed", () => {
     const result = buildTranscribedScore({ id: "s", createdAt: CREATED_AT, setup, clipboard: take, nextId: ids() });
     expect(result.ok).toBe(true);

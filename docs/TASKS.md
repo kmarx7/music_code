@@ -1565,3 +1565,12 @@
 - 12현 산조 5도 위 기보: 결정하지 않았다. 앱은 실음 기보(결정 9 기본)를 유지한다. 국악사전은 관행으로 적었을 뿐 연주자 확인이 없다 — 사용자 결정 대기.
 - 테스트: 단위 MusicXML +3(악기 3종 이름·score-instrument, 필드 없는 파트 = 피아노, 파트별 id), E2E `tuning-press.spec.ts` 인쇄 머리글 2곳 확인.
 - 검증: typecheck, lint, unit 80 files/1078, architecture 위반 0, build, E2E 119/119(Chromium). MuseScore 등 외부 프로그램에서 연 결과는 미확인.
+
+## 57. Phase 7 B-6 — 시작 흐름에서 악기 선택 (2026-11-15, 사용자 "진행해줘", 커밋 전)
+
+- `/new`·`/record` ① "목표 악기": 확인된 악기(피아노·25현 가야금·12현 산조가야금)를 고를 수 있고 향피리는 "(준비 중)" 선택 불가. 목록은 Domain `selectableInstruments()`에서 만든다(고를 수 있는 것 먼저). `parseScoreSetup`이 악기를 읽고 목록에 없거나 확인 전인 악기는 거부. `createEmptyScore`·`createNewScore`·`buildTranscribedScore`가 악기를 받아 새 악보 파트에 넣는다(기본 피아노).
+- `/record` ④: 채보 후보를 고른 악기 음역과 비교해 "음역 · 범위 밖 n개"와, 벗어나면 기존 추천기의 1순위 이동(전체 적합/가장 가까운 후보)을 보여 준다(`InstrumentRangeNote`). 표시만 하고 음은 바꾸지 않으며, 확정은 편집기 다듬기 → 악기에 맞추기에서.
+- 기존 테스트 기대값 변경(의도된 변화): `score-setup.test.ts`(기본 setup에 `instrument: "piano"`, 선택 가능 목록), `home.spec.ts`(국악기 선택 가능, 25현으로 만들기), `record-flow.spec.ts`(12현 산조 선택·이전 단계 유지·④ 음역 문구·저장 악기).
+- 미검증: `/record` ④의 범위 밖·추천 문구는 E2E에서 보지 못했다(가짜 마이크 A4가 모든 악기 음역 안). 판정·추천은 단위 테스트(B-3)로만 확인.
+- 검증: typecheck, lint, unit 80 files/1082, architecture 위반 0, build, E2E 119/119(Chromium). Safari·실기기·실제 마이크·연주자 확인(UAT-G) 미검증.
+- Phase 7 트랙 B 남은 것: 향피리(B-1 보류), 12현 산조 5도 위 기보 결정, UAT-G.

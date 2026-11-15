@@ -993,3 +993,7 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 
 - Domain: `DEFAULT_PART_NAME = "Melody"`, `exportPartName(part)`(기본 이름이면 악기 이름, 아니면 "이름 (악기)").
 - MusicXML writer: `<score-part>`에 `<part-name>`(exportPartName)과 `<score-instrument id="P{n}-I1"><instrument-name>`. PrintView 머리글 `print-instrument`.
+
+## 시작 흐름의 악기 (2026-11-15, B-6)
+
+- `CreateScoreInput.instrument?`, `NewScoreInput.instrument?`, `TranscribedScoreInput.setup.instrument?`(없으면 피아노). `ScoreSetup.instrument: InstrumentId`, `parseScoreSetup({ instrument })`(선택 불가 악기 거부). `SETUP_INSTRUMENTS`는 Domain 프로필에서 만든다. `/record` ④ `InstrumentRangeNote({ score })`(표시 전용).

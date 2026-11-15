@@ -81,6 +81,7 @@ export interface NewScoreInput {
   tempoBpm?: number;
   timeSignature?: CreateScoreInput["timeSignature"];
   keySignature?: CreateScoreInput["keySignature"];
+  instrument?: CreateScoreInput["instrument"];
 }
 
 /** Creates and saves one empty score. Invalid settings are refused before anything is written. */
@@ -94,6 +95,7 @@ export async function createNewScore(repository: ScoreRepository, input: NewScor
     tempoBpm: input.tempoBpm,
     timeSignature: input.timeSignature,
     keySignature: input.keySignature,
+    instrument: input.instrument,
     createdAt: input.createdAt,
   });
   const issues = validateScore(score);
@@ -118,7 +120,7 @@ export async function probeScoreStorage(repository: ScoreRepository): Promise<bo
 export interface TranscribedScoreInput {
   id: string;
   createdAt: string;
-  setup: { title: string; tempoBpm: number; timeSignature: TimeSignature; keySignature: KeySignature };
+  setup: { title: string; tempoBpm: number; timeSignature: TimeSignature; keySignature: KeySignature; instrument?: CreateScoreInput["instrument"] };
   /** The confirmed take (transcription candidate). */
   clipboard: ClipboardPayload;
   /** Measure ids for the measures the take adds beyond the first eight. */

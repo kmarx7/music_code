@@ -1,4 +1,5 @@
 import { DEFAULT_PART_NAME } from "./instruments";
+import type { InstrumentId } from "./constants";
 import type { NoteEvent, RestEvent, Score } from "@/domain/score/types";
 import { SCORE_SCHEMA_VERSION, TICKS_PER_QUARTER } from "@/domain/score/constants";
 import { createPitch } from "@/domain/music-theory/pitch";
@@ -17,6 +18,8 @@ export interface CreateScoreInput {
     fifths: number;
   };
   createdAt: string;
+  /** The part's instrument (v3); the piano when not given. */
+  instrument?: InstrumentId;
 }
 
 export function measureTicks(timeSignature: {
@@ -49,7 +52,7 @@ export function createEmptyScore(input: CreateScoreInput): Score {
       {
         id: `${input.id}:part:1`,
         name: DEFAULT_PART_NAME,
-        instrument: "piano",
+        instrument: input.instrument ?? "piano",
         clef: "treble",
         keySignature: input.keySignature ?? {
           tonic: "C",

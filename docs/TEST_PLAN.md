@@ -1759,3 +1759,7 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 ## 출력의 악기 이름 B-5 (2026-11-15, Claude Code)
 
 - 단위 `musicxml-export.test.ts` +3과 part-name 기대값 1건 변경(결정 9 출력 변화). E2E 인쇄 머리글 `print-instrument`. unit 1078, E2E 119/119.
+
+## 시작 흐름의 악기 B-6 (2026-11-15, Claude Code)
+
+- 단위: `score-setup.test.ts`(악기 읽기·거부·목록), `score-library.test.ts`·`transcribed-score.test.ts`(새 악보에 악기). E2E `home.spec.ts`(25현으로 만들기), `record-flow.spec.ts`(12현 산조, ④ 음역 문구). ④의 범위 밖 문구는 E2E 미확인. unit 1082, E2E 119/119.

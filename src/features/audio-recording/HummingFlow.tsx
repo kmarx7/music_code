@@ -5,6 +5,7 @@ import { buildTranscribedScore, type AudioTranscriptionPort } from "@/applicatio
 import type { ClipboardPayload, PlaybackPosition } from "@/domain/score";
 import { StaffView } from "@/features/score-editor";
 import { highlightPlayback, PlaybackControls } from "@/features/playback";
+import { InstrumentRangeNote } from "./InstrumentRangeNote";
 import { parseScoreSetup, ScoreSetupFields, SETUP_DEFAULTS, type ScoreSetup } from "@/features/score-setup";
 import { CandidateChips, lowConfidenceCount, MicrophoneFields, takeCard, TakeProgressView, TakeStepList, useHummingTake } from "./take";
 
@@ -69,7 +70,7 @@ export function HummingFlow({ onCreate, port }: HummingFlowProps) {
 
   function readSetup(form: HTMLFormElement): boolean {
     const data = new FormData(form);
-    const parsed = parseScoreSetup({ title: data.get("title"), meter: data.get("meter"), tempo: data.get("tempo") });
+    const parsed = parseScoreSetup({ title: data.get("title"), meter: data.get("meter"), tempo: data.get("tempo"), instrument: data.get("instrument") });
     if (!parsed.ok) { setSetupError(parsed.message); return false; }
     setSetup(parsed.setup); setSetupError("");
     return true;
@@ -154,6 +155,7 @@ export function HummingFlow({ onCreate, port }: HummingFlowProps) {
                 <StaffView score={preview.score} />
               </div>
               <PlaybackControls score={preview.score} onPosition={showPosition} />
+              <InstrumentRangeNote score={preview.score} />
             </>
           ) : preview && !preview.ok ? <p role="alert" className="hb-alert">{preview.message}</p> : null}
           {createError ? <p role="alert" className="hb-alert">{createError}</p> : null}

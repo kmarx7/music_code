@@ -48,6 +48,7 @@ test("허밍 시작(/record): 설정→마이크→녹음→확인→악보 만�
   await expect(page.getByLabel("조성")).toHaveCount(0);
   await page.getByLabel("제목").fill("콧노래");
   await page.getByLabel("템포 (BPM)").fill("400"); // short take: 1 count-in measure + 8 × 0.6 s
+  await page.getByLabel("목표 악기").selectOption("gayageum-12-sanjo");
   await page.getByRole("button", { name: "다음", exact: true }).click();
 
   // ② 마이크: consent gates the start; back keeps the settings.
@@ -59,6 +60,7 @@ test("허밍 시작(/record): 설정→마이크→녹음→확인→악보 만�
   await expect(start).toBeDisabled();
   await page.getByRole("button", { name: "이전", exact: true }).click();
   await expect(page.getByLabel("제목")).toHaveValue("콧노래");
+  await expect(page.getByLabel("목표 악기")).toHaveValue("gayageum-12-sanjo");
   await page.getByRole("button", { name: "다음", exact: true }).click();
   await page.getByLabel("마이크 사용과 기기 내 분석에 동의합니다").check();
   await start.click();
@@ -73,6 +75,9 @@ test("허밍 시작(/record): 설정→마이크→녹음→확인→악보 만�
   await expect(page.getByTestId("recording-result")).toHaveAttribute("data-ok", "true");
   await expect(page.getByTestId("recording-candidate").locator("svg")).toBeVisible();
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  // B-6: the take against the chosen instrument's range (A4 is inside G2–D5, so no move is suggested).
+  await expect(page.getByTestId("record-instrument-range")).toHaveText("12현 산조가야금 음역 G2–D5 · 모든 음이 음역 안에 있습니다.");
+  await expect(page.getByTestId("record-instrument-recommendation")).toHaveCount(0);
   expect(await scoreIds(page)).toEqual(before);
   await page.getByRole("button", { name: "악보 만들기", exact: true }).dblclick();
   await page.waitForURL(/\/editor\/[^/?]+$/);
@@ -84,6 +89,7 @@ test("허밍 시작(/record): 설정→마이크→녹음→확인→악보 만�
   const stored = await storedScore(page, id);
   expect(stored).toMatchObject({ title: "콧노래", tempoBpm: 400 });
   expect(stored.parts[0].timeSignature).toEqual({ numerator: 4, denominator: 4 });
+  expect(stored.parts[0].instrument).toBe("gayageum-12-sanjo");
   const notes = stored.parts[0].measures.flatMap((measure: { events: { kind: string; pitch?: { midi: number } }[] }) => measure.events)
     .filter((event: { kind: string }) => event.kind === "note");
   expect(notes.length).toBeGreaterThan(0);
