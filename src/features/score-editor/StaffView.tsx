@@ -38,8 +38,10 @@ export function compactStaffScore(score: Score, cursorTick: number | null): Scor
   return { ...score, parts: score.parts.map((candidate, index) => (index === 0 ? { ...candidate, measures: candidate.measures.slice(0, keep) } : candidate)) };
 }
 
-export function StaffView({ score, cursorTick = null, labelMode = "none", onSelectEvent, rangeEventIds = NO_RANGE }: {
+export function StaffView({ score, cursorTick = null, labelMode = "none", onSelectEvent, rangeEventIds = NO_RANGE, pressedEventIds }: {
   score: Score; cursorTick?: number | null; labelMode?: NoteLabelMode; onSelectEvent?: (eventId: string) => void;
+  /** Attacks marked "누름" in the chosen tuning (B-4). Display only; keep the set's identity stable between renders. */
+  pressedEventIds?: ReadonlySet<string>;
   /** Original event IDs of the current range selection. Changing it does not redraw the SVG. */
   rangeEventIds?: readonly string[];
 }) {
@@ -56,7 +58,7 @@ export function StaffView({ score, cursorTick = null, labelMode = "none", onSele
     const element = ref.current;
     if (!element) return;
     const controller = new AbortController();
-    renderScoreInto(element, score, { cursorTick, labelMode, signal: controller.signal }).then(() => {
+    renderScoreInto(element, score, { cursorTick, labelMode, pressedEventIds, signal: controller.signal }).then(() => {
       if (!controller.signal.aborted) markRange(element, rangeByStaff.get(element) ?? NO_RANGE);
     // Two-argument form: the failure notice must land in the same microtask turn as before.
     }, (error: unknown) => {
@@ -69,7 +71,7 @@ export function StaffView({ score, cursorTick = null, labelMode = "none", onSele
       element.replaceChildren(notice);
     });
     return () => controller.abort();
-  }, [score, cursorTick, labelMode]);
+  }, [score, cursorTick, labelMode, pressedEventIds]);
 
   return (
     <div

@@ -8,6 +8,8 @@ export interface InstrumentTuning {
   id: string;
   name: string;
   stringMidis: readonly number[];
+  /** Key signature (fifths) this tuning is the scale of, major or its relative minor; null when it follows no key. */
+  keyFifths: number | null;
 }
 
 export interface InstrumentProfile {
@@ -45,13 +47,13 @@ const PROFILES: Record<InstrumentId, InstrumentProfile> = {
   "hyang-piri": { id: "hyang-piri", name: "향피리", verified: false, range: null, clefs: SUPPORTED_CLEFS, tunings: [], grandStaff: false },
   "gayageum-25": {
     id: "gayageum-25", name: "25현 가야금", verified: true, range: { lowMidi: 39, highMidi: 80, label: "Eb2–Ab5" }, clefs: SUPPORTED_CLEFS,
-    tunings: [{ id: "eb", name: "Eb조", stringMidis: GAYAGEUM_25_EB }, { id: "ab", name: "Ab조", stringMidis: GAYAGEUM_25_AB }],
+    tunings: [{ id: "eb", name: "Eb조", stringMidis: GAYAGEUM_25_EB, keyFifths: -3 }, { id: "ab", name: "Ab조", stringMidis: GAYAGEUM_25_AB, keyFifths: -4 }],
     // B-1 second answer: 25현 scores use the grand staff.
     grandStaff: true,
   },
   "gayageum-12-sanjo": {
     id: "gayageum-12-sanjo", name: "12현 산조가야금", verified: true, range: { lowMidi: 43, highMidi: 74, label: "G2–D5" }, clefs: SUPPORTED_CLEFS,
-    tunings: [{ id: "sanjo", name: "산조 조율", stringMidis: GAYAGEUM_12_SANJO }],
+    tunings: [{ id: "sanjo", name: "산조 조율", stringMidis: GAYAGEUM_12_SANJO, keyFifths: null }],
     grandStaff: false,
   },
 };

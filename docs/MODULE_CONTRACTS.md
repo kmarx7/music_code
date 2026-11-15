@@ -982,3 +982,9 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 
 - Domain: `selectableInstruments(): InstrumentProfile[]`(verified이고 range가 있는 것, `INSTRUMENT_IDS` 순), `analyzeInstrumentFit(score, instrument) → { instrument, range: TargetMidiRange | null, outside: {below, above, total}, logicalNoteCount, suggestedClef: Clef | null }`. 읽기 전용. `InstrumentProfile.range`에 표시용 `label` 추가.
 - UI: `InstrumentFitPanel({ score, disabled, onRecommend(target, label) })`. 변경은 `SetInstrument`·`SetClef` Command만. `RangeRecommendations`에 선택 `initialTarget`·`targetLabel`(다시 마운트해서 바꾼다).
+
+## 조율·누름 (2026-11-15, B-4)
+
+- Domain: `pressedNoteIds(part, tuning): ReadonlySet<string>`, `recommendTunings(score): TuningRecommendation[]`(`{ tuning, pressed, keyMatch }`). `InstrumentTuning.keyFifths: number | null`.
+- VexFlow: `renderScoreInto(..., { pressedEventIds })`, `renderPrintRows(host, score, labelMode, pressedEventIds?)`. "누름" 요소는 `data-testid="press-mark"`, `data-press-event-id`.
+- UI: `StaffView.pressedEventIds`, `TransposeTool`/`InstrumentFitPanel`의 `tunings`·`tuningId`·`onTuningChange`, `ExportControls.tuningId`, `printPath(id, labelMode, tuningId?)`, `PrintView.tuningId`(주소 `?tuning=`). 조율은 Score에 저장하지 않는다.

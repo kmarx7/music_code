@@ -1546,3 +1546,12 @@
 - 테스트: 단위 `instrument-fit.test.ts` 5(먼저 작성해 실패 확인), E2E `instrument-fit.spec.ts` 2(구현 후 작성: 선택이 음을 바꾸지 않음·저장, 범위 밖 2개, 추천 목표 43–74, 후보 full/partial, 확정 후 0개, Undo 2번으로 조옮김→악기 순 복원; 음자리표 제안·적용·Undo).
 - 검증: typecheck, lint, unit 79 files/1069(3회 연속 통과 — 그 전 1회 실행에서 1건 실패가 있었으나 재현되지 않아 원인 미상), architecture 위반 0, build, E2E 117/117(Chromium). Safari·실기기 미검증, 국악기 실제 연주 가능성은 연주자 확인(UAT-G) 전.
 - 남은 것: B-4 조율 추천·누름 표시, B-5 출력, B-6 `/new`·`/record` 악기 선택과 "준비 중" 해제.
+
+## 55. Phase 7 B-4 — 조율 추천·누름 표시 (2026-11-15, 사용자 "진행해줘", 커밋 전)
+
+- Domain `tuning.ts`: `pressedNoteIds(part, tuning)`(개방현에 없는 음의 첫 발음, 붙임줄 이어짐 제외 — B-1 G3에 따라 폭과 상관없이 모두 "누름", "불가" 없음), `recommendTunings(score)`(누름 적은 순 → 조표와 맞는 조율 → 프로필 순). `InstrumentTuning.keyFifths` 추가(Eb조 -3, Ab조 -4, 산조 null).
+- 표시: 조율 선택은 라벨처럼 화면 상태(저장·이력 없음, 기본값은 1순위 추천). 렌더러 `pressedEventIds` 옵션 — 음 위에 "누름"(위쪽 Annotation, 라벨은 아래라 겹치지 않음), 행 캐시 서명에 포함. 다듬기 "악기에 맞추기"에 조율 선택(25현: "Ab조 · 누름 없음 (추천)" 등)과 요약, 12현 산조는 조율이 하나라 요약만.
+- 인쇄: `printPath(id, labelMode, tuningId)` → `/print/id?tuning=eb`, 인쇄 화면이 같은 누름 표시와 머리글 조율 이름을 그린다. 조율 없는 주소는 이전과 같다.
+- 테스트: 단위 `tuning.test.ts` 6(먼저 작성해 실패 확인; 최저·최고 줄 개방, 반음 위아래 누름, Ab조 D줄, 추천 순서·동률 조표, 12현 맨 위 줄 위, 조율 없는 악기, 인쇄 주소). E2E `tuning-press.spec.ts` 2(추천·선택·누름 1개·라벨과 겹침 없음·저장/이력 없음·인쇄 있음/없음, 12현).
+- 기존 테스트 수정 1건: `grand-staff.spec.ts` 기둥 간격 검사가 `.vf-notehead` 그룹 상자를 썼는데, VexFlow는 음표의 Annotation("누름")을 그 그룹 안에 그려 상자가 넓어진다. 음표 머리 글리프(`.vf-notehead > text`)만 재도록 바꿨다. 기대값(3px 미만)은 그대로이고 스크린샷으로 기둥이 붙어 있음을 확인.
+- 검증: typecheck, lint, unit 80 files/1075, architecture 위반 0, build, E2E 119/119(Chromium). Safari·실기기·연주자 확인(UAT-G) 미검증. 줄 번호 표시는 B-1 G5("안 적어도 됨")에 따라 만들지 않았다.

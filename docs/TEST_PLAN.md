@@ -1751,3 +1751,7 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 
 - 단위 `instrument-fit.test.ts`: 선택 가능 악기(확인된 것만), 범위 밖 수(붙임줄 한 번), 악기 음역 → 기존 추천기의 full/partial 일치·원본 불변, 음자리표 제안(중앙값·큰보표·빈 악보), 미확인 악기는 음역 없음.
 - E2E `instrument-fit.spec.ts` 2개: 악기 선택·저장·음 불변, 추천 미리보기 목표 43–74, 확정과 Undo 단위, 음자리표 제안 적용·Undo. 결과 unit 1069, E2E 117/117(Chromium).
+
+## 조율 추천·누름 표시 B-4 (2026-11-15, Claude Code)
+
+- 단위 `tuning.test.ts` 6, E2E `tuning-press.spec.ts` 2. 누름 표시는 저장 행(revision 포함)이 바뀌지 않고 Undo로 사라지지 않음을 확인. `grand-staff.spec.ts` 기둥 검사는 음표 머리 글리프만 잰다(Annotation이 notehead 그룹 안에 그려지기 때문). 결과 unit 1075, E2E 119/119(Chromium).

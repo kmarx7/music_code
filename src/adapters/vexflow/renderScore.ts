@@ -118,7 +118,11 @@ function vexKeyOf(event: Extract<ScoreEvent, { kind: "note" }>): string {
 export async function renderScoreInto(
   element: HTMLDivElement,
   score: Score,
-  options?: { cursorTick?: number | null; labelMode?: NoteLabelMode; signal?: AbortSignal },
+  options?: {
+    cursorTick?: number | null; labelMode?: NoteLabelMode; signal?: AbortSignal;
+    /** Attacks drawn with a "누름" mark above the note (B-4). Display only; the caller computes it from a tuning. */
+    pressedEventIds?: ReadonlySet<string>;
+  },
 ): Promise<void> {
   if (options?.signal?.aborted) return;
   const request = (renderRequests.get(element) ?? 0) + 1;
@@ -167,6 +171,8 @@ export async function renderScoreInto(
     let expandedLayout = labelled;
     const continuation = new Set(part.ties.map((tie) => tie.to));
     const annotations = new Map<InstanceType<typeof StaveNote>, InstanceType<typeof Annotation>>();
+    const pressed = options?.pressedEventIds;
+    const pressMarks = new Map<InstanceType<typeof StaveNote>, InstanceType<typeof Annotation>>();
     // 25현 가야금: a grand staff (treble over bass) per row; each glyph goes on the staff assignGrandStaves gives it.
     const { rowHeight, bassOffset } = staffRowGeometry(part, labelMode);
     const grandStaves = bassOffset > 0 ? assignGrandStaves(plan.measures) : null;
@@ -223,7 +229,7 @@ export async function renderScoreInto(
           planned[from + offset].map((fragment) => [fragment.event.id, fragment.event.kind,
             fragment.event.kind === "note" ? vexKeyOf(fragment.event) : "", fragment.startTick, fragment.duration.base,
             fragment.duration.dots, fragment.duration.ticks, fragment.index, fragment.count,
-            continuation.has(fragment.event.id) ? 1 : 0])]),
+            continuation.has(fragment.event.id) ? 1 : 0, pressed?.has(fragment.event.id) ? 1 : 0])]),
         tieSignatures[row] ?? []]);
     }
     let layout: RowLayout = { signature: "", group: null, endX: 0, spaced: false, measures: [] };
@@ -319,6 +325,13 @@ export async function renderScoreInto(
           note.addModifier(annotation, 0);
           annotations.set(note, annotation);
         }
+        // Above the note, so it never meets a label (labels sit below the staff).
+        if (event.kind === "note" && fragment.index === 0 && pressed?.has(event.id)) {
+          const mark = new Annotation("누름").setFont("system-ui, sans-serif", 10)
+            .setVerticalJustification(Annotation.VerticalJustify.TOP);
+          note.addModifier(mark, 0);
+          pressMarks.set(note, mark);
+        }
         return note;
       });
 
@@ -395,6 +408,12 @@ export async function renderScoreInto(
           label.setAttribute("data-label-event-id", event.id);
           label.setAttribute("aria-label", annotations.get(notes[position])!.getText());
           label.setAttribute("style", "pointer-events: none; user-select: none");
+        }
+        const mark = pressMarks.get(notes[position])?.getSVGElement();
+        if (mark) {
+          mark.setAttribute("data-testid", "press-mark");
+          mark.setAttribute("data-press-event-id", event.id);
+          mark.setAttribute("style", "pointer-events: none; user-select: none");
         }
         const previous = rendered.get(event.id);
         rendered.set(event.id, { first: previous?.first ?? notes[position], last: notes[position], row });

@@ -15,21 +15,27 @@ export interface ExportControlsProps {
   flush: () => Promise<boolean>;
   /** Storage is in conflict or the score was deleted elsewhere: the stored copy is not the one on screen. */
   storageBlocked: boolean;
+  /** Tuning whose "누름" marks are on screen (B-4); the print view shows the same. */
+  tuningId?: string | null;
 }
 
 const button: React.CSSProperties = {
   padding: "6px 12px", borderRadius: 8, border: "1px solid #c8cfdb", background: "#ffffff", cursor: "pointer", fontSize: 13, minHeight: 44,
 };
 
-export function printPath(scoreId: string, labelMode: NoteLabelMode): string {
-  return `/print/${encodeURIComponent(scoreId)}${labelMode === "none" ? "" : `?labels=${labelMode}`}`;
+export function printPath(scoreId: string, labelMode: NoteLabelMode, tuningId: string | null = null): string {
+  const query = new URLSearchParams();
+  if (labelMode !== "none") query.set("labels", labelMode);
+  if (tuningId) query.set("tuning", tuningId);
+  const text = query.toString();
+  return `/print/${encodeURIComponent(scoreId)}${text ? `?${text}` : ""}`;
 }
 
 /**
  * MIDI / MusicXML download the score on screen (it is never changed, stored or added to history).
  * PDF opens the print view in a new tab after saving, for the browser's "Save as PDF" (D-03 #1).
  */
-export function ExportControls({ score, labelMode, flush, storageBlocked }: ExportControlsProps) {
+export function ExportControls({ score, labelMode, flush, storageBlocked, tuningId = null }: ExportControlsProps) {
   const [notice, setNotice] = useState<{ text: string; error: boolean; link?: string } | null>(null);
 
   function download(port: ExportPort, label: string) {
@@ -40,7 +46,7 @@ export function ExportControls({ score, labelMode, flush, storageBlocked }: Expo
   }
 
   async function openPrint() {
-    const path = printPath(score.id, labelMode);
+    const path = printPath(score.id, labelMode, tuningId);
     // Opened inside the click so popup blockers allow it; it is pointed at the print view once the save is done.
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null;

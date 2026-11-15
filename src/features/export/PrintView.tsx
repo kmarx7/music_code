@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { exportFileName } from "@/application";
 import { KEY_SIGNATURE_OPTIONS, type NoteLabelMode } from "@/domain/music-theory";
 import type { Score } from "@/domain/score/types";
+import { pressedNoteIds, recommendTunings } from "@/domain/score";
 import { NotationRenderError } from "@/adapters/vexflow/renderScore";
 import { renderPrintRows } from "@/adapters/vexflow/printRows";
 
@@ -31,6 +32,8 @@ export interface PrintViewProps {
   /** Reads the stored score (never creates or saves one). */
   load: () => Promise<Score | null>;
   labelMode: NoteLabelMode;
+  /** Tuning chosen on screen (B-4, not stored). Its "누름" marks are printed; an id the instrument lacks prints none. */
+  tuningId?: string | null;
 }
 
 function keyLabel(score: Score): string {
@@ -39,7 +42,7 @@ function keyLabel(score: Score): string {
 }
 
 /** Read-only A4 print layout of the stored score (P5-06). Nothing here writes to storage, history or the Score. */
-export function PrintView({ load, labelMode }: PrintViewProps) {
+export function PrintView({ load, labelMode, tuningId = null }: PrintViewProps) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const host = useRef<HTMLDivElement>(null);
   const rows = useRef<HTMLDivElement>(null);
@@ -58,12 +61,14 @@ export function PrintView({ load, labelMode }: PrintViewProps) {
 
   const [drawn, setDrawn] = useState<{ score: Score; count: number } | null>(null);
   const score = state.kind === "ready" ? state.score : null;
+  const tuning = score && tuningId ? recommendTunings(score).find((entry) => entry.tuning.id === tuningId)?.tuning ?? null : null;
+  const pressed = useMemo(() => score?.parts[0] && tuning ? pressedNoteIds(score.parts[0], tuning) : undefined, [score, tuning]);
   useEffect(() => {
     if (!score || !host.current || !rows.current) return;
     let active = true;
     const target = rows.current;
     document.title = exportFileName(score.title, "pdf").replace(/\.pdf$/, "");
-    renderPrintRows(host.current, score, labelMode).then((svgs) => {
+    renderPrintRows(host.current, score, labelMode, pressed).then((svgs) => {
       if (!active) return;
       target.replaceChildren(...svgs.map((svg) => {
         const row = document.createElement("div");
@@ -79,7 +84,7 @@ export function PrintView({ load, labelMode }: PrintViewProps) {
         ? `정확한 기보를 인쇄할 수 없습니다. ${error.message}` : "악보를 인쇄용으로 그리지 못했습니다. 원본 악보는 바뀌지 않았습니다." });
     });
     return () => { active = false; };
-  }, [score, labelMode]);
+  }, [score, labelMode, pressed]);
 
   const ready = state.kind === "ready" && drawn?.score === state.score;
   const part = score?.parts[0];
@@ -103,7 +108,7 @@ export function PrintView({ load, labelMode }: PrintViewProps) {
       {score && part && state.kind !== "error" ? <header style={{ marginBottom: 12 }}>
         <h1 data-testid="print-title" style={{ fontSize: 22, margin: "0 0 4px", overflowWrap: "anywhere" }}>{score.title}</h1>
         <p data-testid="print-meta" style={{ margin: 0, fontSize: 12, color: "#3f4652" }}>
-          ♩ = {score.tempoBpm} · {part.timeSignature.numerator}/{part.timeSignature.denominator}박자 · {keyLabel(score)} · 마디 {part.measures.length}개
+          ♩ = {score.tempoBpm} · {part.timeSignature.numerator}/{part.timeSignature.denominator}박자 · {keyLabel(score)}{tuning ? ` · ${tuning.name}` : ""} · 마디 {part.measures.length}개
         </p>
       </header> : null}
       <div ref={rows} data-testid="print-rows" hidden={state.kind === "error"} />

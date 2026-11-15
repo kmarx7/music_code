@@ -21,5 +21,6 @@ function PrintRoute() {
   const scoreId = params?.scoreId ?? "";
   const repository = getScoreRepository();
   const load = useCallback(() => repository.load(scoreId), [repository, scoreId]);
-  return <PrintView key={scoreId} load={load} labelMode={labelModeOf(search?.get("labels") ?? null)} />;
+  return <PrintView key={scoreId} load={load} labelMode={labelModeOf(search?.get("labels") ?? null)}
+    tuningId={search?.get("tuning") ?? null} />;
 }

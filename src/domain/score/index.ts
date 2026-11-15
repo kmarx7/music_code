@@ -14,3 +14,4 @@ export * from "./grand-staff";
 export * from "./selection";
 export * from "./clipboard";
 export * from "./instrument-fit";
+export * from "./tuning";

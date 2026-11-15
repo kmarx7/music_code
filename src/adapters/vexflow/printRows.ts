@@ -29,8 +29,9 @@ export function printRowViewBox(drawn: Box, row: number, rowHeight: number, canv
  * can break pages between rows and never through one. No cursor, selection or playback state is drawn.
  * Throws the renderer's NotationRenderError for a score that cannot be notated exactly.
  */
-export async function renderPrintRows(host: HTMLDivElement, score: Score, labelMode: NoteLabelMode): Promise<SVGSVGElement[]> {
-  await renderScoreInto(host, score, { labelMode });
+export async function renderPrintRows(host: HTMLDivElement, score: Score, labelMode: NoteLabelMode,
+  pressedEventIds?: ReadonlySet<string>): Promise<SVGSVGElement[]> {
+  await renderScoreInto(host, score, { labelMode, pressedEventIds });
   await host.ownerDocument.fonts?.ready;
   const svg = host.querySelector("svg");
   if (!svg) return [];

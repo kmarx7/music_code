@@ -96,7 +96,8 @@ test("처음 열 때부터 음표 기둥이 머리에 붙어 그려진다(악보
     const glyphs = page.getByTestId("editor-content").getByTestId("staff").locator("[data-event-id]");
     await expect(glyphs).toHaveCount(4);
     const gaps = await glyphs.evaluateAll((elements) => elements.map((element) => {
-      const head = (element.querySelector(".vf-notehead") as SVGGraphicsElement).getBBox();
+      // The glyph itself: VexFlow also draws a note's annotations ("누름", labels) inside the notehead group.
+      const head = (element.querySelector(".vf-notehead > text") as SVGGraphicsElement).getBBox();
       const stem = (element.querySelector(".vf-stem") as SVGGraphicsElement).getBBox();
       // Stem up: at the head's right edge; stem down: at its left edge.
       return Math.min(Math.abs(stem.x - head.x), Math.abs(stem.x - (head.x + head.width)));

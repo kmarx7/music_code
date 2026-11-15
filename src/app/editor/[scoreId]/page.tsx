@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { Pitch } from "@/domain/score/types";
 import { formatNoteLabel, koreanFixedDo, letterName, type NoteLabelMode } from "@/domain/music-theory";
 import { ScoreConflictError, ScoreReadError, importScoreBackup, exportScoreBackup, openOrCreateScore, planAppendNote, planAppendRest, planNoteAt, probeScoreStorage } from "@/application";
-import { createEmptyScore, measureTicks, TICKS_PER_QUARTER } from "@/domain/score";
+import { createEmptyScore, measureTicks, pressedNoteIds, recommendTunings, TICKS_PER_QUARTER } from "@/domain/score";
 import { downloadScoreJson } from "@/adapters/file-export/json";
 import { createUnavailableScoreRepository, getScoreRepository } from "@/adapters/indexeddb";
 import { scoreStore } from "@/store/score-store";
@@ -276,6 +276,12 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
   const currentScore = session?.current ?? null;
   const staffScore = useMemo(() => (currentScore && phone && mode === "edit" ? compactStaffScore(currentScore, cursorTick) : currentScore),
     [currentScore, phone, mode, cursorTick]);
+  // B-4: the tuning is a view choice like the labels (never stored). Until one is chosen, the top recommendation.
+  const [tuningChoice, setTuningChoice] = useState<string | null>(null);
+  const tunings = useMemo(() => (currentScore ? recommendTunings(currentScore) : []), [currentScore]);
+  const activeTuning = (tunings.find((entry) => entry.tuning.id === tuningChoice) ?? tunings[0])?.tuning ?? null;
+  const firstPart = currentScore?.parts[0] ?? null;
+  const pressedIds = useMemo(() => (firstPart && activeTuning ? pressedNoteIds(firstPart, activeTuning) : undefined), [firstPart, activeTuning]);
 
   if (!session) {
     return (
@@ -438,7 +444,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
             {/* Tapping a glyph opens its editor in the "다듬기" mode. */}
             <StaffView score={staffScore ?? score} cursorTick={cursorTick} labelMode={labelMode}
               onSelectEvent={(id) => { setSelectedEventId(id); setMode("edit"); }}
-              rangeEventIds={rangeSelection?.eventIds} />
+              rangeEventIds={rangeSelection?.eventIds} pressedEventIds={pressedIds} />
           </div>
           {notes.length === 0 ? <p className="hb-muted" style={{ margin: "8px 0 0" }}>
             아직 음이 없습니다. 입력 모드에서 건반을 누르거나 허밍을 녹음해 보세요.</p> : null}
@@ -601,7 +607,8 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
           onStart={() => setPlaybackStopSignal((value) => value + 1)} openSignal={start === "hum" ? 1 : 0} />
       </div>
       <div role="tabpanel" id="mode-panel-edit-more" aria-labelledby="mode-tab-edit" hidden={mode !== "edit"}>
-        <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
+        <TransposeTool labelMode={labelMode} autosave={autosave} status={saveStatus}
+          tunings={tunings} tuningId={activeTuning?.id ?? null} onTuningChange={setTuningChoice} onOpen={() => setPlaybackStopSignal((value) => value + 1)} />
         <RefineSection title="악보 설정" summary={`템포 ${score.tempoBpm} · ${part.timeSignature.numerator}/${part.timeSignature.denominator}박자`}>
           <ScoreSettings score={score} onCommand={runCommand} />
         </RefineSection>
@@ -612,7 +619,7 @@ function EditorWorkspace({ initialRevision, memoryOnly }: { initialRevision: num
 
       <div role="tabpanel" id="mode-panel-file" aria-labelledby="mode-tab-file" hidden={mode !== "file"}>
         <div style={panel}>
-          <ExportControls score={score} labelMode={labelMode} storageBlocked={storageBlocked || memoryOnly}
+          <ExportControls score={score} labelMode={labelMode} tuningId={activeTuning?.id ?? null} storageBlocked={storageBlocked || memoryOnly}
             flush={async () => (await autosave.current?.flush()) ?? false} />
         </div>
         <div style={{ ...panel, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>

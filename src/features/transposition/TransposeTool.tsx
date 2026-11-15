@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { EditSessionState } from "@/application/edit-session";
 import { KEY_SIGNATURE_OPTIONS, isSupportedKeySignature, type TransposeDirection, type NoteLabelMode } from "@/domain/music-theory";
-import { analyzeScoreRange, planPartNotation, transposeScore, type RangeRecommendation, type TargetMidiRange, type TransposeSpec } from "@/domain/score";
+import { analyzeScoreRange, planPartNotation, transposeScore } from "@/domain/score";
+import type { RangeRecommendation, TargetMidiRange, TransposeSpec, TuningRecommendation } from "@/domain/score";
 import { scoreStore } from "@/store/score-store";
 import { useScoreState } from "@/store/useScoreStore";
 import { StaffView } from "@/features/score-editor";
@@ -25,8 +26,10 @@ function explain(error: { code: string }): string {
 }
 
 /** Transient candidate only. Confirmation alone uses the existing synchronous command pipeline. */
-export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: {
+export function TransposeTool({ autosave, status, onOpen, labelMode = "none", tunings = [], tuningId = null, onTuningChange }: {
   autosave: RefObject<AutosaveHandle | null>; status: SaveStatus; onOpen?: () => void; labelMode?: NoteLabelMode;
+  /** B-4 tuning view state, owned by the page (not stored). */
+  tunings?: readonly TuningRecommendation[]; tuningId?: string | null; onTuningChange?: (id: string) => void;
 }) {
   const session = useScoreState();
   const [base, setBase] = useState<{ session: EditSessionState; revision: number } | null>(null);
@@ -110,7 +113,8 @@ export function TransposeTool({ autosave, status, onOpen, labelMode = "none" }: 
     }
   }
   return <div style={{ marginBottom: 16 }}>
-    {session ? <InstrumentFitPanel score={session.current} disabled={status === "conflict" || status === "deleted"} onRecommend={recommendForInstrument} /> : null}
+    {session ? <InstrumentFitPanel score={session.current} disabled={status === "conflict" || status === "deleted"} onRecommend={recommendForInstrument}
+      tunings={tunings} tuningId={tuningId} onTuningChange={onTuningChange} /> : null}
     <button ref={trigger} type="button" style={button} aria-expanded={!!base} disabled={!session || status === "conflict" || status === "deleted"} onClick={() => { open(); }}>조옮김</button>
     {range ? <RangeSummary analysis={range} /> : null}
     {!base && error ? <p aria-live="polite">{error}</p> : null}
