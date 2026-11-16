@@ -18,6 +18,14 @@ describe("describeImportNotice", () => {
       .toBe("선법(dorian)은 같은 조표의 장조로 표시했습니다");
   });
 
+  it("explains the MIDI notices", () => {
+    expect(describeImportNotice({ code: "PERFORMANCE_QUANTIZED", count: 12, measures: ["1", "2"] }))
+      .toBe("연주 기록으로 보여 음 12개를 16분음표 단위로 맞췄습니다 (1, 2마디)");
+    expect(describeImportNotice({ code: "DRUMS_IGNORED", count: 30, measures: [] })).toBe("드럼 채널 음 30개는 가져오지 않았습니다");
+    expect(describeImportNotice({ code: "KEY_ASSUMED", count: 1, measures: [] }))
+      .toBe("파일에 조표 정보가 없어 C장조로 적었습니다. 다음 단계에서 목표 조를 고를 수 있습니다");
+  });
+
   it("has a sentence for every code", () => {
     for (const code of IMPORT_NOTICE_CODES) {
       const text = describeImportNotice({ code, count: 1, measures: ["3"], detail: "x" });

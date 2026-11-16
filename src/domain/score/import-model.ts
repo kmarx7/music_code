@@ -45,5 +45,5 @@ export interface ImportedScore {
   tempos: ImportedTempo[];
   parts: ImportedPart[];
   /** Marks the import does not carry over: repeats/endings, lyrics, and directions (dynamics, articulations, chord symbols…). */
-  ignored: { repeats: number; lyrics: number; directions: number };
+  ignored: { repeats: number; lyrics: number; directions: number; drums?: number };
 }

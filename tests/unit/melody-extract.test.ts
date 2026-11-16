@@ -163,3 +163,68 @@ describe("extractMelody review fixes", () => {
     expect(notice(result, "DROPPED_ZERO_LENGTH")).toBeUndefined();
   });
 });
+
+describe("extractMelody MIDI rules (Phase 8 step 3)", () => {
+  const imported = (starts: [number, number][], extra: Partial<ImportedScore> = {}): ImportedScore => ({
+    title: "t", tempos: [{ tick: 0, bpm: 120 }], ignored: { repeats: 0, lyrics: 0, directions: 0 }, ...extra,
+    parts: [{ id: "M1", name: "m", staves: 1, timeSignatures: [{ tick: 0, numerator: 4, denominator: 4 }], keys: [],
+      measures: [{ number: "1", startTick: 0, lengthTicks: 3840, implicit: false }, { number: "2", startTick: 3840, lengthTicks: 3840, implicit: false }],
+      notes: starts.map(([start, length], index) => ({ measureNumber: "1", startTick: start, durationTicks: length,
+        pitch: { step: (["C", "D", "E", "F"] as const)[index % 4]!, alter: 0, octave: 5 },
+        staff: 1, voice: "1", chord: false, grace: false, cue: false, tieStart: false, tieStop: false })) }],
+  });
+
+  it("performance MIDI snaps the whole part", () => {
+    // 990 is notatable on its own (a multiple of 30) but sits in a played, unquantized take.
+    const result = ok(extractMelody(imported([[5, 950], [990, 940], [1915, 980]]), { rhythm: "grid-all-if-any-off" }));
+    expect(notes(result).map((event) => [event.startTick, event.durationTicks])).toEqual([[0, 960], [960, 960], [1920, 960]]);
+    expect(notice(result, "PERFORMANCE_QUANTIZED")).toMatchObject({ count: 3 });
+    expect(notice(result, "ROUNDED_TO_GRID")).toBeUndefined();
+  });
+
+  it("notation MIDI stays exact under the MIDI rule", () => {
+    const result = ok(extractMelody(imported([[0, 120], [120, 360], [480, 480]]), { rhythm: "grid-all-if-any-off" }));
+    expect(notes(result).map((event) => [event.startTick, event.durationTicks])).toEqual([[0, 120], [120, 360], [480, 480]]);
+    expect(notice(result, "PERFORMANCE_QUANTIZED")).toBeUndefined();
+  });
+
+  it("reports drums and an assumed key", () => {
+    const result = ok(extractMelody(imported([[0, 960]], { ignored: { repeats: 0, lyrics: 0, directions: 0, drums: 4 } })));
+    expect(notice(result, "DRUMS_IGNORED")).toMatchObject({ count: 4 });
+    expect(notice(result, "KEY_ASSUMED")).toBeDefined();
+    expect(result.settings.keySignature).toMatchObject({ fifths: 0, mode: "major" });
+  });
+
+  it("fractional tempo is rounded without a clamp notice", () => {
+    const result = ok(extractMelody(imported([[0, 960]], { tempos: [{ tick: 0, bpm: 96.5 }] })));
+    expect(result.settings.tempoBpm).toBe(97);
+    expect(notice(result, "TEMPO_CLAMPED")).toBeUndefined();
+    expect(notice(ok(extractMelody(imported([[0, 960]], { tempos: [{ tick: 0, bpm: 10.4 }] }))), "TEMPO_CLAMPED")).toBeDefined();
+  });
+});
+
+describe("extractMelody MIDI review fixes", () => {
+  const imported = (starts: [number, number][]): ImportedScore => ({
+    title: "t", tempos: [{ tick: 0, bpm: 120 }], ignored: { repeats: 0, lyrics: 0, directions: 0 },
+    parts: [{ id: "M1", name: "m", staves: 1, timeSignatures: [{ tick: 0, numerator: 4, denominator: 4 }], keys: [],
+      measures: [{ number: "1", startTick: 0, lengthTicks: 3840, implicit: false }],
+      notes: starts.map(([start, length], index) => ({ measureNumber: "1", startTick: start, durationTicks: length,
+        pitch: { step: (["C", "D", "E", "F", "G", "A"] as const)[index % 6]!, alter: 0, octave: 5 },
+        staff: 1, voice: "1", chord: false, grace: false, cue: false, tieStart: false, tieStop: false })) }],
+  });
+
+  it("played short notes keep at least a sixteenth", () => {
+    const result = ok(extractMelody(imported([[3, 100], [483, 100], [963, 100]]), { rhythm: "grid-all-if-any-off" }));
+    expect(notes(result).map((event) => [event.startTick, event.durationTicks])).toEqual([[0, 240], [480, 240], [960, 240]]);
+    expect(notice(result, "DROPPED_ZERO_LENGTH")).toBeUndefined();
+  });
+
+  it("triplets do not make a notation MIDI look played", () => {
+    // quarter, three 8th triplets, two 32nds, dotted 8th
+    const result = ok(extractMelody(imported([[0, 960], [960, 320], [1280, 320], [1600, 320], [1920, 120], [2040, 120], [2160, 720]]),
+      { rhythm: "grid-all-if-any-off" }));
+    expect(notice(result, "PERFORMANCE_QUANTIZED")).toBeUndefined();
+    expect(notes(result).slice(4).map((event) => [event.startTick, event.durationTicks])).toEqual([[1920, 120], [2040, 120], [2160, 720]]);
+    expect(notice(result, "ROUNDED_TO_GRID")).toBeDefined();
+  });
+});

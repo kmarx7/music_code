@@ -1,5 +1,6 @@
 import type { ImportedScore } from "@/domain/score";
 import { decodeXmlBytes, readMusicXml, type XmlElementLike } from "@/adapters/musicxml";
+import { readMidiImport } from "@/adapters/midi";
 import { findMusicXmlEntry, readZip } from "./zip";
 
 /*
@@ -11,7 +12,7 @@ import { findMusicXmlEntry, readZip } from "./zip";
 export const IMPORT_MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export type ScoreFileReadResult =
-  | { ok: true; imported: ImportedScore; fileTitle: string }
+  | { ok: true; imported: ImportedScore; fileTitle: string; format: "musicxml" | "midi" }
   | { ok: false; message: string };
 
 const ZIP_MESSAGE = "압축 악보(.mxl)를 열 수 없습니다.";
@@ -20,11 +21,20 @@ function isZip(name: string, bytes: Uint8Array): boolean {
   return /\.mxl$/i.test(name) || (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04);
 }
 
+function isMidi(name: string, bytes: Uint8Array): boolean {
+  return /\.midi?$/i.test(name) || (bytes[0] === 0x4d && bytes[1] === 0x54 && bytes[2] === 0x68 && bytes[3] === 0x64);
+}
+
 export async function readScoreFile(
   file: { name: string; bytes: Uint8Array },
   parseXml: (text: string) => XmlElementLike | null,
 ): Promise<ScoreFileReadResult> {
   if (file.bytes.byteLength > IMPORT_MAX_FILE_BYTES) return { ok: false, message: "파일이 너무 큽니다(최대 5MB)." };
+  const fileTitle = file.name.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
+  if (isMidi(file.name, file.bytes)) {
+    const midi = readMidiImport(file.bytes);
+    return midi.ok ? { ok: true, imported: midi.score, fileTitle, format: "midi" } : { ok: false, message: midi.message };
+  }
   let xmlBytes = file.bytes;
   if (isZip(file.name, file.bytes)) {
     try {
@@ -45,6 +55,5 @@ export async function readScoreFile(
     if (result.code === "TIMEWISE") return { ok: false, message: "지원하지 않는 MusicXML 형식(score-timewise)입니다." };
     return { ok: false, message: result.message };
   }
-  const fileTitle = file.name.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
-  return { ok: true, imported: result.score, fileTitle };
+  return { ok: true, imported: result.score, fileTitle, format: "musicxml" };
 }

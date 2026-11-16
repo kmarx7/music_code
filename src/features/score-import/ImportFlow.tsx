@@ -7,7 +7,7 @@ import { readScoreFile } from "@/adapters/file-import";
 import {
   analyzeInstrumentFit, extractMelody, getInstrumentProfile, recommendTranspositions, selectableInstruments, TICKS_PER_QUARTER,
 } from "@/domain/score";
-import type { ImportedScore, InstrumentId, KeySignature, PlaybackPosition, Score, TransposeSpec } from "@/domain/score";
+import type { ImportedScore, ImportRhythmRule, InstrumentId, KeySignature, PlaybackPosition, Score, TransposeSpec } from "@/domain/score";
 import { KEY_SIGNATURE_OPTIONS, type TransposeDirection } from "@/domain/music-theory";
 import { StaffView } from "@/features/score-editor";
 import { highlightPlayback, PlaybackControls } from "@/features/playback";
@@ -24,7 +24,9 @@ export interface ImportFlowProps {
 const STEPS = ["파일", "확인", "바꾸기", "만들기"] as const;
 const RECOMMENDATIONS_SHOWN = 5;
 type Step = "file" | "review" | "convert";
-interface Loaded { imported: ImportedScore; fileTitle: string }
+interface Loaded { imported: ImportedScore; fileTitle: string; format: "musicxml" | "midi" }
+/** MusicXML keeps exact rhythms; a played MIDI take is evened out as a whole (MIDI spec §3.5). */
+const rhythmFor = (format: Loaded["format"]): ImportRhythmRule => (format === "midi" ? "grid-all-if-any-off" : "exact-or-grid");
 
 const keyLabel = (key: KeySignature) =>
   KEY_SIGNATURE_OPTIONS.find((option) => option.key.mode === key.mode && option.key.fifths === key.fifths)?.label ?? "지원하지 않는 조성";
@@ -79,7 +81,7 @@ export function ImportFlow({ onCreate }: ImportFlowProps) {
     heading.current?.focus({ preventScroll: false });
   }, [index]);
 
-  const extraction = useMemo(() => loaded ? extractMelody(loaded.imported, { partIndex, fallbackTitle: loaded.fileTitle }) : null, [loaded, partIndex]);
+  const extraction = useMemo(() => loaded ? extractMelody(loaded.imported, { partIndex, fallbackTitle: loaded.fileTitle, rhythm: rhythmFor(loaded.format) }) : null, [loaded, partIndex]);
   const melody = extraction?.ok ? extraction : null;
   // From the file itself, so the picker stays when the chosen part cannot be used.
   const partChoices = useMemo(() => loaded ? loaded.imported.parts.map((part, index) => ({
@@ -117,7 +119,7 @@ export function ImportFlow({ onCreate }: ImportFlowProps) {
     try {
       const read = await readScoreFile({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, parseXmlText);
       if (!read.ok) { setFileError(read.message); return; }
-      const first = extractMelody(read.imported, { fallbackTitle: read.fileTitle });
+      const first = extractMelody(read.imported, { fallbackTitle: read.fileTitle, rhythm: rhythmFor(read.format) });
       if (!first.ok) { setFileError(first.message); return; }
       setLoaded(read); setPartIndex(undefined);
       setTitle(first.settings.title); setInstrument("piano"); setKeyId(""); setDirection("nearest"); setRecommended(null);
@@ -154,9 +156,9 @@ export function ImportFlow({ onCreate }: ImportFlowProps) {
             onDrop={(event) => { event.preventDefault(); setDragging(false); void readFile(event.dataTransfer.files[0]); }}
             style={{ ...takeCard, display: "block", padding: 24, textAlign: "center", cursor: "pointer",
               borderStyle: "dashed", borderColor: dragging ? "var(--hb-accent)" : "var(--hb-border-strong)" }}>
-            <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>MusicXML 파일을 끌어다 놓거나 눌러서 고르세요</span>
-            <span className="hb-muted">.musicxml · .xml · .mxl, 최대 5MB</span>
-            <input ref={fileInput} type="file" aria-label="악보 파일" accept=".musicxml,.xml,.mxl" disabled={reading}
+            <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>MusicXML·MIDI 파일을 끌어다 놓거나 눌러서 고르세요</span>
+            <span className="hb-muted">.musicxml · .xml · .mxl · .mid, 최대 5MB</span>
+            <input ref={fileInput} type="file" aria-label="악보 파일" accept=".musicxml,.xml,.mxl,.mid,.midi" disabled={reading}
               onChange={(event) => void readFile(event.target.files?.[0])}
               style={{ display: "block", margin: "12px auto 0", maxWidth: "100%" }} />
           </label>

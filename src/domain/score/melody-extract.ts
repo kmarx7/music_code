@@ -16,6 +16,8 @@ import { isAlterInRange, midiFromSpelling } from "../music-theory/pitch";
 
 export const IMPORT_GRID_TICKS = 240;
 const DEFAULT_TEMPO = 90;
+/** Triplet subdivisions of the notatable durations land on multiples of this. */
+const TUPLET_UNIT_TICKS = 40;
 const MIN_TEMPO = 20;
 const MAX_TEMPO = 400;
 const MAX_TITLE_LENGTH = 120;
@@ -25,10 +27,18 @@ export const IMPORT_NOTICE_CODES = [
   "LOWER_STAFF_DROPPED", "CHORD_NOTES_DROPPED", "OVERLAP_TRUNCATED", "ROUNDED_TO_GRID", "DROPPED_ZERO_LENGTH",
   "GRACE_DROPPED", "CUE_DROPPED", "PITCH_UNSUPPORTED", "TIME_SIGNATURE_CHANGED", "KEY_CHANGED", "MODE_AS_MAJOR",
   "TEMPO_CLAMPED", "TEMPO_CHANGED", "PICKUP_PADDED", "REPEATS_IGNORED", "LYRICS_IGNORED", "DIRECTIONS_IGNORED",
+  "PERFORMANCE_QUANTIZED", "DRUMS_IGNORED", "KEY_ASSUMED",
 ] as const;
 export type ImportNoticeCode = (typeof IMPORT_NOTICE_CODES)[number];
 
 export interface ImportNotice { code: ImportNoticeCode; count: number; measures: string[]; detail?: string }
+
+/**
+ * "exact-or-grid" (MusicXML): only times the notation cannot write exactly move to the 16th grid.
+ * "grid-all-if-any-off" (MIDI): if any note is off the notation grid the file is a played take, so every note
+ * of the part moves to the 16th grid (MIDI spec §3.5).
+ */
+export type ImportRhythmRule = "exact-or-grid" | "grid-all-if-any-off";
 
 export interface MelodySettings { title: string; tempoBpm: number; timeSignature: TimeSignature; keySignature: KeySignature }
 
@@ -104,7 +114,10 @@ function findKey(fifths: number, mode: "major" | "minor"): KeySignature {
   return KEY_SIGNATURE_OPTIONS.find((option) => option.key.fifths === fifths && option.key.mode === mode)!.key;
 }
 
-export function extractMelody(score: ImportedScore, options: { partIndex?: number; fallbackTitle?: string } = {}): MelodyExtraction {
+export function extractMelody(
+  score: ImportedScore,
+  options: { partIndex?: number; fallbackTitle?: string; rhythm?: ImportRhythmRule } = {},
+): MelodyExtraction {
   const parts = score.parts.map((part, index) => ({ index, name: part.name, noteCount: part.notes.filter(playable).length }));
   const partIndex = options.partIndex ?? Math.max(0, parts.findIndex((part) => part.noteCount > 0));
   const part: ImportedPart | undefined = score.parts[partIndex];
@@ -128,6 +141,7 @@ export function extractMelody(score: ImportedScore, options: { partIndex?: numbe
 
   // Key: the first one; modes other than major/minor are read as major with the same fifths.
   const firstKey = part.keys[0] ?? { tick: 0, fifths: 0, mode: null, nonStandard: false };
+  if (part.keys.length === 0) log.add("KEY_ASSUMED");
   if (firstKey.nonStandard || !Number.isInteger(firstKey.fifths) || firstKey.fifths < -7 || firstKey.fifths > 7) {
     return { ok: false, code: "UNSUPPORTED_KEY", message: "이 악보의 조표는 아직 지원하지 않습니다." };
   }
@@ -144,7 +158,8 @@ export function extractMelody(score: ImportedScore, options: { partIndex?: numbe
   // Tempo: the first mark, else 90; clamped to the Score range.
   const rawTempo = score.tempos[0]?.bpm ?? DEFAULT_TEMPO;
   const tempoBpm = Math.min(MAX_TEMPO, Math.max(MIN_TEMPO, Math.round(rawTempo)));
-  if (tempoBpm !== rawTempo) log.add("TEMPO_CLAMPED", undefined, String(rawTempo));
+  // Rounding a fractional tempo is not a clamp; only a mark outside the range is reported.
+  if (rawTempo < MIN_TEMPO || rawTempo > MAX_TEMPO) log.add("TEMPO_CLAMPED", undefined, String(rawTempo));
   for (const tempo of score.tempos.slice(1)) log.add("TEMPO_CHANGED", measureAt(part.measures, tempo.tick));
 
   // Pickup: shift everything so the first (short) bar ends where a full bar would.
@@ -166,19 +181,26 @@ export function extractMelody(score: ImportedScore, options: { partIndex?: numbe
     }
   }
 
+  const exact = (tick: number) => Number.isInteger(tick) && tick % NOTATION_UNIT_TICKS === 0;
+  const joined = joinTies(candidates);
+  // Notation programs write tuplets on a 40-tick grid (8th triplet = 320), so only times off both grids mean "played".
+  const written = (tick: number) => exact(tick) || (Number.isInteger(tick) && tick % TUPLET_UNIT_TICKS === 0);
+  const played = options.rhythm === "grid-all-if-any-off"
+    && joined.some(({ note, end }) => !written(note.startTick + pad) || !written(end + pad));
   const working: Working[] = [];
-  for (const { note, end } of joinTies(candidates)) {
+  for (const { note, end } of joined) {
     const midi = validMidi(note);
     if (midi === null) { log.add("PITCH_UNSUPPORTED", note.measureNumber); continue; }
     const rawStart = note.startTick + pad;
     const rawEnd = end + pad;
-    // Spec §5.2: only times the notation cannot write exactly (fractional, tuplets…) move to the 16th grid.
-    const exact = (tick: number) => Number.isInteger(tick) && tick % NOTATION_UNIT_TICKS === 0;
-    const toGrid = (tick: number) => (exact(tick) ? tick : Math.round(tick / IMPORT_GRID_TICKS) * IMPORT_GRID_TICKS);
+    // Spec §5.2: only times the notation cannot write exactly (fractional, tuplets…) move to the 16th grid;
+    // a played MIDI take moves entirely.
+    const toGrid = (tick: number) => (exact(tick) && !played ? tick : Math.round(tick / IMPORT_GRID_TICKS) * IMPORT_GRID_TICKS);
     const start = toGrid(rawStart);
-    const roundedEnd = toGrid(rawEnd);
+    // A played note never shrinks below a sixteenth: staccato in a take is still a note.
+    const roundedEnd = played ? Math.max(start + IMPORT_GRID_TICKS, toGrid(rawEnd)) : toGrid(rawEnd);
     if (roundedEnd <= start) { log.add("DROPPED_ZERO_LENGTH", note.measureNumber); continue; }
-    if (start !== rawStart || roundedEnd !== rawEnd) log.add("ROUNDED_TO_GRID", note.measureNumber);
+    if (start !== rawStart || roundedEnd !== rawEnd) log.add(played ? "PERFORMANCE_QUANTIZED" : "ROUNDED_TO_GRID", note.measureNumber);
     working.push({ start, end: roundedEnd, midi, source: note });
   }
 
@@ -209,6 +231,7 @@ export function extractMelody(score: ImportedScore, options: { partIndex?: numbe
   log.set("REPEATS_IGNORED", score.ignored.repeats);
   log.set("LYRICS_IGNORED", score.ignored.lyrics);
   log.set("DIRECTIONS_IGNORED", score.ignored.directions);
+  log.set("DRUMS_IGNORED", score.ignored.drums ?? 0);
 
   if (line.length === 0) return { ok: false, code: "NO_NOTES", message: "가져올 음이 없습니다." };
   const lastEnd = line.at(-1)!.end;

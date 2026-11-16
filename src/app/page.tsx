@@ -46,7 +46,7 @@ export default function HomePage() {
         {PRODUCT_TAGLINE}
       </h1>
       <p style={{ fontSize: 16, margin: "0 0 24px", maxWidth: 560 }}>
-        허밍을 녹음하거나 화면 피아노로 음을 넣으면 악보가 됩니다. 가진 MusicXML 악보를 올려 선율을 가져올 수도 있습니다. 고치고, 조를 옮기고, 느리게 반복해 연습한 뒤
+        허밍을 녹음하거나 화면 피아노로 음을 넣으면 악보가 됩니다. 가진 MusicXML·MIDI 파일을 올려 선율을 가져올 수도 있습니다. 고치고, 조를 옮기고, 느리게 반복해 연습한 뒤
         PDF·MIDI·MusicXML로 내보낼 수 있습니다. 로그인은 필요 없습니다.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>

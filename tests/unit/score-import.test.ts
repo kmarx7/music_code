@@ -10,6 +10,7 @@ import type { ClipboardPayload, ImportedScore, NoteEvent, Score } from "@/domain
 import { MemoryScoreRepository } from "../fixtures/memory-repository";
 import { parseXmlLite } from "../fixtures/xml-lite";
 import { makeZip } from "../fixtures/zip";
+import { makeSmf, vlq } from "../fixtures/smf-builder";
 
 const parse = (text: string) => { try { return parseXmlLite(text); } catch { return null; } };
 const fixtureBytes = (name: string) => new Uint8Array(readFileSync(join(__dirname, "../fixtures/musicxml-import", name)));
@@ -122,5 +123,23 @@ describe("buildImportedScore", () => {
     const bad = input(score);
     await expect(createImportedScore(empty, { ...bad, settings: { ...bad.settings, tempoBpm: 1000 } })).rejects.toThrow();
     expect(await empty.list()).toHaveLength(0);
+  });
+});
+
+describe("readScoreFile with MIDI (Phase 8 step 3)", () => {
+  const smf = () => makeSmf({ format: 0, tracks: [[0, 0x90, 60, 100, ...vlq(480), 0x80, 60, 0]] });
+
+  it("routes .mid files and MThd bytes to the MIDI reader", async () => {
+    const byName = await readScoreFile({ name: "tune.mid", bytes: smf() }, parse);
+    expect(byName.ok && [byName.format, byName.fileTitle, byName.imported.parts[0]!.notes.length]).toEqual(["midi", "tune", 1]);
+    const byBytes = await readScoreFile({ name: "tune.bin", bytes: smf() }, parse);
+    expect(byBytes.ok && byBytes.format).toBe("midi");
+    const xml = await readScoreFile({ name: "simple-melody.musicxml", bytes: fixtureBytes("simple-melody.musicxml") }, parse);
+    expect(xml.ok && xml.format).toBe("musicxml");
+  });
+
+  it("explains broken MIDI files", async () => {
+    expect(await message({ name: "a.midi", bytes: encode("not midi") })).toBe("MIDI 파일로 읽을 수 없습니다.");
+    expect(await message({ name: "a.mid", bytes: makeSmf({ format: 2, tracks: [[]] }) })).toBe("지원하지 않는 MIDI 형식(형식 2)입니다.");
   });
 });

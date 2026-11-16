@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { makeZip } from "../fixtures/zip";
+import { makeSmf, text, vlq } from "../fixtures/smf-builder";
 import { storedScore } from "./storage";
 
 const FIXTURES = join(__dirname, "../fixtures/musicxml-import");
@@ -122,4 +123,31 @@ test("고를 수 없는 파트를 골라도 파트 선택은 남아 다시 바�
   await expect(page.getByRole("button", { name: "다음" })).toBeDisabled();
   await picker.selectOption({ label: "Flute · 음 1개" });
   await expect(page.getByRole("button", { name: "다음" })).toBeEnabled();
+});
+
+test("MIDI 파일 → 25현 가야금, 드럼은 빼고 악보 하나", async ({ page }) => {
+  // Conductor: title, 100 BPM (600000 µs), Eb major. Melody on channel 1, a drum hit on channel 10.
+  const conductor = [...text(0x03, "미디 노래"), 0, 0xff, 0x51, 3, 0x09, 0x27, 0xc0, 0, 0xff, 0x59, 2, 0xfd, 0];
+  const melody = [...text(0x03, "Melody"), 0, 0x99, 36, 100,
+    0, 0x90, 63, 90, ...vlq(480), 0x80, 63, 0, 0, 0x89, 36, 0, 0, 0x90, 67, 90, ...vlq(480), 0x80, 67, 0,
+    0, 0x90, 70, 90, ...vlq(960), 0x80, 70, 0];
+  const bytes = makeSmf({ tracks: [conductor, melody] });
+  await page.goto("/");
+  const before = await scoreIds(page);
+  await page.goto("/import");
+  await expect(page.getByLabel("악보 파일")).toHaveAttribute("accept", /\.mid/);
+  await page.getByLabel("악보 파일").setInputFiles({ name: "song.mid", mimeType: "audio/midi", buffer: Buffer.from(bytes) });
+  await step(page, "review");
+  await expect(page.getByTestId("import-summary")).toContainText("미디 노래");
+  await expect(page.getByTestId("import-summary")).toContainText("100 BPM");
+  await expect(page.getByTestId("import-summary")).toContainText("Eb 장조");
+  await expect(page.getByTestId("import-notices")).toContainText("드럼 채널 음 1개");
+  await page.getByRole("button", { name: "다음" }).click();
+  await page.getByLabel("목표 악기").selectOption("gayageum-25");
+  await page.getByRole("button", { name: "악보 만들기" }).click();
+  const saved = await storedScore(page, await createdId(page));
+  expect((await scoreIds(page)).length).toBe(before.length + 1);
+  expect(saved.parts[0].instrument).toBe("gayageum-25");
+  expect(saved.parts[0].keySignature.fifths).toBe(-3);
+  expect(saved.tempoBpm).toBe(100);
 });

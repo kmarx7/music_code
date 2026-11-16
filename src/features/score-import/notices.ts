@@ -27,6 +27,9 @@ const SENTENCES: Readonly<Record<ImportNoticeCode, (notice: ImportNotice) => str
   REPEATS_IGNORED: (n) => `도돌이표·반복 괄호 ${n.count}개는 가져오지 않았습니다(반복을 펼치지 않음)`,
   LYRICS_IGNORED: (n) => `가사 ${n.count}개는 가져오지 않았습니다`,
   DIRECTIONS_IGNORED: (n) => `셈여림·아티큘레이션 같은 표시 ${n.count}개는 가져오지 않았습니다`,
+  PERFORMANCE_QUANTIZED: (n) => `연주 기록으로 보여 음 ${n.count}개를 16분음표 단위로 맞췄습니다${where(n.measures)}`,
+  DRUMS_IGNORED: (n) => `드럼 채널 음 ${n.count}개는 가져오지 않았습니다`,
+  KEY_ASSUMED: () => "파일에 조표 정보가 없어 C장조로 적었습니다. 다음 단계에서 목표 조를 고를 수 있습니다",
 };
 
 /** One Korean line per notice (Phase 8 step 2): what the import changed or left out, and where. */

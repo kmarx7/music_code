@@ -30,10 +30,16 @@ export function parseXmlLite(text: string): XmlElementLike {
     const open = text.indexOf("<", index);
     if (open < 0) break;
     if (open > index && stack.length) stack[stack.length - 1]!.append(decode(text.slice(index, open)));
-    if (text.startsWith("<!--", open)) { index = text.indexOf("-->", open) + 3; continue; }
-    if (text.startsWith("<?", open)) { index = text.indexOf("?>", open) + 2; continue; }
-    if (text.startsWith("<!", open)) { index = text.indexOf(">", open) + 1; continue; }
+    const skip = (marker: string) => {
+      const found = text.indexOf(marker, open);
+      if (found < 0) throw new Error("unclosed markup");
+      return found + marker.length;
+    };
+    if (text.startsWith("<!--", open)) { index = skip("-->"); continue; }
+    if (text.startsWith("<?", open)) { index = skip("?>"); continue; }
+    if (text.startsWith("<!", open)) { index = skip(">"); continue; }
     const close = text.indexOf(">", open);
+    if (close < 0) throw new Error("unclosed tag");
     const body = text.slice(open + 1, close);
     index = close + 1;
     if (body.startsWith("/")) { stack.pop(); continue; }
