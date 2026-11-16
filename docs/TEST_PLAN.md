@@ -1784,3 +1784,8 @@ long task와 입력 지연은 두 프로브에서 같은 의미다.
 - E2E `import-flow.spec.ts` 6항목(위 TASKS §61). unit 1124, E2E 126/126(Chromium).
 - 테스트 파일: `tests/fixtures/musicxml-import/`(직접 쓴 짧은 곡 4개, 저작권 없음), XML 파서는 단위 테스트 전용 `tests/fixtures/xml-lite.ts`(앱은 브라우저 DOMParser).
 - 미검증: WebKit/Safari·실기기 실행, 외부 악보 프로그램이 만든 실제 파일(UAT-U).
+
+## 악보 올리기 MIDI Phase 8 3단계 (2026-11-16, Claude Code)
+
+- 단위: `midi-reader.test.ts`(12: 앱 MIDI 왕복, running status·velocity 0, 같은 음 겹침 짝짓기, 형식 0 채널별 파트·드럼, 조표 철자·없음, 트랙 이름·제목·마디, 형식 2·SMPTE·잘림·비MIDI 문구, 트랙 끝 없음, 템포 기본 120, 14만 음, 마디 상한, 1/4 못갖춘마디), `melody-extract.test.ts`(+6: 연주 기록 전체 맞춤, 악보 MIDI 그대로, 드럼·조표 보고, 소수 템포, 짧은 연주 음 최소 16분, 셋잇단), `score-import.test.ts`(+2: MIDI 판별·오류 문구), `import-notices.test.ts`(+1).
+- E2E `import-flow.spec.ts` +1: MIDI → 25현, 드럼 제외, 템포·조 저장. 전체 127/127 PASS(재실행). 첫 실행 108/127의 실패 19건은 오디오 시계 정지(환경)로, 재실행에서 모두 통과 — TASKS §62.

@@ -1010,3 +1010,9 @@ Claude Code 세션에서 사용자가 질의에 직접 답해 확정했다. 새 
 - Adapter `@/adapters/musicxml`: `readMusicXml(root: XmlElementLike)`, `parseXmlText(text)`(브라우저), `decodeXmlBytes(bytes)`. `@/adapters/file-import`: `readZip`, `findMusicXmlEntry`, `ZipReadError`, `readScoreFile(file, parseXml)`, `IMPORT_MAX_FILE_BYTES = 5MB`.
 - Application: `buildImportedScore(input)`(순수), `createImportedScore(repository, input)`(한 번 저장). `ImportedScoreInput { id, createdAt, settings, clipboard, instrument, transpose, nextId }`.
 - Feature `@/features/score-import`: `ImportFlow({ onCreate })`, `describeImportNotice(notice)`. `TakeStepList({ index, steps? })`.
+
+## 악보 올리기 MIDI (2026-11-16, Phase 8 3단계)
+
+- Adapter `@/adapters/midi`: `readMidiImport(bytes): { ok: true; score: ImportedScore } | { ok: false; code: "NOT_MIDI" | "FORMAT_2" | "SMPTE" | "CORRUPT"; message }`. 파트 = 트랙×채널(채널 10 제외, `ignored.drums`에 개수), 철자는 그 시점 조표 메타, 조표 없으면 `keys: []`.
+- `readScoreFile` 결과에 `format: "musicxml" | "midi"`. `.mid`/`.midi` 또는 `MThd`로 판별.
+- Domain: `ImportedScore.ignored.drums?`. `extractMelody(..., { rhythm?: ImportRhythmRule })` — `"exact-or-grid"`(기본, MusicXML), `"grid-all-if-any-off"`(MIDI). 보고 코드 `PERFORMANCE_QUANTIZED`, `DRUMS_IGNORED`, `KEY_ASSUMED` 추가. `TEMPO_CLAMPED`는 20–400 밖일 때만.
